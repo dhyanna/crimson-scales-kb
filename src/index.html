@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crimson Scales — Class Knowledge Base</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <span class="brand-icon">⛓</span>
+        <div>
+          <div class="brand-title">Crimson Scales</div>
+          <div class="brand-sub">Class Knowledge Base</div>
+        </div>
+      </div>
+      <nav class="class-nav" id="class-nav">
+        <button class="class-btn active" data-class="chainguard">Inox Chainguard</button>
+        <button class="class-btn coming-soon" disabled title="Coming soon">+ Add class</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main" id="app">
+
+    <div class="class-hero">
+      <div class="hero-inner">
+        <div class="hero-text">
+          <div class="hero-eyebrow">Crimson Scales · Starting class</div>
+          <h1 class="hero-title">Inox Chainguard</h1>
+          <p class="hero-desc">A bruising Damage Soak who pins enemies in place with Shackle and flings them through traps with Swing. Evolution of the Brute — more control, more teeth.</p>
+        </div>
+        <div class="hero-stats">
+          <div class="stat-pill"><span class="stat-num">10</span><span class="stat-lbl">HP</span></div>
+          <div class="stat-pill"><span class="stat-num">10</span><span class="stat-lbl">Cards</span></div>
+          <div class="stat-pill"><span class="stat-num">2</span><span class="stat-lbl">Builds</span></div>
+          <div class="stat-pill"><span class="stat-num">9</span><span class="stat-lbl">Levels</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-shell">
+      <nav class="tab-nav" id="tab-nav">
+        <button class="tab-btn active" data-tab="overview">Overview</button>
+        <button class="tab-btn" data-tab="cards">Cards</button>
+        <button class="tab-btn" data-tab="builds">Builds</button>
+        <button class="tab-btn" data-tab="perks">Perks</button>
+        <button class="tab-btn" data-tab="milestone">Milestone</button>
+        <button class="tab-btn" data-tab="tips">Tips</button>
+      </nav>
+
+      <div class="tab-content">
+
+        <!-- OVERVIEW -->
+        <section class="tab-pane active" id="tab-overview">
+          <div class="two-col">
+            <div>
+              <div class="info-block">
+                <div class="info-block-label">
+                  <span class="mechanic-chip shackle-chip">Unique mechanic</span> Shackle
+                </div>
+                <p>Places a character token on an enemy. A Shackled enemy cannot perform Move abilities while adjacent to the Chainguard, and does not factor the Chainguard into its Focus pathing. Token removed if the enemy dies or you Shackle a different enemy. Enemies immune to IMMOBILIZE are immune to Shackle.</p>
+              </div>
+              <div class="info-block">
+                <div class="info-block-label">
+                  <span class="mechanic-chip swing-chip">Mechanic</span> Swing
+                </div>
+                <p>A modified Push/Pull that moves a target X hexes in a circle around you — clockwise or counterclockwise. The target cannot end up further from or closer to you. Movement ends when the target hits something that would normally block movement.</p>
+              </div>
+            </div>
+            <div>
+              <div class="info-block">
+                <div class="info-block-label">Role in party</div>
+                <p>Chainguard holds monster aggro and soaks damage for the party. He struggles with AoE — his only reliable way to hit multiple targets is Bottom Attack actions and Traps. Jump is scarce at Level 1. Initiative Control is a recurring challenge: cards skew 10–60. Comes fully online as a Damage Soak around Level 5 but requires creative play before then.</p>
+              </div>
+              <div class="info-block">
+                <div class="info-block-label">Level progression</div>
+                <div class="xp-table">
+                  <div class="xp-row header">
+                    <span>Level</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>
+                  </div>
+                  <div class="xp-row">
+                    <span>XP</span><span>0</span><span>45</span><span>95</span><span>150</span><span>200</span><span>275</span><span>345</span><span>420</span><span>500</span>
+                  </div>
+                  <div class="xp-row">
+                    <span>HP</span><span>10</span><span>12</span><span>14</span><span>16</span><span>18</span><span>20</span><span>22</span><span>24</span><span>26</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARDS -->
+        <section class="tab-pane" id="tab-cards">
+          <div class="cards-toolbar">
+            <div class="search-wrap">
+              <svg class="search-icon" viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M13 13l3.5 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              <input type="text" id="card-search" class="search-input" placeholder="Search cards…">
+            </div>
+            <div class="filter-chips" id="filter-chips">
+              <button class="chip active" data-filter="all">All</button>
+              <button class="chip" data-filter="lvl1">Level 1</button>
+              <button class="chip" data-filter="lvlx">Level X</button>
+              <button class="chip chip-milestone" data-filter="lvlm">Level M</button>
+              <button class="chip" data-filter="lvl2plus">Lvl 2+</button>
+              <button class="chip" data-filter="shackle">Shackle</button>
+              <button class="chip" data-filter="trap">Trap</button>
+              <button class="chip" data-filter="loss">Has Loss</button>
+              <button class="chip chip-bruiser" data-filter="bruiser">Bruiser build</button>
+              <button class="chip chip-trap" data-filter="trapbuild">Trap build</button>
+            </div>
+          </div>
+          <div class="build-filter-banner hidden" id="build-banner">
+            <svg viewBox="0 0 20 20" fill="none" width="14" height="14"><path d="M3 5h14M6 10h8M9 15h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <span id="banner-text"></span>
+            <button class="banner-clear" id="banner-clear">Clear</button>
+          </div>
+          <div class="cards-grid" id="cards-grid"></div>
+        </section>
+
+        <!-- BUILDS -->
+        <section class="tab-pane" id="tab-builds">
+          <div class="builds-grid">
+            <div class="build-panel" id="bp-bruiser" data-build="bruiser">
+              <div class="build-panel-header">
+                <div class="build-panel-icon bruiser-icon">⚔</div>
+                <div>
+                  <div class="build-panel-name">Bruiser build</div>
+                  <div class="build-panel-tagline">Shields, Retaliate, raw melee damage</div>
+                </div>
+                <span class="build-chevron" id="chev-bruiser">▾</span>
+              </div>
+              <p class="build-panel-desc">Shackle a target, then attack it repeatedly for stacking bonus damage. Use Shields and Retaliate to survive incoming hits. The most straightforward path — strong from Level 1 with cards that clearly serve a single purpose.</p>
+              <div class="build-panel-expand" id="bx-bruiser">
+                <div class="expand-section">
+                  <div class="expand-label">Playstyle</div>
+                  <p class="expand-text">Lead with Untouchable Keeper (Init 14) or Chokehold (Init 22) to establish Shackle early. Use Wrapped in Metal (Init 82) as your emergency Stun when something dangerous is about to activate. Stack Retaliate with Spiked Knuckles and perks to punish your Shackled target. Champion of Chains at Level 9 lets you Shackle three targets simultaneously — each getting Wound — fundamentally changing the class's threat level.</p>
+                </div>
+                <div class="expand-section">
+                  <div class="expand-label">Core cards</div>
+                  <div class="expand-card-list">
+                    <div class="expand-card-item"><strong>Chokehold</strong><span>Shackle + stacking attack bonus (+7 damage over 3 hits)</span></div>
+                    <div class="expand-card-item"><strong>Follow the Chains</strong><span>Attack 3 + repositioning, pairs well in rest cycles</span></div>
+                    <div class="expand-card-item"><strong>Wrapped in Metal</strong><span>Unconditional Ranged Stun — your emergency brake</span></div>
+                    <div class="expand-card-item"><strong>Untouchable Keeper</strong><span>Fastest card (Init 14), Shield + Heal 3 Self</span></div>
+                    <div class="expand-card-item"><strong>Locking Links</strong><span>Persistent True Damage clock — great vs Shielded targets</span></div>
+                    <div class="expand-card-item"><strong>Merciless Beatdown</strong><span>High-ceiling Loss Attack + forced enemy-on-enemy attack</span></div>
+                  </div>
+                </div>
+                <div class="expand-section">
+                  <div class="expand-label">Level-up path</div>
+                  <div class="expand-levelup-list">
+                    <div class="expand-levelup-item"><span class="lvl-badge">2</span><span>Iron Thrust — Jump + ally chain combos</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">3</span><span>Sweeping Collision — Pierce 2 for party + grounds Fliers</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">4</span><span>Double K.O. — two Attack 4s, Init 92</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">5</span><span>Impending Power — defensive capstone, good for both builds</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">7</span><span>Meteor Hammer — Disarm + Shield Ignore vs Shackled</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">8</span><span>Syndicated Assault — ally-chain AoE, Attack 9–15</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">9</span><span>Champion of Chains — 3 Shackles + Wound on each</span></div>
+                  </div>
+                </div>
+                <div class="expand-actions">
+                  <button class="show-cards-btn bruiser-btn" data-build="bruiser">Show Bruiser cards →</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="build-panel" id="bp-trap" data-build="trap">
+              <div class="build-panel-header">
+                <div class="build-panel-icon trap-icon">⚙</div>
+                <div>
+                  <div class="build-panel-name">Trap build</div>
+                  <div class="build-panel-tagline">True Damage, Shackle-delivery, Shield bypass</div>
+                </div>
+                <span class="build-chevron" id="chev-trap">▾</span>
+              </div>
+              <p class="build-panel-desc">Place traps, Shackle a nearby enemy, then force or lure it through them. Traps deal True Damage — bypassing Shields entirely. More setup-dependent than Bruiser but scales better against high-armor enemies.</p>
+              <div class="build-panel-expand" id="bx-trap">
+                <div class="expand-section">
+                  <div class="expand-label">Playstyle</div>
+                  <p class="expand-text">Place a trap adjacent to you, establish Shackle, then use Pull abilities (Latch and Tow, Titanic Chainwhip) to drag the target through it. Latch and Tow top combo makes traps deal minimum 5 True Damage + Muddle. Dizzying Release + Latch and Tow is your signature combo: 7 True Damage, Wound, Muddle, 2 XP in one round. Impending Power at Level 5 extends trap placement to Range 2 and adds 2 bonus damage whenever you trigger one.</p>
+                </div>
+                <div class="expand-section">
+                  <div class="expand-label">Core cards</div>
+                  <div class="expand-card-list">
+                    <div class="expand-card-item"><strong>Locking Links</strong><span>Bottom 2-damage Trap — always better than Bottom Attack 2</span></div>
+                    <div class="expand-card-item"><strong>Rusty Spikes</strong><span>3-dmg Poison Trap + Move 2 Shackle, fast Init 18</span></div>
+                    <div class="expand-card-item"><strong>Latch and Tow</strong><span>Pull into trap for +3 True Damage + Muddle + XP</span></div>
+                    <div class="expand-card-item"><strong>Dizzying Release</strong><span>Wound Trap — 7 True Damage combo with Latch and Tow</span></div>
+                    <div class="expand-card-item"><strong>Impending Power</strong><span>Range 2 trap placement + 2 bonus damage on spring</span></div>
+                    <div class="expand-card-item"><strong>Clamping Snare</strong><span>First AoE Trap — 5 True Dmg + Muddle + 2 splash</span></div>
+                  </div>
+                </div>
+                <div class="expand-section">
+                  <div class="expand-label">Level-up path</div>
+                  <div class="expand-levelup-list">
+                    <div class="expand-levelup-item"><span class="lvl-badge">2</span><span>Latch and Tow — core trap-trigger Pull card</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">3</span><span>Sweeping Collision — Pierce 2 + grounds Fliers</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">4</span><span>Dizzying Release — Wound Trap combo centerpiece</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">5</span><span>Impending Power — near-mandatory for Trap builds</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">7</span><span>Clamping Snare — first AoE Trap</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">8</span><span>Pivot and Smash — Swing + trap trigger + Jump</span></div>
+                    <div class="expand-levelup-item"><span class="lvl-badge">9</span><span>Unending Torment — double Trap damage victory lap</span></div>
+                  </div>
+                </div>
+                <div class="expand-actions">
+                  <button class="show-cards-btn trap-btn" data-build="trap">Show Trap build cards →</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="both-builds-block">
+            <div class="both-builds-label">Cards good for both builds</div>
+            <div class="both-builds-grid">
+              <div class="both-card"><strong>Untouchable Keeper</strong><p>Fastest card (Init 14) and only self-Heal at Level 1. Almost never cut.</p></div>
+              <div class="both-card"><strong>Wrapped in Metal</strong><p>Unconditional Ranged Stun + Shackle. Repeatedly saves the party on key turns.</p></div>
+              <div class="both-card"><strong>Impending Power (Lvl 5)</strong><p>Top serves Bruisers (Shield/Heal), Bottom serves Trap builds (range + bonus damage).</p></div>
+              <div class="both-card"><strong>Sweeping Collision (Lvl 3)</strong><p>Pierce 2 for everyone + grounds Fliers. Addresses both builds' core weaknesses.</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- PERKS -->
+        <section class="tab-pane" id="tab-perks">
+          <div class="perks-header">
+            <div class="perks-header-text">
+              <p>Tap a checkbox to mark a perk as taken. Perks reinforce the class themes: Shackle, Shields, Retaliate, Wound, and Traps. Remove -1 cards first, then prioritize rolling modifiers.</p>
+            </div>
+            <div class="perks-progress">
+              <span id="perks-taken">0</span> / <span id="perks-total">0</span> taken
+              <button class="reset-perks-btn" id="reset-perks">Reset</button>
+            </div>
+          </div>
+          <div class="perks-list" id="perks-list"></div>
+        </section>
+
+
+        <!-- MILESTONE -->
+        <section class="tab-pane" id="tab-milestone">
+          <div class="milestone-layout">
+            <div class="milestone-card-wrap">
+              <img id="milestone-img" class="milestone-card-img" alt="Chainguard milestone card" loading="lazy"
+                onerror="this.parentElement.classList.add('milestone-img-error'); this.style.display='none'">
+              <div class="milestone-img-label">Milestone card (front)</div>
+            </div>
+            <div class="milestone-detail">
+              <div class="milestone-section">
+                <div class="milestone-section-label">What is a Milestone?</div>
+                <p class="milestone-text">Each Crimson Scales and Trail of Ashes character has a personal Milestone card with a unique goal. When the character accumulates the required number of checkmarks toward that goal, the Milestone is complete and they permanently add their Level M ability card to their hand. The Level M card does not count against hand size — it is an extra card earned through play.</p>
+              </div>
+              <div class="milestone-section">
+                <div class="milestone-section-label">Chainguard milestone goal</div>
+                <p class="milestone-text" id="milestone-goal-text">See the milestone card image for the specific goal condition. The Chainguard milestone requires <strong>10 checkmarks</strong> to complete.</p>
+              </div>
+              <div class="milestone-section">
+                <div class="milestone-section-label">Reward — Rope Pit (Level M)</div>
+                <p class="milestone-text">Once complete, <strong>Rope Pit</strong> is permanently added to your hand. It is one of the most impactful early-game upgrades for the Trap build — a Range 2 trap that auto-Shackles on trigger, letting you maintain momentum without spending a card action on Shackle setup. Even Bruiser builds benefit from carrying this for most of the campaign.</p>
+              </div>
+              <div class="milestone-section">
+                <div class="milestone-section-label">Level M card — Rope Pit</div>
+                <div class="milestone-reward-card" id="milestone-reward-wrap">
+                  <img id="milestone-reward-img" class="milestone-reward-img" alt="Rope Pit milestone ability card" loading="lazy"
+                    onerror="this.style.display='none'">
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TIPS -->
+        <section class="tab-pane" id="tab-tips">
+          <div class="tips-grid" id="tips-grid"></div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span>Crimson Scales Class Knowledge Base</span>
+      <span class="footer-sep">·</span>
+      <span>Guide source: <em>Magatis</em> on Imgur (Aug 2022)</span>
+      <span class="footer-sep">·</span>
+      <span>Fan-made reference tool, not affiliated with Crimson Scales or Isaac Childres</span>
+    </div>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
