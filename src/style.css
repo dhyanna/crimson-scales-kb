@@ -617,8 +617,9 @@ body {
 
 .build-chevron {
   margin-left: auto;
-  color: var(--text-dim);
-  font-size: 14px;
+  color: var(--gold-dim);
+  font-size: 20px;
+  line-height: 1;
   transition: transform 0.2s;
   flex-shrink: 0;
 }

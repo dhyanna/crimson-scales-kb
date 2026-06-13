@@ -3,6 +3,7 @@
 const CHAINGUARD_DATA = {
   id: "chainguard",
   name: "Inox Chainguard",
+  symbol: "Chained Helmet",
   game: "Crimson Scales",
   startingHP: 10,
   handSize: 10,

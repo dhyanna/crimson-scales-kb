@@ -63,20 +63,45 @@ crimson-scales-kb/
 
 ## Deployment
 
-### Docker image via GitHub Actions
+### Production server (searing-plains.com)
 
-On every push to `main`, the GitHub Actions workflow builds the Docker image and pushes it to the GitHub Container Registry (`ghcr.io`).
+The app runs at `cs.searing-plains.com` behind a Caddy reverse proxy on port 8081.
 
-To pull and run the published image:
+**First-time setup on the server:**
 
 ```bash
-docker pull ghcr.io/YOUR_USERNAME/crimson-scales-kb:latest
-docker run -p 8080:80 ghcr.io/YOUR_USERNAME/crimson-scales-kb:latest
+# Set your GitHub username
+export GITHUB_REPO=your-github-username/crimson-scales-kb
+
+# Pull and start
+docker compose --profile prod pull
+docker compose --profile prod up -d
+```
+
+**Updating to the latest image:**
+
+```bash
+docker compose --profile prod pull
+docker compose --profile prod up -d --force-recreate
+```
+
+The GitHub Actions workflow automatically builds and pushes a new image to `ghcr.io` on every push to `main`, so deployment is just a pull + recreate.
+
+**Caddy reverse proxy config** (`/etc/caddy/Caddyfile`):
+
+```
+searing-plains.com {
+    reverse_proxy localhost:8080
+}
+
+cs.searing-plains.com {
+    reverse_proxy localhost:8081
+}
 ```
 
 ### Any static host
 
-Since the app is pure static files, you can deploy `src/` to any host:
+Since the app is pure static files, you can also deploy `src/` to any host:
 - **Netlify / Vercel** — drag and drop the `src/` folder, or point at the repo
 - **GitHub Pages** — set Pages source to the `src/` folder on `main`
 - **Cloudflare Pages** — connect repo, set build output to `src/`

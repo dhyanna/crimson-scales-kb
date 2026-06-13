@@ -4,8 +4,15 @@
 (function () {
   "use strict";
 
+  // ===== CLASS REGISTRY =====
+  const CLASS_REGISTRY = {
+    chainguard: CHAINGUARD_DATA,
+    luminary: LUMINARY_DATA,
+  };
+
   // ===== STATE =====
   const state = {
+    activeClass: "chainguard",
     activeTab: "overview",
     cardFilter: "all",
     activeBuild: null,
@@ -13,6 +20,10 @@
     expandedBuild: null,
     perksChecked: {},
   };
+
+  function activeClassData() {
+    return CLASS_REGISTRY[state.activeClass];
+  }
 
   // ===== INIT =====
   function init() {
@@ -26,6 +37,10 @@
     bindBannerClear();
     bindPerkReset();
     renderMilestone();
+    renderOverview();
+    renderBuilds();
+    updateMechanicChipLabels();
+    bindClassNav();
   }
 
 
@@ -80,20 +95,24 @@
 
   // ===== BUILD PANELS =====
   function bindBuildPanels() {
-    ["bruiser", "trap"].forEach((build) => {
+    // Dynamically get build IDs from current class
+    const bd = CLASS_BUILDS[state.activeClass];
+    const buildIds = bd ? bd.builds.map((b) => b.id) : ["bruiser", "trap"];
+
+    buildIds.forEach((build) => {
       const panel = document.getElementById("bp-" + build);
       if (panel) {
         panel.addEventListener("click", (e) => {
           if (e.target.closest(".show-cards-btn")) return;
           toggleBuildPanel(build);
         });
-      }
-      const showBtn = panel ? panel.querySelector(".show-cards-btn") : null;
-      if (showBtn) {
-        showBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          goToCardsForBuild(build);
-        });
+        const showBtn = panel.querySelector(".show-cards-btn");
+        if (showBtn) {
+          showBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            goToCardsForBuild(build);
+          });
+        }
       }
     });
   }
@@ -102,7 +121,10 @@
     const isSame = state.expandedBuild === build;
     state.expandedBuild = isSame ? null : build;
 
-    ["bruiser", "trap"].forEach((b) => {
+    const bd = CLASS_BUILDS[state.activeClass];
+    const buildIds = bd ? bd.builds.map((b) => b.id) : ["bruiser", "trap"];
+
+    buildIds.forEach((b) => {
       const expand = document.getElementById("bx-" + b);
       const chev = document.getElementById("chev-" + b);
       const panel = document.getElementById("bp-" + b);
@@ -110,7 +132,7 @@
       if (expand) expand.classList.toggle("open", open);
       if (chev) chev.classList.toggle("rotated", open);
       if (panel) {
-        panel.classList.remove("open-bruiser", "open-trap");
+        panel.classList.remove("open-bruiser", "open-trap", "open-support");
         if (open) panel.classList.add("open-" + b);
       }
     });
@@ -119,11 +141,12 @@
   function goToCardsForBuild(build) {
     state.activeBuild = build;
     state.cardFilter = "all";
+    // Map build id to filter chip data-filter value
+    const filterMap = { bruiser: "bruiser", trap: "trapbuild", support: "trapbuild" };
+    const filterVal = filterMap[build] || "bruiser";
     switchTab("cards");
     document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
-    const targetChip = document.querySelector(
-      `.chip[data-filter="${build === "bruiser" ? "bruiser" : "trapbuild"}"]`
-    );
+    const targetChip = document.querySelector(`.chip[data-filter="${filterVal}"]`);
     if (targetChip) targetChip.classList.add("active");
     showBuildBanner(build);
     renderCards();
@@ -134,8 +157,11 @@
     const banner = document.getElementById("build-banner");
     const bannerText = document.getElementById("banner-text");
     if (!banner || !bannerText) return;
-    bannerText.textContent =
-      "Showing " + (build === "bruiser" ? "Bruiser build" : "Trap build") + " cards";
+    // Look up the build name from the class data
+    const bd = CLASS_BUILDS[state.activeClass];
+    const buildData = bd ? bd.builds.find((b) => b.id === build) : null;
+    const buildName = buildData ? buildData.name : build;
+    bannerText.textContent = "Showing " + buildName + " cards";
     banner.classList.remove("hidden");
   }
 
@@ -160,18 +186,25 @@
 
   // ===== RENDER CARDS =====
   function cardMatchesFilter(card) {
-    const f = state.activeBuild
-      ? state.activeBuild === "bruiser"
-        ? "bruiser"
-        : "trapbuild"
-      : state.cardFilter;
+    // Map activeBuild to filter key based on class builds order
+    let f = state.cardFilter;
+    if (state.activeBuild) {
+      const bd = CLASS_BUILDS[state.activeClass];
+      if (bd) {
+        const b1 = bd.builds[0].id;
+        f = state.activeBuild === b1 ? "bruiser" : "trapbuild";
+      } else {
+        f = state.activeBuild === "bruiser" ? "bruiser" : "trapbuild";
+      }
+    }
 
     if (f === "lvl1" && card.level !== "1") return false;
     if (f === "lvlx" && card.level !== "X") return false;
     if (f === "lvlm" && card.level !== "M") return false;
     if (f === "lvl2plus" && !["2","3","4","5","6","7","8","9"].includes(card.level)) return false;
-    if (f === "shackle" && !card.tags.includes("shackle")) return false;
-    if (f === "trap" && !card.tags.includes("trap")) return false;
+    // Mechanic filters — map to class-specific tag values
+    if (f === "mechanic1" && !card.tags.includes(getTagConfig().mechanic1.filter)) return false;
+    if (f === "mechanic2" && !card.tags.includes(getTagConfig().mechanic2.filter)) return false;
     if (f === "loss" && !card.top.isLoss && !card.bottom.isLoss) return false;
     if (f === "bruiser") {
       if (!card.builds.includes("bruiser") && !card.builds.includes("both")) return false;
@@ -190,26 +223,43 @@
   }
 
   function getCardHighlightClass(card) {
-    const isBruiser = card.builds.includes("bruiser") && !card.builds.includes("trap") && !card.builds.includes("both");
-    const isTrap = card.builds.includes("trap") && !card.builds.includes("bruiser") && !card.builds.includes("both");
-    const isBoth = card.builds.includes("both") || (card.builds.includes("bruiser") && card.builds.includes("trap"));
-    if (isBruiser) return "hl-bruiser";
-    if (isTrap) return "hl-trap";
+    const bd = CLASS_BUILDS[state.activeClass];
+    const b1 = bd ? bd.builds[0].id : "bruiser";
+    const b2 = bd ? bd.builds[1].id : "trap";
+    const isB1   = card.builds.includes(b1) && !card.builds.includes(b2) && !card.builds.includes("both");
+    const isB2   = card.builds.includes(b2) && !card.builds.includes(b1) && !card.builds.includes("both");
+    const isBoth = card.builds.includes("both") || (card.builds.includes(b1) && card.builds.includes(b2));
+    if (isB1)   return "hl-bruiser";
+    if (isB2)   return "hl-trap";
     if (isBoth) return "hl-both";
     return "hl-none";
   }
 
   function buildCardTags(card) {
     const tags = [];
+    const tc = getTagConfig();
+    const bd = CLASS_BUILDS[state.activeClass];
+    const b1 = bd ? bd.builds[0] : { id: "bruiser", name: "Bruiser" };
+    const b2 = bd ? bd.builds[1] : { id: "trap",    name: "Trap build" };
+
     tags.push(`<span class="tag tag-lvl">Lvl ${card.level}</span>`);
-    if (card.tags.includes("shackle")) tags.push(`<span class="tag tag-shackle">Shackle</span>`);
-    if (card.tags.includes("trap")) tags.push(`<span class="tag tag-trap">Trap</span>`);
-    if (card.top.isLoss || card.bottom.isLoss) tags.push(`<span class="tag tag-loss">Loss</span>`);
-    const isBruiser = card.builds.includes("bruiser") && !card.builds.includes("trap") && !card.builds.includes("both");
-    const isTrap = card.builds.includes("trap") && !card.builds.includes("bruiser") && !card.builds.includes("both");
-    const isBoth = card.builds.includes("both") || (card.builds.includes("bruiser") && card.builds.includes("trap"));
-    if (isBruiser) tags.push(`<span class="tag tag-bruiser">Bruiser</span>`);
-    if (isTrap) tags.push(`<span class="tag tag-trapbld">Trap build</span>`);
+
+    // Class-specific mechanic tags
+    if (card.tags.includes(tc.mechanic1.filter))
+      tags.push(`<span class="tag ${tc.mechanic1.tagClass}">${tc.mechanic1.label}</span>`);
+    if (card.tags.includes(tc.mechanic2.filter))
+      tags.push(`<span class="tag ${tc.mechanic2.tagClass}">${tc.mechanic2.label}</span>`);
+    if (card.tags.includes("aoe"))
+      tags.push(`<span class="tag tag-shackle">AoE</span>`);
+    if (card.top.isLoss || card.bottom.isLoss)
+      tags.push(`<span class="tag tag-loss">Loss</span>`);
+
+    // Build tags — dynamic per class
+    const isB1   = card.builds.includes(b1.id) && !card.builds.includes(b2.id) && !card.builds.includes("both");
+    const isB2   = card.builds.includes(b2.id) && !card.builds.includes(b1.id) && !card.builds.includes("both");
+    const isBoth = card.builds.includes("both") || (card.builds.includes(b1.id) && card.builds.includes(b2.id));
+    if (isB1)   tags.push(`<span class="tag tag-bruiser">${b1.name}</span>`);
+    if (isB2)   tags.push(`<span class="tag tag-trapbld">${b2.name}</span>`);
     if (isBoth) tags.push(`<span class="tag tag-both">Both builds</span>`);
     return tags.join("");
   }
@@ -218,7 +268,7 @@
     const grid = document.getElementById("cards-grid");
     if (!grid) return;
 
-    const data = CHAINGUARD_DATA;
+    const data = activeClassData();
     const filtered = data.cards.filter(cardMatchesFilter);
 
     if (filtered.length === 0) {
@@ -261,7 +311,7 @@
     const list = document.getElementById("perks-list");
     if (!list) return;
 
-    const data = CHAINGUARD_DATA;
+    const data = activeClassData();
     let totalCount = 0;
     let html = "";
 
@@ -323,12 +373,69 @@
     });
   }
 
+  // ===== RENDER BUILDS =====
+  function renderBuilds() {
+    const container = document.getElementById("builds-container");
+    if (!container) return;
+
+    const bd = CLASS_BUILDS[state.activeClass];
+    if (!bd) { container.innerHTML = ""; return; }
+
+    // Update perks description
+    const perksDesc = document.getElementById("perks-desc");
+    if (perksDesc) perksDesc.textContent = bd.perksDesc;
+
+    const buildsHTML = bd.builds.map((b) => `
+      <div class="build-panel" id="bp-${b.id}" data-build="${b.id}">
+        <div class="build-panel-header">
+          <div class="build-panel-icon ${b.iconClass}">${b.icon}</div>
+          <div>
+            <div class="build-panel-name">${b.name}</div>
+            <div class="build-panel-tagline">${b.tagline}</div>
+          </div>
+          <span class="build-chevron" id="chev-${b.id}">&#9660;</span>
+        </div>
+        <p class="build-panel-desc">${b.desc}</p>
+        <div class="build-panel-expand" id="bx-${b.id}">
+          <div class="expand-section">
+            <div class="expand-label">Playstyle</div>
+            <p class="expand-text">${b.playstyle}</p>
+          </div>
+          <div class="expand-section">
+            <div class="expand-label">Core cards</div>
+            <div class="expand-card-list">
+              ${b.coreCards.map((c) => "<div class=\"expand-card-item\"><strong>" + c.name + "</strong><span>" + c.desc + "</span></div>").join("")}
+            </div>
+          </div>
+          <div class="expand-section">
+            <div class="expand-label">Level-up path</div>
+            <div class="expand-levelup-list">
+              ${b.levelups.map((l) => "<div class=\"expand-levelup-item\"><span class=\"lvl-badge\">" + l.lvl + "</span><span>" + l.text + "</span></div>").join("")}
+            </div>
+          </div>
+          <div class="expand-actions">
+            <button class="show-cards-btn ${b.btnClass}" data-build="${b.id}">Show ${b.name} cards →</button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    const bothHTML = "<div class=\"both-builds-block\"><div class=\"both-builds-label\">Cards good for both builds</div><div class=\"both-builds-grid\">" +
+      bd.bothBuilds.map((c) => "<div class=\"both-card\"><strong>" + c.name + "</strong><p>" + c.desc + "</p></div>").join("") +
+      "</div></div>";
+
+    container.innerHTML = "<div class=\"builds-grid\">" + buildsHTML + "</div>" + bothHTML;
+
+    // Re-bind build panel interactions after DOM is updated
+    bindBuildPanels();
+  }
+
   // ===== RENDER TIPS =====
   function renderTips() {
     const grid = document.getElementById("tips-grid");
     if (!grid) return;
 
-    grid.innerHTML = CHAINGUARD_DATA.tips
+    grid.innerHTML = activeClassData().tips
       .map(
         (tip) => `
       <div class="tip-card">
@@ -343,15 +450,352 @@
 
   // ===== RENDER MILESTONE =====
   function renderMilestone() {
-    const ms = CHAINGUARD_DATA.milestone;
+    const data = activeClassData();
+    const ms = data.milestone;
     if (!ms) return;
+
+    // Milestone condition card image
     const img = document.getElementById("milestone-img");
     if (img) img.src = ms.imageUrl;
-    const ropepit = CHAINGUARD_DATA.cards.find((c) => c.id === "rope-pit");
-    const rewardImg = document.getElementById("milestone-reward-img");
-    if (rewardImg && ropepit && ropepit.imageUrl) {
-      rewardImg.src = ropepit.imageUrl;
+
+    // Milestone goal label and commentary
+    const goalLabel = document.getElementById("milestone-goal-label");
+    if (goalLabel) goalLabel.textContent = data.name + " milestone goal";
+    const goalText = document.getElementById("milestone-goal-text");
+    if (goalText) goalText.innerHTML = ms.commentary;
+
+    // Find the Level M card for this class
+    const milestoneCard = data.cards.find((c) => c.level === "M");
+
+    // Reward label and description
+    const rewardLabel = document.getElementById("milestone-reward-label");
+    const rewardDesc = document.getElementById("milestone-reward-desc");
+    if (milestoneCard) {
+      if (rewardLabel) rewardLabel.textContent = "Reward — " + milestoneCard.name + " (Level M)";
+      if (rewardDesc) rewardDesc.innerHTML = ms.reward;
     }
+
+    // Milestone ability card image
+    const rewardImg = document.getElementById("milestone-reward-img");
+    if (rewardImg && milestoneCard && milestoneCard.imageUrl) {
+      rewardImg.src = milestoneCard.imageUrl;
+    }
+  }
+
+
+  // ===== CLASS NAV =====
+  function bindClassNav() {
+    const nav = document.getElementById("class-nav");
+    if (!nav) return;
+    nav.addEventListener("click", (e) => {
+      const btn = e.target.closest(".class-btn");
+      if (!btn || btn.disabled || !btn.dataset.class) return;
+      const cls = btn.dataset.class;
+      if (cls === state.activeClass) return;
+      state.activeClass = cls;
+      state.cardFilter = "all";
+      state.activeBuild = null;
+      state.cardSearch = "";
+      state.expandedBuild = null;
+      state.perksChecked = {};
+
+      // Update class buttons
+      document.querySelectorAll(".class-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.class === cls);
+      });
+
+      // Update hero
+      const data = activeClassData();
+      const heroTitle = document.querySelector(".hero-title");
+      const heroDesc = document.querySelector(".hero-desc");
+      const heroEyebrow = document.querySelector(".hero-eyebrow");
+      if (heroTitle) heroTitle.textContent = data.name;
+      if (heroDesc) heroDesc.textContent = getClassDesc(cls);
+      if (heroEyebrow) heroEyebrow.textContent = data.game + " · " + (data.symbol ? data.symbol + " class" : data.name + " class");
+
+      // Update stat pills
+      const statNums = document.querySelectorAll(".stat-num");
+      if (statNums.length >= 2) {
+        statNums[0].textContent = data.startingHP;
+        statNums[1].textContent = data.handSize;
+      }
+
+      // Reset search input
+      const searchInput = document.getElementById("card-search");
+      if (searchInput) searchInput.value = "";
+
+      // Re-render everything
+      hideBuildBanner();
+      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+      const allChip = document.querySelector('.chip[data-filter="all"]');
+      if (allChip) allChip.classList.add("active");
+
+      // Update build filter chip labels for the new class
+      updateBuildChipLabels(cls);
+      updateMechanicChipLabels();
+
+      renderOverview();
+      renderCards();
+      renderBuilds();
+      renderPerks();
+      renderTips();
+      renderMilestone();
+    });
+  }
+
+  function getClassDesc(cls) {
+    const descs = {
+      chainguard: "A bruising Damage Soak who pins enemies in place with Shackle and flings them through traps with Swing. Evolution of the Brute — more control, more teeth.",
+      luminary: "A frontliner who deploys persistent Glow abilities and side-steps through enemy formations with Scuttle, leveraging Fire, Ice, Dark, and Light for powerful elemental effects.",
+    };
+    return descs[cls] || "";
+  }
+
+  // ===== RENDER OVERVIEW =====
+  const CLASS_OVERVIEW = {
+    chainguard: {
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Shackle",
+          chipClass: "shackle-chip",
+          text: "Places a character token on an enemy. A Shackled enemy cannot perform Move abilities while adjacent to the Chainguard, and does not factor the Chainguard into its Focus pathing. Token removed if the enemy dies or you Shackle a different enemy. Enemies immune to IMMOBILIZE are immune to Shackle."
+        },
+        {
+          label: "Mechanic",
+          chip: "Swing",
+          chipClass: "swing-chip",
+          text: "A modified Push/Pull that moves a target X hexes in a circle around you — clockwise or counterclockwise. The target cannot end up further from or closer to you. Movement ends when the target hits something that would normally block movement."
+        }
+      ],
+      role: "Chainguard holds monster aggro and soaks damage for the party. He struggles with AoE and Jump at Level 1. Initiative Control is a recurring challenge — cards skew 10–60. Comes fully online as a Damage Soak around Level 5, but needs creative play before then.",
+      xp: [0,45,95,150,200,275,345,420,500],
+      hp: [10,12,14,16,18,20,22,24,26]
+    },
+    luminary: {
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Glow",
+          chipClass: "shackle-chip",
+          text: "Persistent, non-Loss abilities that require element Consumption to function. You can activate them at any time during your turn, including during Move actions. You may only have one Glow active by default — each Glow discards when another is played. They produce a different element when first placed into your Active Area, so there is value in playing them even without intent to activate."
+        },
+        {
+          label: "Mechanic",
+          chip: "Scuttle",
+          chipClass: "swing-chip",
+          text: "Many Luminary AoE cards depict black hexes. After performing the attack, you may Move 1 into any depicted black hex — if you do, you infuse a specific element for free. The black hex must be empty and reachable. You resolve Attacks first so you always have full information before deciding whether to Scuttle."
+        }
+      ],
+      role: "Luminary is a Lurker frontliner with 11 cards and high HP (10 at Level 1). Uses Fire, Ice, Dark, and Light extensively. Moderately complex but plays smoothly for players comfortable with element cycling. Two distinct build paths — Bruiser/Scuttle (AoE damage) and Glow/Support (heal, shield, strengthen). Fair to say it's fairly durable, but far from a definitive tank.",
+      xp: [0,45,95,150,200,275,345,420,500],
+      hp: [10,12,14,16,18,20,22,24,26]
+    }
+  };
+
+  function renderOverview() {
+    const ov = CLASS_OVERVIEW[state.activeClass];
+    if (!ov) return;
+
+    const mechBlocks = document.querySelectorAll(".info-block");
+    if (mechBlocks.length >= 4) {
+      // Block 0: mechanic 1
+      const m0 = ov.mechanics[0];
+      mechBlocks[0].querySelector(".info-block-label").innerHTML =
+        '<span class="mechanic-chip ' + m0.chipClass + '">' + m0.label + '</span> ' + m0.chip;
+      mechBlocks[0].querySelector("p").textContent = m0.text;
+
+      // Block 1: mechanic 2
+      const m1 = ov.mechanics[1];
+      mechBlocks[1].querySelector(".info-block-label").innerHTML =
+        '<span class="mechanic-chip ' + m1.chipClass + '">' + m1.label + '</span> ' + m1.chip;
+      mechBlocks[1].querySelector("p").textContent = m1.text;
+
+      // Block 2: role
+      mechBlocks[2].querySelector("p").textContent = ov.role;
+
+      // Block 3: XP table
+      const xpRow = document.querySelectorAll(".xp-row:not(.header)")[0];
+      const hpRow = document.querySelectorAll(".xp-row:not(.header)")[1];
+      if (xpRow && hpRow) {
+        const xpCells = xpRow.querySelectorAll("span");
+        const hpCells = hpRow.querySelectorAll("span");
+        ov.xp.forEach((v, i) => { if (xpCells[i+1]) xpCells[i+1].textContent = v; });
+        ov.hp.forEach((v, i) => { if (hpCells[i+1]) hpCells[i+1].textContent = v; });
+      }
+    }
+  }
+
+
+
+  // ===== BUILDS DATA =====
+  const CLASS_BUILDS = {
+    chainguard: {
+      perksDesc: "Tap a checkbox to mark a perk as taken. Perks reinforce the class themes: Shackle, Shields, Retaliate, Wound, and Traps. Remove -1 cards first, then prioritize rolling modifiers.",
+      builds: [
+        {
+          id: "bruiser",
+          icon: "⚔",
+          iconClass: "bruiser-icon",
+          name: "Bruiser build",
+          tagline: "Shields, Retaliate, raw melee damage",
+          btnClass: "bruiser-btn",
+          desc: "Shackle a target, then attack it repeatedly for stacking bonus damage. Use Shields and Retaliate to survive incoming hits. The most straightforward path — strong from Level 1 with cards that clearly serve a single purpose.",
+          playstyle: "Lead with Untouchable Keeper (Init 14) or Chokehold (Init 22) to establish Shackle early. Use Wrapped in Metal (Init 82) as your emergency Stun when something dangerous is about to activate. Stack Retaliate with Spiked Knuckles and perks to punish your Shackled target. Champion of Chains at Level 9 lets you Shackle three targets simultaneously — each getting Wound — fundamentally changing the class's threat level.",
+          coreCards: [
+            { name: "Chokehold", desc: "Shackle + stacking attack bonus (+7 damage over 3 hits)" },
+            { name: "Follow the Chains", desc: "Attack 3 + repositioning, pairs well in rest cycles" },
+            { name: "Wrapped in Metal", desc: "Unconditional Ranged Stun — your emergency brake" },
+            { name: "Untouchable Keeper", desc: "Fastest card (Init 14), Shield + Heal 3 Self" },
+            { name: "Locking Links", desc: "Persistent True Damage clock — great vs Shielded targets" },
+            { name: "Merciless Beatdown", desc: "High-ceiling Loss Attack + forced enemy-on-enemy attack" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Iron Thrust — Jump + ally chain combos" },
+            { lvl: "3", text: "Sweeping Collision — Pierce 2 for party + grounds Fliers" },
+            { lvl: "4", text: "Double K.O. — two Attack 4s, Init 92" },
+            { lvl: "5", text: "Impending Power — defensive capstone, good for both builds" },
+            { lvl: "7", text: "Meteor Hammer — Disarm + Shield Ignore vs Shackled" },
+            { lvl: "8", text: "Syndicated Assault — ally-chain AoE, Attack 9–15" },
+            { lvl: "9", text: "Champion of Chains — 3 Shackles + Wound on each" },
+          ],
+        },
+        {
+          id: "trap",
+          icon: "⚙",
+          iconClass: "trap-icon",
+          name: "Trap build",
+          tagline: "True Damage, Shackle-delivery, Shield bypass",
+          btnClass: "trap-btn",
+          desc: "Place traps, Shackle a nearby enemy, then force or lure it through them. Traps deal True Damage — bypassing Shields entirely. More setup-dependent than Bruiser but scales better against high-armor enemies.",
+          playstyle: "Place a trap adjacent to you, establish Shackle, then use Pull abilities (Latch and Tow, Titanic Chainwhip) to drag the target through it. Latch and Tow top combo makes traps deal minimum 5 True Damage + Muddle. Dizzying Release + Latch and Tow is your signature combo: 7 True Damage, Wound, Muddle, 2 XP in one round. Impending Power at Level 5 extends trap placement to Range 2 and adds 2 bonus damage whenever you trigger one.",
+          coreCards: [
+            { name: "Locking Links", desc: "Bottom 2-damage Trap — always better than Bottom Attack 2" },
+            { name: "Rusty Spikes", desc: "3-dmg Poison Trap + Move 2 Shackle, fast Init 18" },
+            { name: "Latch and Tow", desc: "Pull into trap for +3 True Damage + Muddle + XP" },
+            { name: "Dizzying Release", desc: "Wound Trap — 7 True Damage combo with Latch and Tow" },
+            { name: "Impending Power", desc: "Range 2 trap placement + 2 bonus damage on spring" },
+            { name: "Clamping Snare", desc: "First AoE Trap — 5 True Dmg + Muddle + 2 splash" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Latch and Tow — core trap-trigger Pull card" },
+            { lvl: "3", text: "Sweeping Collision — Pierce 2 + grounds Fliers" },
+            { lvl: "4", text: "Dizzying Release — Wound Trap combo centerpiece" },
+            { lvl: "5", text: "Impending Power — near-mandatory for Trap builds" },
+            { lvl: "7", text: "Clamping Snare — first AoE Trap" },
+            { lvl: "8", text: "Pivot and Smash — Swing + trap trigger + Jump" },
+            { lvl: "9", text: "Unending Torment — double Trap damage victory lap" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Untouchable Keeper", desc: "Fastest card (Init 14) and only self-Heal at Level 1. Almost never cut." },
+        { name: "Wrapped in Metal", desc: "Unconditional Ranged Stun + Shackle. Repeatedly saves the party on key turns." },
+        { name: "Impending Power (Lvl 5)", desc: "Top serves Bruisers (Shield/Heal), Bottom serves Trap builds (range + bonus damage)." },
+        { name: "Sweeping Collision (Lvl 3)", desc: "Pierce 2 for everyone + grounds Fliers. Addresses both builds' core weaknesses." },
+      ],
+    },
+    luminary: {
+      perksDesc: "Tap a checkbox to mark a perk as taken. The Luminary has solid perk utility but lacks raw damage upgrades — every single perk caps out at +0. This lowers average Attack values slightly but adds elemental Infusion, healing, and utility. Remove -1 cards first, then prioritize Infuse replacements.",
+      builds: [
+        {
+          id: "bruiser",
+          icon: "⚡",
+          iconClass: "bruiser-icon",
+          name: "Bruiser / Scuttle build",
+          tagline: "AoE attacks, Scuttle positioning, element consumption",
+          btnClass: "bruiser-btn",
+          desc: "Focus on AoE Attack cards with element consumption bonuses. Scuttle into black hexes to generate elements for free after your attack. Chain Dark → Stun and Fire → Wound for consistent conditions against grouped enemies.",
+          playstyle: "Lead with Radiant Glare (Move 2 Infuse Dark) or Flickering Lights (Init 19) to establish element generation. Use Chilling Wave Top to Stun key targets with Dark Consumption. Scuttle after attacks to generate secondary elements — you resolve the attack first so you always have full information before Scuttling. Darkened Overcast at Level 2 is a cornerstone — Initiative 10 quasi-Invisibility that also generates Dark. Blackened Rage at Level 3 gives the AoE Immobilize this build wants.",
+          coreCards: [
+            { name: "Chilling Wave", desc: "Attack 3 + Dark Stun AoE — workhorse attack at Level 1" },
+            { name: "Flickering Lights", desc: "Attack 3 AoE, generates up to 4 elements, Heal 2 Loot bottom" },
+            { name: "Shimmering Scuttle", desc: "Fast Init 21, Attack 2 AoE + Fire Scuttle" },
+            { name: "Darkened Overcast (Lvl 2)", desc: "Init 10 quasi-Invisibility + Disadvantage + Dark generation" },
+            { name: "Blackened Rage (Lvl 3)", desc: "AoE Attack + Dark Immobilize, Scuttle Fire — signature Bruiser card" },
+            { name: "Colorful Wavelengths (Lvl 5)", desc: "Attack 5 with all-element conversion — class vision capstone" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Darkened Overcast — Init 10, quasi-Invisibility + Dark generation" },
+            { lvl: "3", text: "Blackened Rage — AoE Immobilize + Fire Scuttle" },
+            { lvl: "4", text: "Floodlight — Jump Scuttle Attack 4 Poison + ally Heal" },
+            { lvl: "5", text: "Colorful Wavelengths — Attack 5 all-element conversion capstone" },
+            { lvl: "6", text: "Imposing Brilliance — condition AoE + multi-element bottom" },
+            { lvl: "7", text: "Gamma Energy — Glow AoE 2 True Damage + Ranged Loss" },
+            { lvl: "9", text: "Blazing Pincers — Attack 8-12 Wound, or Light the Way (Summon + Ranged)" },
+          ],
+        },
+        {
+          id: "support",
+          icon: "✨",
+          iconClass: "trap-icon",
+          name: "Glow / Support build",
+          tagline: "Persistent Glows, party Heals, Shields, Strengthen",
+          btnClass: "trap-btn",
+          desc: "Deploy Glow persistent abilities to Heal, Shield, and Strengthen allies each turn. Pair Glow Tops with Move 2 Infuse Bottoms to generate the elements your Glows need. More party-dependent but excels in long attrition fights.",
+          playstyle: "Set up your active Glow on Turn 1 or between rooms. Soft Glow (Strengthen, Init 24) and Radiant Glare (Dark, Init 36) are your best early Glows. Each rest cycle, recover your Glow and re-deploy. Be aware you can only have one Glow active by default — Drawn into the Light (Milestone M card) upgrades this to two. The Support build really comes online at Level 5-7 when Gamma Energy and better Glow payoffs become available.",
+          coreCards: [
+            { name: "Radiant Glare", desc: "Glow Immobilize (Light) + Move 2 Infuse Dark — best bottom at Level 1" },
+            { name: "Soft Glow", desc: "Glow Strengthen allies (Dark) + Move 2 Infuse Light, fast Init 24" },
+            { name: "Frosty Glimmer", desc: "Heal 2 Range 3 with Dark extra target + Move 3 Jump with Ice" },
+            { name: "Luminescence (Lvl 2)", desc: "Glow Heal 2 all allies (Ice) + Move 4 Heal 3 Self with Ice" },
+            { name: "Shadow Claws (Lvl 5)", desc: "Glow Dark Muddle AoE + Advantage vs Muddled" },
+            { name: "Encompassing Aura (Lvl 6)", desc: "Shield/Retaliate all allies AoE + Immobilize/Wound bottom" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Luminescence — Glow party Heal + Move 4 Heal 3 Self" },
+            { lvl: "3", text: "Shining Diversion — Glow Shield allies (Light) + Move 5 Muddle" },
+            { lvl: "4", text: "Empowering Rays — Strengthen + AoE Attack, Poison on next Glow" },
+            { lvl: "5", text: "Shadow Claws — Glow Muddle AoE + Advantage on attacks" },
+            { lvl: "6", text: "Encompassing Aura — AoE Shield/Retaliate, Init 11" },
+            { lvl: "7", text: "Gamma Energy — first big Glow AoE damage payoff" },
+            { lvl: "9", text: "Light the Way — Glow Summon + Persistent Loss Move 4" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Radiant Glare", desc: "Best Level 1 card for both builds — Glow Top and Move 2 Infuse Dark bottom. Never cut." },
+        { name: "Flickering Lights", desc: "Fastest Initiative (19), generates up to 4 elements, Heal 2 Loot self bottom with Wild Element rider." },
+        { name: "Solid Light (Level X)", desc: "Init 12 is your best Initiative at Level 1. Move 3 Jump with Ice is excellent for positioning." },
+        { name: "Gamma Energy (Lvl 7)", desc: "Good for both builds — Glow AoE True Damage Top and Ranged multi-target Loss Bottom." },
+      ],
+    },
+  };
+
+
+  function updateBuildChipLabels(cls) {
+    const bd = CLASS_BUILDS[cls];
+    if (!bd || bd.builds.length < 2) return;
+    const bruiserChip = document.querySelector('.chip[data-filter="bruiser"]');
+    const trapChip = document.querySelector('.chip[data-filter="trapbuild"]');
+    if (bruiserChip) bruiserChip.textContent = bd.builds[0].name;
+    if (trapChip) trapChip.textContent = bd.builds[1].name;
+  }
+
+
+  // ===== CLASS TAG CONFIG =====
+  // Maps generic filter keys to class-specific tag names and card tag values
+  const CLASS_TAGS = {
+    chainguard: {
+      mechanic1: { filter: "shackle", label: "Shackle", tagClass: "tag-shackle" },
+      mechanic2: { filter: "trap",    label: "Trap",    tagClass: "tag-trap" },
+    },
+    luminary: {
+      mechanic1: { filter: "glow",    label: "Glow",    tagClass: "tag-shackle" },
+      mechanic2: { filter: "scuttle", label: "Scuttle", tagClass: "tag-trap" },
+    },
+  };
+
+  function getTagConfig() {
+    return CLASS_TAGS[state.activeClass] || CLASS_TAGS.chainguard;
+  }
+
+  function updateMechanicChipLabels() {
+    const tc = getTagConfig();
+    const chip1 = document.getElementById("chip-mechanic1");
+    const chip2 = document.getElementById("chip-mechanic2");
+    if (chip1) chip1.textContent = tc.mechanic1.label;
+    if (chip2) chip2.textContent = tc.mechanic2.label;
   }
 
   // ===== START =====

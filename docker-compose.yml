@@ -1,4 +1,27 @@
+# Crimson Scales Knowledge Base — Docker Compose
+#
+# Profiles:
+#   (default)            docker compose up
+#                        Builds image locally, runs on port 8080.
+#                        Use for local testing of the production build.
+#
+#   dev                  docker compose --profile dev up
+#                        Mounts src/ as a live volume — edit files and just refresh.
+#                        No rebuild needed between changes.
+#
+#   prod                 docker compose --profile prod up
+#                        Pulls published image from ghcr.io, runs on port 8081.
+#                        Use on searing-plains.com behind the Caddy reverse proxy.
+#                        Set GITHUB_REPO env var or edit the image line below.
+#
+# Production deployment on searing-plains.com:
+#   export GITHUB_REPO=your-github-username/crimson-scales-kb
+#   docker compose --profile prod pull
+#   docker compose --profile prod up -d
+
 services:
+
+  # ── Local build (default) ─────────────────────────────────────────────────
   app:
     build: .
     ports:
@@ -10,8 +33,8 @@ services:
       timeout: 3s
       retries: 3
 
-  # Dev mode: mounts src/ so you can edit files and just refresh the browser
-  # Usage: docker compose --profile dev up
+  # ── Dev mode: live file mount ─────────────────────────────────────────────
+  # docker compose --profile dev up
   app-dev:
     build: .
     ports:
@@ -19,3 +42,22 @@ services:
     volumes:
       - ./src:/usr/share/nginx/html
     profiles: [dev]
+
+  # ── Production: pull from ghcr.io, port 8081 ─────────────────────────────
+  # docker compose --profile prod pull && docker compose --profile prod up -d
+  app-prod:
+    image: ghcr.io/${GITHUB_REPO:-your-github-username/crimson-scales-kb}:latest
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    profiles: [prod]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

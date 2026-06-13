@@ -16,12 +16,12 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -48,3 +48,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
