@@ -8,6 +8,7 @@
   const CLASS_REGISTRY = {
     chainguard: CHAINGUARD_DATA,
     luminary: LUMINARY_DATA,
+    chieftain: CHIEFTAIN_DATA,
   };
 
   // ===== STATE =====
@@ -452,31 +453,42 @@
   function renderMilestone() {
     const data = activeClassData();
     const ms = data.milestone;
+
+    // Always clear reward elements first to avoid stale data from previous class
+    const rewardLabel   = document.getElementById("milestone-reward-label");
+    const rewardDesc    = document.getElementById("milestone-reward-desc");
+    const rewardImg     = document.getElementById("milestone-reward-img");
+    const abilityLabel  = document.getElementById("milestone-ability-label");
+    const goalLabel     = document.getElementById("milestone-goal-label");
+    const goalText      = document.getElementById("milestone-goal-text");
+    const img           = document.getElementById("milestone-img");
+
+    if (rewardLabel)  rewardLabel.textContent = "Reward — Level M card";
+    if (abilityLabel) abilityLabel.textContent = "Level M ability card";
+    if (rewardDesc)   rewardDesc.innerHTML = "";
+    if (rewardImg)    rewardImg.src = "";
+    if (img)          img.src = "";
+
     if (!ms) return;
 
     // Milestone condition card image
-    const img = document.getElementById("milestone-img");
     if (img) img.src = ms.imageUrl;
 
     // Milestone goal label and commentary
-    const goalLabel = document.getElementById("milestone-goal-label");
     if (goalLabel) goalLabel.textContent = data.name + " milestone goal";
-    const goalText = document.getElementById("milestone-goal-text");
-    if (goalText) goalText.innerHTML = ms.commentary;
+    if (goalText)  goalText.innerHTML = ms.commentary;
 
     // Find the Level M card for this class
     const milestoneCard = data.cards.find((c) => c.level === "M");
 
-    // Reward label and description
-    const rewardLabel = document.getElementById("milestone-reward-label");
-    const rewardDesc = document.getElementById("milestone-reward-desc");
-    if (milestoneCard) {
-      if (rewardLabel) rewardLabel.textContent = "Reward — " + milestoneCard.name + " (Level M)";
-      if (rewardDesc) rewardDesc.innerHTML = ms.reward;
+    // Reward label, description and card image
+    if (rewardLabel) rewardLabel.textContent = milestoneCard
+      ? "Reward — " + milestoneCard.name + " (Level M)"
+      : "Reward — " + ms.reward.split(" —")[0];
+    if (abilityLabel && milestoneCard) {
+      abilityLabel.textContent = "Level M card — " + milestoneCard.name;
     }
-
-    // Milestone ability card image
-    const rewardImg = document.getElementById("milestone-reward-img");
+    if (rewardDesc) rewardDesc.innerHTML = ms.reward;
     if (rewardImg && milestoneCard && milestoneCard.imageUrl) {
       rewardImg.src = milestoneCard.imageUrl;
     }
@@ -546,6 +558,7 @@
   function getClassDesc(cls) {
     const descs = {
       chainguard: "A bruising Damage Soak who pins enemies in place with Shackle and flings them through traps with Swing. Evolution of the Brute — more control, more teeth.",
+      chieftain: "An Orchid Summoner who rides Mounted animal companions around the battlefield, controlling their actions while freeing up utility actions for healing, Commands, and tactical plays.",
       luminary: "A frontliner who deploys persistent Glow abilities and side-steps through enemy formations with Scuttle, leveraging Fire, Ice, Dark, and Light for powerful elemental effects.",
     };
     return descs[cls] || "";
@@ -590,6 +603,25 @@
       role: "Luminary is a Lurker frontliner with 11 cards and high HP (10 at Level 1). Uses Fire, Ice, Dark, and Light extensively. Moderately complex but plays smoothly for players comfortable with element cycling. Two distinct build paths — Bruiser/Scuttle (AoE damage) and Glow/Support (heal, shield, strengthen). Fair to say it's fairly durable, but far from a definitive tank.",
       xp: [0,45,95,150,200,275,345,420,500],
       hp: [10,12,14,16,18,20,22,24,26]
+    },
+    chieftain: {
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Mount",
+          chipClass: "shackle-chip",
+          text: "End your Move action in a hex occupied by a Summon you own to Mount it. While Mounted, the Summon provides you free movement — it moves on its turn and you ride along. Mounted Summons are under your control: you control both your action and the Summon's action each turn. You and the Summon occupy the same hex for targeting purposes."
+        },
+        {
+          label: "Mechanic",
+          chip: "Command",
+          chipClass: "swing-chip",
+          text: "Command abilities let you order a Summon to perform Move and/or Attack actions with you controlling the ability — you choose the targets and path. This is how you prevent Summons from doing dangerous things like walking into traps or attacking high-Retaliate enemies."
+        }
+      ],
+      role: "Orchid Chieftain is a 10-card, Medium HP (8 at Level 1) Summoner class focused entirely around Mounts. She calls unique Summons with a special classification called Mounts — mountable animals you can ride around battle, freeing up your Bottom actions for utility while your Mount attacks. She recovers Lost Summon cards with Resurrection, making her more sustainable than typical Summoners. Uses Earth element moderately. Extremely strong XP generation.",
+      xp: [0,45,95,150,210,275,345,420,500],
+      hp: [8,9,11,12,14,15,17,18,20]
     }
   };
 
@@ -760,6 +792,73 @@
         { name: "Gamma Energy (Lvl 7)", desc: "Good for both builds — Glow AoE True Damage Top and Ranged multi-target Loss Bottom." },
       ],
     },
+    chieftain: {
+      perksDesc: "Tap a checkbox to mark a perk as taken. Prioritize the -1 to +0 Poison and -1 to +0 Heal Summoned Ally perks first. Then grab rolling Pierce 2 perks — Retaliate enemies are a serious problem. The +X Summon Count perk scales very well in late game.",
+      builds: [
+        {
+          id: "dps",
+          icon: "⚔",
+          iconClass: "bruiser-icon",
+          name: "DPS Chieftain",
+          tagline: "Mounted attack combos, high personal damage",
+          btnClass: "bruiser-btn",
+          desc: "Focus on maximizing the Chieftain's own damage output while Mounted. Stack Positive Reinforcement (+1 Attack mounted), Piercing Darts Bottom Pierce bonus, and One With Nature for devastating melee attacks that scale with Earth consumption.",
+          playstyle: "Mount the Speedy Ostrich or Fighting Bull for Initiative control and free movement. Stack Piercing Darts Bottom (active while mounted) with Ceremonial Dance for Attack 4 Pierce 1 Target 3 Muddle. At Level 5 add Positive Reinforcement as a Persistent Loss to push all your attacks up. One With Nature at Level 6 becomes Attack 6-7 with Earth — your signature big hit. Strapping Bullwhip at Level 7 pairs with One With Nature for Attack 9 Pierce 2. You'll output massive damage while your Black Panther tanks hits with Disadvantage on all attacks.",
+          coreCards: [
+            { name: "Piercing Darts", desc: "+1 Attack Pierce 1 mounted — scales incredibly as you level" },
+            { name: "Resurrection", desc: "Recover 3 lost cards — the class's lifeline, near-mandatory" },
+            { name: "Catastrophic Cattle", desc: "Fighting Bull — most reliable general Mount with Attack 2" },
+            { name: "Ceremonial Dance (Lvl 2)", desc: "Attack 2 Target 3 Muddle — combos with Piercing Darts Bottom" },
+            { name: "Positive Reinforcement (Lvl 5)", desc: "Persistent +1 Attack while mounted — transforms all your attacks" },
+            { name: "One With Nature (Lvl 6)", desc: "Attack 4/6 with Earth — your signature big hit card" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Ceremonial Dance — Attack Target 3 Muddle, group Move bottom" },
+            { lvl: "3", text: "Take the Reins + Agile Predator — both are near-unanimous picks" },
+            { lvl: "4", text: "Spiked Muzzle — persistent +2 Mount attacks, or War Paint" },
+            { lvl: "5", text: "Positive Reinforcement — persistent +1 Attack while mounted" },
+            { lvl: "6", text: "One With Nature — Attack 4/6 with Earth, Move 5 Infuse Earth" },
+            { lvl: "7", text: "Strapping Bullwhip — AoE Attack + mounted Pierce 2 burst" },
+            { lvl: "8", text: "Majestic Mass — War Elephant Attack 3 AoE, Mount 4 bottom" },
+            { lvl: "9", text: "Master the Reins or Regal Beast — both excellent for either build" },
+          ],
+        },
+        {
+          id: "tank",
+          icon: "🛡",
+          iconClass: "trap-icon",
+          name: "Summon Tank",
+          tagline: "Multiple summons, damage absorption, party support",
+          btnClass: "trap-btn",
+          desc: "Field multiple Summons simultaneously to absorb hits for the party. Use Sucker Punch and War Paint to redirect damage, Soul Whisperer to Heal your Summons, and Medicine Shield for emergency healing. Sacrifice individual damage output for exceptional party survivability.",
+          playstyle: "Keep 2 Summons out most of the time — one to Mount, one to tank hits. The Giant Tortoise is your go-to early tank Mount with 6 HP and Shield 1. Use Sucker Punch Bottom to absorb hits your Mount would take. War Paint at Level 4 is essential — it makes enemies focus you before your Mount, and lets you act before your Mount to kill threats before they can attack it. The Pack Mule X card provides free Heal 2 each round. At Level 7 the Battle Rhinoceros with Shield 1 (plus Shield 1 for you while Mounted) makes the whole setup extremely durable.",
+          coreCards: [
+            { name: "Sucker Punch", desc: "Fastest Init (14) — Immobilize top, absorb Summon damage bottom" },
+            { name: "Soul Whisperer", desc: "Command + Heal 2 all Summons — keep your beasts alive" },
+            { name: "Slow and Steady", desc: "Giant Tortoise — 6HP Shield 1, tankiest early Mount" },
+            { name: "Prepared Rations (X)", desc: "Pack Mule — free Heal 2 Self each round while mounted" },
+            { name: "Medicine Shield (Lvl 2)", desc: "Heal 3 Range 3 with Earth, Shield 2 Heal 1 all allies Loss" },
+            { name: "War Paint (Lvl 4)", desc: "Enemy focus redirect + act before your Mount — near-mandatory" },
+          ],
+          levelups: [
+            { lvl: "2", text: "Medicine Shield — Heal 3 Range 3, Shield 2 all allies emergency" },
+            { lvl: "3", text: "Take the Reins + Agile Predator — both picks for tank too" },
+            { lvl: "4", text: "War Paint — quasi-Invisibility + focus redirect, near-mandatory" },
+            { lvl: "5", text: "Chest Thumper — Lowland Gorilla 7HP Jump, Strengthen bottom" },
+            { lvl: "6", text: "Venomous Mayhem — Snake Poison/Immobilize, Attack 3 Poison bottom" },
+            { lvl: "7", text: "Impervious Armor — Battle Rhino Shield 1 + you get Shield 1 mounted" },
+            { lvl: "8", text: "Tribal Blessing — Heal 5 Bless, Move 4 Heal 3 Range 3 bottom" },
+            { lvl: "9", text: "Master the Reins or Regal Beast — both excellent for either build" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Resurrection", desc: "The class-defining card. Recover 3 Lost Summons. Never cut before Level 9." },
+        { name: "Sucker Punch", desc: "Fastest Initiative (14). Immobilize top + damage absorption bottom. Near-mandatory." },
+        { name: "Soul Whisperer", desc: "Command your Mount's full Move+Attack + Heal 2 all Summons. Essential." },
+        { name: "Take the Reins (Lvl 3)", desc: "Attack+1 Command (Mounted: +2 Attack). Both builds want this. Agile Predator also near-unanimous." },
+      ],
+    },
   };
 
 
@@ -783,6 +882,10 @@
     luminary: {
       mechanic1: { filter: "glow",    label: "Glow",    tagClass: "tag-shackle" },
       mechanic2: { filter: "scuttle", label: "Scuttle", tagClass: "tag-trap" },
+    },
+    chieftain: {
+      mechanic1: { filter: "mount",   label: "Mount",   tagClass: "tag-shackle" },
+      mechanic2: { filter: "command", label: "Command", tagClass: "tag-trap" },
     },
   };
 
