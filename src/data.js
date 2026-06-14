@@ -14,7 +14,7 @@ const CHAINGUARD_DATA = {
     points: 20,
     imageUrl: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/milestones/crimson-scales/cs-ms-chainguard-front.png",
     reward: "Rope Pit — a Level M ability card added to your hand permanently once the milestone is complete.",
-    commentary: "The Chainguard milestone requires accumulating 10 checkmarks toward the personal goal shown on the milestone card front. Once complete, Rope Pit is added to your hand as a permanent Level M card — one of the most impactful early-game upgrades for the Trap build, giving you a critical mass of trap options before Level 3."
+    commentary: "Goal: Kill a Shackled enemy 10 times. This plays directly into the Chainguard's core loop — Shackle a target, beat it down, and finish it off. The Bruiser build completes this naturally since Shackle is your primary mechanic from turn one. The Trap build takes longer since you're more focused on controlling enemies through traps, but any kill on a Shackled enemy counts regardless of what dealt the killing blow. Once complete, Rope Pit is added permanently — a game-changer for the Trap build that lets you create a Range 2 trap that auto-Shackles when triggered."
   },
 
   cards: [

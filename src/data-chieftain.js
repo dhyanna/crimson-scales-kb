@@ -15,7 +15,7 @@ const CHIEFTAIN_DATA = {
     points: 10,
     imageUrl: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/milestones/crimson-scales/cs-ms-chieftain-front.png",
     reward: "Call of the Wild — a Level M ability card added to your hand permanently once the milestone is complete.",
-    commentary: "The Orchid Chieftain milestone requires accumulating 10 checkmarks toward the personal goal shown on the milestone card front. Once complete, Call of the Wild is added permanently — a powerful card that fits naturally into both the DPS and Tank builds, enhancing your Summon and Mount capabilities."
+    commentary: "Goal: Perform a Summon action and Mount the Summon during the same turn 10 times. This is the Chieftain's core gameplay loop — Summon a Mount and immediately ride it on the same turn. Cards like Take the Reins Bottom (Move 4, Attack 2 if you Mount) and Catastrophic Cattle Top are your primary vehicles for this. You'll complete this milestone naturally if you prioritize Mounting fresh Summons rather than waiting a turn. Once complete, Call of the Wild is added permanently — a fitting reward for a class defined by its bond with its animal companions."
   },
 
   cards: [

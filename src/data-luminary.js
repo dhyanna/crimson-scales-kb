@@ -15,7 +15,7 @@ const LUMINARY_DATA = {
     points: 10,
     imageUrl: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/milestones/crimson-scales/cs-ms-luminary-front.png",
     reward: "Drawn into the Light — a Level M ability card added to your hand permanently once the milestone is complete.",
-    commentary: "The Luminary milestone requires accumulating 10 checkmarks toward the personal goal shown on the milestone card front. The goal involves doing a particular thing 10 times, always referencing the class's own mechanics. Once complete, Drawn into the Light is added permanently — it's the class's only non-Loss Ranged Attack, and unlocks the ability to have two Glow cards active simultaneously. Everyone eventually gets this card, so it's not a question of if but when."
+    commentary: "Goal: Consume an element to perform a Glow action 10 times. This is exactly what the Luminary does every turn it has a Glow active and the right element available — so this milestone completes itself naturally as you play. Any element consumption that triggers a Glow ability counts, whether it's Dark for Radiant Glare, Ice for Luminescence, or Fire for Heat Waves. Once complete, Drawn into the Light is added permanently — the class's only non-Loss Ranged Attack and, crucially, the ability to have two Glow cards active simultaneously."
   },
 
   cards: [
