@@ -9,6 +9,7 @@
     chainguard: CHAINGUARD_DATA,
     luminary: LUMINARY_DATA,
     chieftain: CHIEFTAIN_DATA,
+    hierophant: HIEROPHANT_DATA,
   };
 
   // ===== STATE =====
@@ -28,6 +29,19 @@
 
   // ===== INIT =====
   function init() {
+    // Show Prayer chip only for Hierophant
+    const prayerChip = document.getElementById("chip-lvlp");
+    if (prayerChip) prayerChip.style.display = state.activeClass === "hierophant" ? "" : "none";
+
+    // Milestone flip card
+    const flipCard = document.getElementById("milestone-flip-card");
+    const flipToBack = document.getElementById("flip-to-back");
+    const flipToFront = document.getElementById("flip-to-front");
+    if (flipCard && flipToBack && flipToFront) {
+      flipToBack.addEventListener("click", () => { flipCard.classList.add("flipped"); });
+      flipToFront.addEventListener("click", () => { flipCard.classList.remove("flipped"); });
+    }
+
     renderCards();
     renderPerks();
     renderTips();
@@ -133,7 +147,7 @@
       if (expand) expand.classList.toggle("open", open);
       if (chev) chev.classList.toggle("rotated", open);
       if (panel) {
-        panel.classList.remove("open-bruiser", "open-trap", "open-support");
+        panel.classList.remove("open-bruiser", "open-trap", "open-support", "open-damage", "open-dps", "open-tank");
         if (open) panel.classList.add("open-" + b);
       }
     });
@@ -143,7 +157,7 @@
     state.activeBuild = build;
     state.cardFilter = "all";
     // Map build id to filter chip data-filter value
-    const filterMap = { bruiser: "bruiser", trap: "trapbuild", support: "trapbuild" };
+    const filterMap = { bruiser: "bruiser", trap: "trapbuild", support: "trapbuild", damage: "bruiser", dps: "bruiser", tank: "trapbuild" };
     const filterVal = filterMap[build] || "bruiser";
     switchTab("cards");
     document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
@@ -199,19 +213,20 @@
       }
     }
 
-    if (f === "lvl1" && card.level !== "1") return false;
+    if (f === "lvl1" && (card.level !== "1")) return false;
     if (f === "lvlx" && card.level !== "X") return false;
     if (f === "lvlm" && card.level !== "M") return false;
+    if (f === "lvlp" && card.level !== "P") return false;
     if (f === "lvl2plus" && !["2","3","4","5","6","7","8","9"].includes(card.level)) return false;
     // Mechanic filters — map to class-specific tag values
     if (f === "mechanic1" && !card.tags.includes(getTagConfig().mechanic1.filter)) return false;
     if (f === "mechanic2" && !card.tags.includes(getTagConfig().mechanic2.filter)) return false;
     if (f === "loss" && !card.top.isLoss && !card.bottom.isLoss) return false;
     if (f === "bruiser") {
-      if (!card.builds.includes("bruiser") && !card.builds.includes("both")) return false;
+      if (!card.builds.includes("bruiser") && !card.builds.includes("damage") && !card.builds.includes("dps") && !card.builds.includes("both")) return false;
     }
     if (f === "trapbuild") {
-      if (!card.builds.includes("trap") && !card.builds.includes("both")) return false;
+      if (!card.builds.includes("trap") && !card.builds.includes("support") && !card.builds.includes("tank") && !card.builds.includes("both")) return false;
     }
 
     if (state.cardSearch) {
@@ -542,6 +557,14 @@
       const allChip = document.querySelector('.chip[data-filter="all"]');
       if (allChip) allChip.classList.add("active");
 
+      // Show Prayer chip only for Hierophant
+      const prayerChip = document.getElementById("chip-lvlp");
+      if (prayerChip) prayerChip.style.display = cls === "hierophant" ? "" : "none";
+
+      // Reset flip card to front
+      const flipCard = document.getElementById("milestone-flip-card");
+      if (flipCard) flipCard.classList.remove("flipped");
+
       // Update build filter chip labels for the new class
       updateBuildChipLabels(cls);
       updateMechanicChipLabels();
@@ -560,6 +583,7 @@
       chainguard: "A bruising Damage Soak who pins enemies in place with Shackle and flings them through traps with Swing. Evolution of the Brute — more control, more teeth.",
       chieftain: "An Orchid Summoner who rides Mounted animal companions around the battlefield, controlling their actions while freeing up utility actions for healing, Commands, and tactical plays.",
       luminary: "A frontliner who deploys persistent Glow abilities and side-steps through enemy formations with Scuttle, leveraging Fire, Ice, Dark, and Light for powerful elemental effects.",
+      hierophant: "A ranged 11-card battle-priest who distributes Prayer cards to allies, curses the enemy modifier deck, and leverages a burn-card economy (Spiritual Gains) that lets them cast devastating loss attacks all scenario long.",
     };
     return descs[cls] || "";
   }
@@ -622,7 +646,26 @@
       role: "Orchid Chieftain is a 10-card, Medium HP (8 at Level 1) Summoner class focused entirely around Mounts. She calls unique Summons with a special classification called Mounts — mountable animals you can ride around battle, freeing up your Bottom actions for utility while your Mount attacks. She recovers Lost Summon cards with Resurrection, making her more sustainable than typical Summoners. Uses Earth element moderately. Extremely strong XP generation.",
       xp: [0,45,95,150,210,275,345,420,500],
       hp: [8,9,11,12,14,15,17,18,20]
-    }
+    },
+    hierophant: {
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Prayer Cards",
+          chipClass: "shackle-chip",
+          text: "The Hierophant gives special Prayer ability cards to allies. These don't count against the Hierophant's hand size. Allies add them to their own hands for extra stamina and useful effects. All Prayers can be used for basic Attack 2/Move 2, but cannot be burned to prevent damage (with one exception: Lamentation). All have Initiative 50."
+        },
+        {
+          label: "Mechanic",
+          chip: "Burn Economy",
+          chipClass: "swing-chip",
+          text: "At level 5, Spiritual Gains lets the Hierophant place a token every time they play a burn card. On a Long Rest, spend a token to skip losing a card. This dramatically extends stamina and makes burn cards far less costly — enabling 5–6 burn plays per scenario without running out of cards."
+        }
+      ],
+      role: "The Hierophant is an 11-card ranged class with the smallest HP pool. Almost all attacks are ranged, keeping them safe despite low health. Two viable paths: a Damage/Battle-Priest build that leverages burn cards, curse synergy, and Spiritual Gains for high damage output; and a Support build focused on Prayer distribution, heals, and shields. Becomes a powerhouse at Level 5 (Spiritual Gains) and again at Level 9 (Bringer of Miracles).",
+      xp: [0,45,95,150,200,275,345,420,500],
+      hp: [6,7,9,10,12,13,15,16,18]
+    },
   };
 
   function renderOverview() {
@@ -732,7 +775,7 @@
       builds: [
         {
           id: "bruiser",
-          icon: "⚡",
+          icon: "⡠",
           iconClass: "bruiser-icon",
           name: "Bruiser / Scuttle build",
           tagline: "AoE attacks, Scuttle positioning, element consumption",
@@ -859,6 +902,73 @@
         { name: "Take the Reins (Lvl 3)", desc: "Attack+1 Command (Mounted: +2 Attack). Both builds want this. Agile Predator also near-unanimous." },
       ],
     },
+    hierophant: {
+      perksDesc: "Remove −1 cards first (highest priority), then: Replace +1s with +0 Curse ×2, Replace +0s with rolling Light, Replace +0s with rolling Earth, Ignore negative scenario effects + remove +0, Replace +1s with +3 ×2, Start each scenario with a Bless (skip if using Bringer of Miracles bottom), Replace −2 with 'give ally a Prayer' + +0, Replace last +0 with Shield 1 Ally, Add +1 Wound/Muddle ×2, Add rolling Heal 1 ×2.",
+      builds: [
+        {
+          id: "damage",
+          icon: "🔥",
+          iconClass: "bruiser-icon",
+          name: "Damage / Battle Priest",
+          tagline: "Burn economy, curse synergy, Spiritual Gains engine",
+          btnClass: "bruiser-btn",
+          desc: "Play Spiritual Gains on turn 1 to unlock free burn cards each rest cycle. Use Sacred Death to replay burn attacks. Load the enemy deck with Curses. Hit level 9 for Bringer of Miracles' permanent Advantage and second ×2.",
+          playstyle: "Turn 1: play Spiritual Gains (persistent) and a fast attack. Each burn card you play earns a Spiritual Gains token — on Long Rest, spend a token to skip losing a card. Sacred Death bottom lets you replay burn-card bottoms this turn; combine with Curious Pendant for a third use of Soul Strike or Divine Allegiance. Sit right behind your melee allies — most attacks have short range or adjacency requirements. Build toward 3–5 curses in the enemy deck via perks and Orb of Despair so Muddle becomes devastating and Unruly Repentance triggers fast.",
+          coreCards: [
+            { name: "Spiritual Gains", desc: "Persistent: burn cards earn tokens → skip card loss on Long Rest. ENGINE." },
+            { name: "Sacred Death", desc: "Burn Attack 3, then replay a burn-card bottom this turn." },
+            { name: "Soul Strike", desc: "Burn Attack 4, Pierce 3, Wound — feeds Sacred Death. Stays to level 9." },
+            { name: "Faith Calling", desc: "Enhanced bottom: Attack 1 double-Curse. Init 10 is your fastest card." },
+            { name: "Bringer of Miracles", desc: "Level 9: permanent Advantage + permanent ×2. Play turn 1 every scenario." },
+            { name: "Divine Allegiance (Lvl 2)", desc: "Multi-target burn attack — third Sacred Death fuel source." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Divine Allegiance — multi-target burn, feeds Sacred Death" },
+            { lvl: "3", text: "Prosperous Concord (X card) — only repeatable Light source" },
+            { lvl: "4", text: "Rooted Subjugation — Attack 3 Pierce 3, core damage card" },
+            { lvl: "5", text: "Spiritual Gains — mandatory engine card, play turn 1 every scenario" },
+            { lvl: "6", text: "Chains of Light — effective Attack 6+ with stun" },
+            { lvl: "7", text: "Revered Protector — Initiative 15, Shield top + Move 4 Jump" },
+            { lvl: "8", text: "Vengeful Veneration — effective Attack 6, Range 4" },
+            { lvl: "9", text: "Bringer of Miracles — permanent Advantage + ×2, play turn 1" },
+          ],
+        },
+        {
+          id: "support",
+          icon: "🙏",
+          iconClass: "trap-icon",
+          name: "Support / Prayer Focus",
+          tagline: "Prayer distribution, heals, shields, ally buffs",
+          btnClass: "trap-btn",
+          desc: "Maximise Prayer distribution and keep allies healthy and shielded. Give out Prayers liberally for extra stamina. Use heals, ward abilities, and shield cards to dramatically reduce incoming damage. Spiritual Gains is still strong for its emergency bottom.",
+          playstyle: "Focus on cards with Prayer triggers: Inspired Remedy top, Vocal Sermon bottom, Harsh Rebuke top, Faith Calling top (if only one ally). Keep Inspired Remedy or Oak's Embrace in hand for consistent healing. Oak's Embrace top gives two ward charges — functionally 3–5 damage mitigation at low levels. Weakened Will bottom (Disadvantage on all enemy attacks) is extremely powerful on turns when lots of incoming damage is expected. At level 9, Expansive Permanence bottom gives the whole team +2 Attack and enemies −2 Attack — massive swing.",
+          coreCards: [
+            { name: "Faith Calling", desc: "Shield 1 all allies + Prayer if only one ally. Init 10." },
+            { name: "Inspired Remedy", desc: "Heal 3 top with Prayer trigger at half HP. End-of-turn Heal 1 bottom." },
+            { name: "Oak's Embrace", desc: "Two ward charges within Range 3. Only Move 4 until level 5." },
+            { name: "Vocal Sermon", desc: "Best Prayer trigger — Move 3 Jump bottom, give Prayer to ally moved through." },
+            { name: "Uplifting Ascension (M)", desc: "Heal 3 / Invisibility card from milestone. Main Earth consumer mid-game." },
+            { name: "Expansive Permanence (Lvl 9)", desc: "Team +2 Attack all attacks + enemy −2 Attack. Huge in 4P." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Weakened Will — Disadvantage on all enemy attacks bottom, Init 20" },
+            { lvl: "3", text: "Vital Bond — ally card recovery bottom, top swap + Muddle" },
+            { lvl: "4", text: "Devout Assistance (Lvl 5 card) or hold for level 5" },
+            { lvl: "5", text: "Devout Assistance — persistent element-to-Shield/Heal conversion" },
+            { lvl: "6", text: "Unstoppable Force — Init 15, Shield top + Range 4 attack bottom" },
+            { lvl: "7", text: "Righteous Atonement — ally card recovery burst, or Revered Protector" },
+            { lvl: "8", text: "Two Allies Fight — grant allies Attack 3 each" },
+            { lvl: "9", text: "Expansive Permanence — team +2/−2 attack swing, Init 10" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Faith Calling", desc: "Initiative 10 — your fastest card. Enhanced with Curse on bottom it's core for damage; Shield top is useful for support. Never cut." },
+        { name: "Vocal Sermon", desc: "Best Prayer delivery (Move 3 Jump bottom) and team card recovery top. Both builds value this." },
+        { name: "Uplifting Ascension (Milestone M)", desc: "Heal 3 / Invisibility card from milestone. Main Earth consumer mid-game. Competes with Inspired Remedy." },
+        { name: "Sacred Death", desc: "Bottom card recovery is surprisingly useful even for support — lets you replay a discard's bottom action." },
+      ],
+    },
   };
 
 
@@ -877,7 +987,7 @@
   const CLASS_TAGS = {
     chainguard: {
       mechanic1: { filter: "shackle", label: "Shackle", tagClass: "tag-shackle" },
-      mechanic2: { filter: "trap",    label: "Trap",    tagClass: "tag-trap" },
+      mechanic2: { filter: "swing",   label: "Swing",   tagClass: "tag-trap" },
     },
     luminary: {
       mechanic1: { filter: "glow",    label: "Glow",    tagClass: "tag-shackle" },
@@ -886,6 +996,10 @@
     chieftain: {
       mechanic1: { filter: "mount",   label: "Mount",   tagClass: "tag-shackle" },
       mechanic2: { filter: "command", label: "Command", tagClass: "tag-trap" },
+    },
+    hierophant: {
+      mechanic1: { filter: "prayer",  label: "Prayer",  tagClass: "tag-shackle" },
+      mechanic2: { filter: "burn",    label: "Burn",    tagClass: "tag-trap" },
     },
   };
 

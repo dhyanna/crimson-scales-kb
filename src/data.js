@@ -44,7 +44,7 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 30,
       cardNum: 61,
-      tags: ["shackle", "trap"],
+      tags: ["shackle", "swing"],
       builds: ["trap"],
       top: {
         text: "SWING 3 · Target one adjacent enemy. Add MUDDLE if the Attack 3 hits.",
@@ -63,7 +63,7 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 19,
       cardNum: 62,
-      tags: ["shackle"],
+      tags: [],
       builds: ["bruiser"],
       top: {
         text: "Attack 3 · PUSH 1 · Add +1 PUSH and gain XP if the target is Shackled.",
@@ -90,7 +90,7 @@ const CHAINGUARD_DATA = {
       },
       bottom: {
         text: "Create a 2 damage trap in an adjacent empty hex.",
-        isLoss: true
+        isLoss: false
       },
       commentary: "Glue card for Level 1 — both builds want it. The persistent True Damage clock on the top is excellent against Shielded targets and stacks with Wound. The 2-damage Trap bottom is almost always better than a Bottom Attack 2 since it deals True Damage and ignores Shields."
     },
@@ -101,7 +101,7 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 26,
       cardNum: 64,
-      tags: ["shackle", "loss"],
+      tags: ["loss"],
       builds: ["bruiser"],
       top: {
         text: "Attack 3 · Add +2 Attack for each enemy adjacent to the target.",
@@ -124,7 +124,7 @@ const CHAINGUARD_DATA = {
       builds: ["trap"],
       top: {
         text: "Create a 3 damage POISON trap in an adjacent empty hex.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 2 · Shackle one adjacent enemy.",
@@ -158,7 +158,7 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 66,
       cardNum: 67,
-      tags: ["shackle"],
+      tags: [],
       builds: ["bruiser"],
       top: {
         text: "Attack 2 · WOUND · Add +1 Attack and gain XP if the target is Shackled. (Active rolling Retaliate)",
@@ -177,11 +177,11 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 14,
       cardNum: 59,
-      tags: ["shackle", "loss"],
+      tags: [],
       builds: ["both"],
       top: {
         text: "Shield 1 Self · Shackled enemies treat you as if you have INVISIBLE this round. (Active, Loss)",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Heal 3 Self (XP)",
@@ -196,55 +196,17 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 82,
       cardNum: 68,
-      tags: ["shackle", "loss"],
+      tags: [],
       builds: ["both"],
       top: {
         text: "STUN · Range 2 · PULL 1 · Shackle (Loss)",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 3 · PULL 3 targeting one Shackled enemy adjacent to the hex you occupied at the start of this action.",
         isLoss: false
       },
       commentary: "An unconditional Ranged Stun that also Pulls and Shackles — an absolute powerhouse. Your only very slow Initiative tool. Always play this as your leading Initiative card on turns you use the Top. Repeatedly saves the party on key turns; don't consider cutting before Level 5."
-    },
-    {
-      id: "roundhouse-swing",
-      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-roundhouse-swing.jpeg",
-      name: "Roundhouse Swing",
-      level: "X",
-      initiative: 79,
-      cardNum: 70,
-      tags: ["shackle", "loss"],
-      builds: ["bruiser"],
-      top: {
-        text: "Loot 1 · You may forgo the Loot ability to perform: Shackle and SWING 3 Range 3, Loot each hex the target enters. (Active)",
-        isLoss: false
-      },
-      bottom: {
-        text: "Move 3 · Add +2 SWING to your next Swing ability this round, then discard this card.",
-        isLoss: false
-      },
-      commentary: "A solid X card that serves as Loot 2.0. The flexible Shackle+Swing+Loot combo works in many situations. Initiative 79 adds welcome variety to a deck that skews fast. The bottom +2 Swing rarely matters since most Swings are already Ranged."
-    },
-    {
-      id: "vigorous-sway",
-      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-vigorous-sway.jpeg",
-      name: "Vigorous Sway",
-      level: "X",
-      initiative: 52,
-      cardNum: 71,
-      tags: ["shackle", "trap", "loss"],
-      builds: ["trap"],
-      top: {
-        text: "Shackle and SWING 3 Range 2 · If you cannot swing the target into a hex because of an obstacle or wall, the target suffers 2 damage and you gain XP. (Active)",
-        isLoss: false
-      },
-      bottom: {
-        text: "Move 3 · Shackle one adjacent enemy · Create a 3 damage STUN trap in an adjacent empty hex.",
-        isLoss: true
-      },
-      commentary: "Top is 2 True Damage + XP when walls are nearby — decent success rate in practice. Initiative 52 is terrible for this class. Bottom is a nice last-room Loss play — Move, Shackle, heavy Stun trap — and was a fairly common final room play for our Chainguard."
     },
     {
       id: "ganging-up",
@@ -266,23 +228,42 @@ const CHAINGUARD_DATA = {
       commentary: "Doesn't feel like an X card — both halves are normal Chainguard actions. Two Attack 2s is typically better than Attack 4, and having monsters with Retaliate beat each other up is always satisfying. The bottom enhancement pip is conducive to Poison or similar."
     },
     {
-      id: "iron-thrust",
-      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-iron-thrust.jpeg",
-      name: "Iron Thrust",
-      level: "2",
-      initiative: 38,
-      cardNum: 73,
-      tags: ["loss"],
-      builds: ["both"],
+      id: "roundhouse-swing",
+      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-roundhouse-swing.jpeg",
+      name: "Roundhouse Swing",
+      level: "X",
+      initiative: 79,
+      cardNum: 70,
+      tags: ["shackle", "loss", "swing"],
+      builds: ["bruiser"],
       top: {
-        text: "Attack 3 · PUSH 3 · You may push the target through hexes occupied by your allies. In each case, the ally may perform an 'Attack 2' ability targeting that enemy; if they do, the ally gains MUDDLE. XP unconditional.",
-        isLoss: true
-      },
-      bottom: {
-        text: "Move 3 Jump · Shackle one enemy moved through with the Move ability.",
+        text: "Loot 1 · You may forgo the Loot ability to perform: Shackle and SWING 3 Range 3, Loot each hex the target enters. (Active)",
         isLoss: false
       },
-      commentary: "Top enables nice trap-delivery combos and ally chain attacks. Bottom Move 3 Jump Shackle is excellent — Jump is surprisingly scarce on this class and critically important for positioning Swings and Push/Pull plays. Both builds want this card."
+      bottom: {
+        text: "Move 3 · Add +2 SWING to your next Swing ability this round, then discard this card.",
+        isLoss: false
+      },
+      commentary: "A solid X card that serves as Loot 2.0. The flexible Shackle+Swing+Loot combo works in many situations. Initiative 79 adds welcome variety to a deck that skews fast. The bottom +2 Swing rarely matters since most Swings are already Ranged."
+    },
+    {
+      id: "vigorous-sway",
+      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-vigorous-sway.jpeg",
+      name: "Vigorous Sway",
+      level: "X",
+      initiative: 52,
+      cardNum: 71,
+      tags: ["shackle", "swing"],
+      builds: ["trap"],
+      top: {
+        text: "Shackle and SWING 3 Range 2 · If you cannot swing the target into a hex because of an obstacle or wall, the target suffers 2 damage and you gain XP. (Active)",
+        isLoss: false
+      },
+      bottom: {
+        text: "Move 3 · Shackle one adjacent enemy · Create a 3 damage STUN trap in an adjacent empty hex.",
+        isLoss: true
+      },
+      commentary: "Top is 2 True Damage + XP when walls are nearby — decent success rate in practice. Initiative 52 is terrible for this class. Bottom is a nice last-room Loss play — Move, Shackle, heavy Stun trap — and was a fairly common final room play for our Chainguard."
     },
     {
       id: "agonizing-clamp",
@@ -291,7 +272,7 @@ const CHAINGUARD_DATA = {
       level: "2",
       initiative: 57,
       cardNum: 72,
-      tags: ["shackle"],
+      tags: ["shackle", "swing"],
       builds: ["bruiser", "trap"],
       top: {
         text: "Shackle one adjacent enemy · Attack 4 targeting one adjacent Shackled enemy.",
@@ -304,17 +285,36 @@ const CHAINGUARD_DATA = {
       commentary: "Two-in-one Shackle + Attack 4 is great — Attack 4 is a real upgrade at Level 2. Initiative 57 is a drag. Iron Thrust edges it for the Jump on the Bottom, but Agonizing Clamp's Bottom is the better Trap build Bottom since Move 3 Swing 3 pairs well with Top trap-placement actions."
     },
     {
+      id: "iron-thrust",
+      imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-iron-thrust.jpeg",
+      name: "Iron Thrust",
+      level: "2",
+      initiative: 38,
+      cardNum: 73,
+      tags: [],
+      builds: ["both"],
+      top: {
+        text: "Attack 3 · PUSH 3 · You may push the target through hexes occupied by your allies. In each case, the ally may perform an 'Attack 2' ability targeting that enemy; if they do, the ally gains MUDDLE. XP unconditional.",
+        isLoss: false
+      },
+      bottom: {
+        text: "Move 3 Jump · Shackle one enemy moved through with the Move ability.",
+        isLoss: false
+      },
+      commentary: "Top enables nice trap-delivery combos and ally chain attacks. Bottom Move 3 Jump Shackle is excellent — Jump is surprisingly scarce on this class and critically important for positioning Swings and Push/Pull plays. Both builds want this card."
+    },
+    {
       id: "latch-and-tow",
       imageUrl: "https://raw.githubusercontent.com/cmlenius/gloomhaven-card-browser/images/images/character-ability-cards/crimson-scales/CG/cs-latch-and-tow.jpeg",
       name: "Latch and Tow",
       level: "2",
       initiative: 81,
       cardNum: 74,
-      tags: ["shackle", "trap", "loss"],
+      tags: ["shackle"],
       builds: ["trap"],
       top: {
         text: "PULL 3 · Shackle · Range 4 · If a trap is sprung by the target of the Pull ability, the target suffers 3 damage, gains MUDDLE, and you gain XP.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "PULL 4 Self towards one enemy within Range 5 · If you end the Pull ability adjacent to the targeted enemy, Shackle and MUDDLE the target.",
@@ -329,15 +329,15 @@ const CHAINGUARD_DATA = {
       level: "3",
       initiative: 20,
       cardNum: 75,
-      tags: ["shackle", "loss"],
+      tags: ["shackle", "swing"],
       builds: ["both"],
       top: {
         text: "Shackle and SWING 4 targeting one adjacent enemy · Attack 3 targeting the enemy targeted with the Swing ability and one enemy the target moved through.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "You and all allies gain PIERCE 2 on all your attacks targeting Shackled enemies · While Shackled, enemies lose Flying.",
-        isLoss: false
+        isLoss: true
       },
       commentary: "Top is roughly a double Attack 3 with True Damage on the moved-through enemy. Bottom is huge for both builds — Pierce 2 for the entire party plus grounding Fliers, which is a major weakness of this class. Initiative 20 is excellent. Both builds want this card."
     },
@@ -348,7 +348,7 @@ const CHAINGUARD_DATA = {
       level: "4",
       initiative: 24,
       cardNum: 76,
-      tags: ["shackle", "trap", "loss"],
+      tags: ["swing"],
       builds: ["trap"],
       top: {
         text: "SWING 6 targeting one Shackled enemy · At any point during the ability, you may perform 'PUSH 3' targeting the Shackled enemy · Attack X where X is equal to the number of hexes the enemy moved with this action.",
@@ -367,15 +367,15 @@ const CHAINGUARD_DATA = {
       level: "4",
       initiative: 92,
       cardNum: 77,
-      tags: ["loss"],
+      tags: [],
       builds: ["bruiser"],
       top: {
         text: "Attack 4 · If this attack kills the target, perform 'Attack 4' and gain XP.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 3 · Double the value of your next attack.",
-        isLoss: true
+        isLoss: false
       },
       commentary: "Top Attack 4×2 is excellent with good modifiers — both Attack 4s can be enhanced. Initiative 92 is a great selling point; very late Initiative is valuable for a class that otherwise lacks it. Most Chainguards play this as the Top 95% of the time. Bruiser builds prefer this; Trap builds lean Dizzying Release."
     },
@@ -386,11 +386,11 @@ const CHAINGUARD_DATA = {
       level: "5",
       initiative: 12,
       cardNum: 78,
-      tags: ["trap", "loss"],
+      tags: ["loss"],
       builds: ["both"],
       top: {
         text: "On the next five attacks targeting you this round, gain Shield 2 or Retaliate 1 for the attack. At the end of the round, perform 'Heal X Self', where X is equal to the number of untriggered spaces.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Whenever you may create a trap in an adjacent hex, you may create the trap in an empty hex within Range 2 instead · Whenever you cause an enemy to spring a trap during your turn, that enemy suffers 2 damage.",
@@ -405,11 +405,11 @@ const CHAINGUARD_DATA = {
       level: "5",
       initiative: 17,
       cardNum: 79,
-      tags: ["shackle", "loss"],
+      tags: ["loss"],
       builds: ["bruiser"],
       top: {
         text: "Attack 4 · Add +1 Attack and gain XP if the target is Shackled · Retaliate 1 Self, only applies to attacks by Shackled enemies. (Active)",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "At the end of each of your turns, you may perform 'PULL 1 Range 2' targeting one Shackled enemy.",
@@ -424,7 +424,7 @@ const CHAINGUARD_DATA = {
       level: "6",
       initiative: 9,
       cardNum: 80,
-      tags: ["shackle", "loss"],
+      tags: ["loss"],
       builds: ["bruiser"],
       top: {
         text: "Retaliate 4 Self · Ignore all sources of damage from attacks targeting you by Shackled enemies this round.",
@@ -462,11 +462,11 @@ const CHAINGUARD_DATA = {
       level: "7",
       initiative: 27,
       cardNum: 82,
-      tags: ["trap", "loss"],
+      tags: ["trap"],
       builds: ["trap"],
       top: {
         text: "Create a 5 damage MUDDLE trap in an adjacent empty hex · When the trap is sprung, all enemies adjacent to the trap suffer 2 damage, then discard this card.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 4 · Shield 3 Self, only applies to attacks by Shackled enemies. (Active)",
@@ -481,11 +481,11 @@ const CHAINGUARD_DATA = {
       level: "7",
       initiative: 45,
       cardNum: 83,
-      tags: ["shackle", "loss"],
+      tags: [],
       builds: ["bruiser"],
       top: {
         text: "Attack 5 · Add DISARM and gain XP if the target is Shackled.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 3 · During all your attacks against Shackled enemies this round, ignore the Shield value of the target.",
@@ -500,11 +500,11 @@ const CHAINGUARD_DATA = {
       level: "8",
       initiative: 28,
       cardNum: 84,
-      tags: ["shackle", "trap", "loss"],
+      tags: ["shackle", "swing"],
       builds: ["trap"],
       top: {
         text: "SWING 4 targeting one enemy within 2 hexes · One enemy the target moves through suffers 2 damage · Attack 5 targeting the enemy targeted with the Swing ability.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 4 Jump · Shackle one enemy moved through with the Move ability · PULL 3 targeting one Shackled enemy.",
@@ -519,11 +519,11 @@ const CHAINGUARD_DATA = {
       level: "8",
       initiative: 68,
       cardNum: 85,
-      tags: ["loss"],
+      tags: ["swing"],
       builds: ["bruiser"],
       top: {
         text: "SWING 6 Range 3 · The target may move through your allies with this ability. All allies moved through may immediately perform an 'Attack 3' ability targeting that enemy.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move 2 · Attack 3 targeting all adjacent enemies.",
@@ -546,7 +546,7 @@ const CHAINGUARD_DATA = {
       },
       bottom: {
         text: "PULL 2 · Range 3 · Target 3 · Shackle (Active, then discard)",
-        isLoss: true
+        isLoss: false
       },
       commentary: "Groundbreaking. Three simultaneous Shackles plus Wound on each Shackle fundamentally changes the class — breathing room for your whole party. Near-instant setup on Turn 1, as this is your second fastest Initiative card. The Bottom is overkill once Top is active but excellent forced movement for Trap-heavy scenarios."
     },
@@ -557,11 +557,11 @@ const CHAINGUARD_DATA = {
       level: "9",
       initiative: 33,
       cardNum: 87,
-      tags: ["shackle", "trap", "loss"],
+      tags: [],
       builds: ["trap"],
       top: {
         text: "Whenever you cause a Shackled enemy to spring a damage trap during your turn, that enemy suffers double the damage value of the trap. (Persistent Loss)",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Force one Shackled enemy to perform Move 3 with you controlling the ability · Shackled enemies suffer 1 damage each time they are targeted with an attack this round. (Active)",
@@ -580,7 +580,7 @@ const CHAINGUARD_DATA = {
       builds: ["both"],
       top: {
         text: "Create a 3 damage trap in an adjacent empty hex within Range 2. When the trap is sprung by an enemy, perform 'PULL 3, Shackle' targeting the enemy, then discard this card.",
-        isLoss: true
+        isLoss: false
       },
       bottom: {
         text: "Move one trap within Range 2 to a different empty hex within Range 2. Move 4.",
@@ -591,17 +591,17 @@ const CHAINGUARD_DATA = {
   ],
 
   perks: [
-    { count: 2, text: 'Replace one ⊕1 card with one ⊕1 "Shackle" card' },
-    { count: 2, text: 'Replace one ⊕0 card with one ⊕+2 if the target is Shackled" card' },
-    { count: 1, text: 'Replace two ⊕0 cards with one rolling "Shield 1, Self" card' },
+    { count: 2, text: 'Replace one +1 card with one +1 "Shackle" card' },
+    { count: 2, text: 'Replace one +0 card with one "+2 if the target is Shackled" card' },
+    { count: 1, text: 'Replace two +0 cards with one rolling "Shield 1, Self" card' },
     { count: 1, text: 'Add two rolling "Retaliate 1, Self" cards' },
     { count: 1, text: 'Add three rolling SWING 3 cards' },
-    { count: 1, text: 'Replace one ⊕1 card with one ⊕2 WOUND card' },
-    { count: 1, text: 'Add one ⊕1 "DISARM if the target is Shackled" card' },
-    { count: 1, text: 'Add one ⊕1 "Create a 2 damage trap in an empty hex within Range 2" card' },
+    { count: 1, text: 'Replace one +1 card with one +2 WOUND card' },
+    { count: 1, text: 'Add one +1 "DISARM if the target is Shackled" card' },
+    { count: 1, text: 'Add one +1 "Create a 2 damage trap in an empty hex within Range 2" card' },
     { count: 1, text: 'Add two rolling "Heal 1, Self" cards' },
-    { count: 2, text: 'Add one ⊕2 "Shackle" card' },
-    { count: 1, text: 'Ignore negative item effects and remove one ⊕0 card' }
+    { count: 2, text: 'Add one +2 "Shackle" card' },
+    { count: 1, text: 'Ignore negative item effects and remove one +0 card' }
   ],
 
   tips: [
