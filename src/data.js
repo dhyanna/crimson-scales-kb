@@ -13,7 +13,7 @@ const CHAINGUARD_DATA = {
     xws: "chainguardmilestone",
     points: 20,
     imageUrl: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/milestones/crimson-scales/cs-ms-chainguard-front.png",
-    reward: "Rope Pit — a Level M ability card added to your hand permanently once the milestone is complete.",
+    reward: "Permanently add <strong>Rope Pit</strong> (Level M card) to your supply. It creates a Range 2 trap that auto-Shackles any enemy that springs it, then pulls them 3 hexes — eliminating the need to spend a card action on Shackle setup before your trap turn. The bottom lets you reposition any existing trap within Range 2 while still moving 4 hexes, giving exceptional tactical flexibility. A game-changer for the Trap build at any level, and strong enough that even Bruiser builds will keep it for most of their career.",
     commentary: "Goal: Kill a Shackled enemy 10 times. This plays directly into the Chainguard's core loop — Shackle a target, beat it down, and finish it off. The Bruiser build completes this naturally since Shackle is your primary mechanic from turn one. The Trap build takes longer since you're more focused on controlling enemies through traps, but any kill on a Shackled enemy counts regardless of what dealt the killing blow. Once complete, Rope Pit is added permanently — a game-changer for the Trap build that lets you create a Range 2 trap that auto-Shackles when triggered."
   },
 
@@ -25,11 +25,11 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 22,
       cardNum: 60,
-      tags: ["shackle"],
+      tags: ["shackle", "loss"],
       builds: ["bruiser"],
       top: {
-        text: "Shackle one adjacent enemy. On your next three attacks targeting a Shackled enemy, add +X Attack where X is equal to the value shown (+2 / +2 / +3).",
-        isLoss: false
+        text: "Shackle one adjacent enemy. On your next three attacks targeting a Shackled enemy, add +X Attack where X is equal to the value shown (+2 / +2 / +3). (Persistent Loss)",
+        isLoss: true
       },
       bottom: {
         text: "Move 4 · One adjacent Shackled enemy suffers 1 damage.",
@@ -70,7 +70,7 @@ const CHAINGUARD_DATA = {
         isLoss: false
       },
       bottom: {
-        text: "Move 2 · This movement must end adjacent to a Shackled enemy.",
+        text: "Retaliate 1, Self · Add +1 Retaliate against attacks by Shackled enemies. (Active)",
         isLoss: false
       },
       commentary: "Two solid medium-value actions that bundle nicely. The bottom shines in Rest Cycles where you let it free your other action for damage mitigation, trap-placing, or extra movement."
@@ -120,7 +120,7 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 18,
       cardNum: 65,
-      tags: ["shackle", "trap"],
+      tags: ["trap"],
       builds: ["trap"],
       top: {
         text: "Create a 3 damage POISON trap in an adjacent empty hex.",
@@ -161,7 +161,7 @@ const CHAINGUARD_DATA = {
       tags: [],
       builds: ["bruiser"],
       top: {
-        text: "Attack 2 · WOUND · Add +1 Attack and gain XP if the target is Shackled. (Active rolling Retaliate)",
+        text: "Attack 2 · WOUND · Add +1 Attack and gain XP if the target is Shackled.",
         isLoss: false
       },
       bottom: {
@@ -180,7 +180,7 @@ const CHAINGUARD_DATA = {
       tags: [],
       builds: ["both"],
       top: {
-        text: "Shield 1 Self · Shackled enemies treat you as if you have INVISIBLE this round. (Active, Loss)",
+        text: "Shield 1 Self · Shackled enemies treat you as if you have INVISIBLE this round. (Active)",
         isLoss: false
       },
       bottom: {
@@ -196,10 +196,10 @@ const CHAINGUARD_DATA = {
       level: "1",
       initiative: 82,
       cardNum: 68,
-      tags: [],
+      tags: ["shackle"],
       builds: ["both"],
       top: {
-        text: "STUN · Range 2 · PULL 1 · Shackle (Loss)",
+        text: "STUN · Range 2 · PULL 1 · Shackle",
         isLoss: false
       },
       bottom: {
@@ -237,11 +237,11 @@ const CHAINGUARD_DATA = {
       tags: ["shackle", "loss", "swing"],
       builds: ["bruiser"],
       top: {
-        text: "Loot 1 · You may forgo the Loot ability to perform: Shackle and SWING 3 Range 3, Loot each hex the target enters. (Active)",
+        text: "Loot 1 · You may forgo the Loot ability to perform: Shackle and SWING 3 Range 3, Loot each hex the target enters.",
         isLoss: false
       },
       bottom: {
-        text: "Move 3 · Add +2 SWING to your next Swing ability this round, then discard this card.",
+        text: "Move 3 · Add +2 SWING to your next Swing ability this round, then discard this card. (Active)",
         isLoss: false
       },
       commentary: "A solid X card that serves as Loot 2.0. The flexible Shackle+Swing+Loot combo works in many situations. Initiative 79 adds welcome variety to a deck that skews fast. The bottom +2 Swing rarely matters since most Swings are already Ranged."
@@ -253,10 +253,10 @@ const CHAINGUARD_DATA = {
       level: "X",
       initiative: 52,
       cardNum: 71,
-      tags: ["shackle", "swing"],
+      tags: ["shackle", "trap", "swing"],
       builds: ["trap"],
       top: {
-        text: "Shackle and SWING 3 Range 2 · If you cannot swing the target into a hex because of an obstacle or wall, the target suffers 2 damage and you gain XP. (Active)",
+        text: "Shackle and SWING 3 Range 2 · If you cannot swing the target into a hex because of an obstacle or wall, the target suffers 2 damage and you gain XP.",
         isLoss: false
       },
       bottom: {
@@ -291,10 +291,10 @@ const CHAINGUARD_DATA = {
       level: "2",
       initiative: 38,
       cardNum: 73,
-      tags: [],
+      tags: ["shackle"],
       builds: ["both"],
       top: {
-        text: "Attack 3 · PUSH 3 · You may push the target through hexes occupied by your allies. In each case, the ally may perform an 'Attack 2' ability targeting that enemy; if they do, the ally gains MUDDLE. XP unconditional.",
+        text: "Attack 3 · PUSH 3 · You may push the target through hexes occupied by your allies. In each case, the ally may perform an 'Attack 2' ability targeting that enemy; if they do, the ally gains MUDDLE.",
         isLoss: false
       },
       bottom: {
@@ -336,7 +336,7 @@ const CHAINGUARD_DATA = {
         isLoss: false
       },
       bottom: {
-        text: "You and all allies gain PIERCE 2 on all your attacks targeting Shackled enemies · While Shackled, enemies lose Flying.",
+        text: "You and all allies gain PIERCE 2 on all your attacks targeting Shackled enemies · While Shackled, enemies lose Flying. (Active)",
         isLoss: true
       },
       commentary: "Top is roughly a double Attack 3 with True Damage on the moved-through enemy. Bottom is huge for both builds — Pierce 2 for the entire party plus grounding Fliers, which is a major weakness of this class. Initiative 20 is excellent. Both builds want this card."
@@ -348,14 +348,14 @@ const CHAINGUARD_DATA = {
       level: "4",
       initiative: 24,
       cardNum: 76,
-      tags: ["swing"],
+      tags: ["trap", "swing"],
       builds: ["trap"],
       top: {
         text: "SWING 6 targeting one Shackled enemy · At any point during the ability, you may perform 'PUSH 3' targeting the Shackled enemy · Attack X where X is equal to the number of hexes the enemy moved with this action.",
         isLoss: true
       },
       bottom: {
-        text: "Create a 3 damage WOUND trap in an adjacent empty hex · If the trap is sprung by a Shackled enemy, remove Shackle from the enemy, discard this card, and it suffers 1 additional damage.",
+        text: "Create a 3 damage WOUND trap in an adjacent empty hex · If the trap is sprung by a Shackled enemy, remove Shackle from the enemy, discard this card, and it suffers 1 additional damage. (Active)",
         isLoss: false
       },
       commentary: "Top is Attack 5–7 in practice — good but not worth it as a Level 4 Loss in isolation. The bottom Wound Trap is the real draw: paired with Latch and Tow Top, you get 7 True Damage + Wound + Muddle + 2 XP with essentially no setup. Core Trap build card."
@@ -367,15 +367,15 @@ const CHAINGUARD_DATA = {
       level: "4",
       initiative: 92,
       cardNum: 77,
-      tags: [],
+      tags: ["loss"],
       builds: ["bruiser"],
       top: {
         text: "Attack 4 · If this attack kills the target, perform 'Attack 4' and gain XP.",
         isLoss: false
       },
       bottom: {
-        text: "Move 3 · Double the value of your next attack.",
-        isLoss: false
+        text: "Move 3 · Double the value of your next attack. (Active)",
+        isLoss: true
       },
       commentary: "Top Attack 4×2 is excellent with good modifiers — both Attack 4s can be enhanced. Initiative 92 is a great selling point; very late Initiative is valuable for a class that otherwise lacks it. Most Chainguards play this as the Top 95% of the time. Bruiser builds prefer this; Trap builds lean Dizzying Release."
     },
@@ -389,11 +389,11 @@ const CHAINGUARD_DATA = {
       tags: ["loss"],
       builds: ["both"],
       top: {
-        text: "On the next five attacks targeting you this round, gain Shield 2 or Retaliate 1 for the attack. At the end of the round, perform 'Heal X Self', where X is equal to the number of untriggered spaces.",
+        text: "On the next five attacks targeting you this round, gain Shield 2 or Retaliate 1 for the attack. At the end of the round, perform 'Heal X Self', where X is equal to the number of untriggered spaces. (Active)",
         isLoss: false
       },
       bottom: {
-        text: "Whenever you may create a trap in an adjacent hex, you may create the trap in an empty hex within Range 2 instead · Whenever you cause an enemy to spring a trap during your turn, that enemy suffers 2 damage.",
+        text: "Whenever you may create a trap in an adjacent hex, you may create the trap in an empty hex within Range 2 instead · Whenever you cause an enemy to spring a trap during your turn, that enemy suffers 2 damage. (Active)",
         isLoss: true
       },
       commentary: "The mini-capstone that both builds want. The Top solves the feel-bad of temporary defensive cards — if monsters don't attack you, you Heal 5. The Bottom extends all trap placement to Range 2 and adds 2 bonus damage on every spring. Initiative 12 becomes your fastest card after this point."
@@ -412,7 +412,7 @@ const CHAINGUARD_DATA = {
         isLoss: false
       },
       bottom: {
-        text: "At the end of each of your turns, you may perform 'PULL 1 Range 2' targeting one Shackled enemy.",
+        text: "At the end of each of your turns, you may perform 'PULL 1 Range 2' targeting one Shackled enemy. (Active)",
         isLoss: true
       },
       commentary: "Pales next to Impending Power. The top is Attack 4 with very conditional Retaliate flavor text. The bottom persistent Pull is numerically weak — it's really only a Move 1 most of the time. Both builds almost universally take Impending Power instead."
@@ -427,7 +427,7 @@ const CHAINGUARD_DATA = {
       tags: ["loss"],
       builds: ["bruiser"],
       top: {
-        text: "Retaliate 4 Self · Ignore all sources of damage from attacks targeting you by Shackled enemies this round.",
+        text: "Retaliate 4 Self · Ignore all sources of damage from attacks targeting you by Shackled enemies this round. (Active)",
         isLoss: true
       },
       bottom: {
@@ -465,7 +465,7 @@ const CHAINGUARD_DATA = {
       tags: ["trap"],
       builds: ["trap"],
       top: {
-        text: "Create a 5 damage MUDDLE trap in an adjacent empty hex · When the trap is sprung, all enemies adjacent to the trap suffer 2 damage, then discard this card.",
+        text: "Create a 5 damage MUDDLE trap in an adjacent empty hex · When the trap is sprung, all enemies adjacent to the trap suffer 2 damage, then discard this card. (Active)",
         isLoss: false
       },
       bottom: {
@@ -488,7 +488,7 @@ const CHAINGUARD_DATA = {
         isLoss: false
       },
       bottom: {
-        text: "Move 3 · During all your attacks against Shackled enemies this round, ignore the Shield value of the target.",
+        text: "Move 3 · During all your attacks against Shackled enemies this round, ignore the Shield value of the target. (Active)",
         isLoss: false
       },
       commentary: "Top Disarm via Shackle is excellent mitigation — easy to set up on this class. The bottom Shield Ignore addresses a core class weakness; often results in +2–3 effective damage against high-Shield enemies. Initiative 45 is awful for a Disarm. Bruiser builds prefer this; Trap builds take Clamping Snare."
@@ -538,14 +538,14 @@ const CHAINGUARD_DATA = {
       level: "9",
       initiative: 10,
       cardNum: 86,
-      tags: ["shackle", "loss"],
+      tags: ["shackle", "swing"],
       builds: ["bruiser"],
       top: {
-        text: "You may have up to three enemies Shackled at any time. Whenever you Shackle an enemy, that enemy gains WOUND. (Persistent Loss)",
+        text: "You may have up to three enemies Shackled at any time. Whenever you Shackle an enemy, that enemy gains WOUND. (Persistent Loss) · PULL 2 · Range 3 · Target 3 · Shackle",
         isLoss: true
       },
       bottom: {
-        text: "PULL 2 · Range 3 · Target 3 · Shackle (Active, then discard)",
+        text: "SWING 6 and Shackle, Range 3 · At any point during the ability, you may perform 'PUSH 4', targeting the Shackled enemy.",
         isLoss: false
       },
       commentary: "Groundbreaking. Three simultaneous Shackles plus Wound on each Shackle fundamentally changes the class — breathing room for your whole party. Near-instant setup on Turn 1, as this is your second fastest Initiative card. The Bottom is overkill once Top is active but excellent forced movement for Trap-heavy scenarios."
@@ -557,11 +557,11 @@ const CHAINGUARD_DATA = {
       level: "9",
       initiative: 33,
       cardNum: 87,
-      tags: [],
+      tags: ["loss"],
       builds: ["trap"],
       top: {
-        text: "Whenever you cause a Shackled enemy to spring a damage trap during your turn, that enemy suffers double the damage value of the trap. (Persistent Loss)",
-        isLoss: false
+        text: "Whenever you cause a Shackled enemy to spring a damage trap during your turn, that enemy suffers double the damage value of the trap · Suffer 1 damage each time you Shackle an enemy. (Persistent Loss)",
+        isLoss: true
       },
       bottom: {
         text: "Force one Shackled enemy to perform Move 3 with you controlling the ability · Shackled enemies suffer 1 damage each time they are targeted with an attack this round. (Active)",
@@ -576,7 +576,7 @@ const CHAINGUARD_DATA = {
       level: "M",
       initiative: 32,
       cardNum: 677,
-      tags: ["shackle", "trap"],
+      tags: ["trap"],
       builds: ["both"],
       top: {
         text: "Create a 3 damage trap in an adjacent empty hex within Range 2. When the trap is sprung by an enemy, perform 'PULL 3, Shackle' targeting the enemy, then discard this card.",

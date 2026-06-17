@@ -33,6 +33,10 @@
     const prayerChip = document.getElementById("chip-lvlp");
     if (prayerChip) prayerChip.style.display = state.activeClass === "hierophant" ? "" : "none";
 
+    // Show Trap chip only for Chainguard
+    const trapChip = document.getElementById("chip-trap");
+    if (trapChip) trapChip.style.display = state.activeClass === "chainguard" ? "" : "none";
+
     // Milestone flip card
     const flipCard = document.getElementById("milestone-flip-card");
     const flipToBack = document.getElementById("flip-to-back");
@@ -40,6 +44,15 @@
     if (flipCard && flipToBack && flipToFront) {
       flipToBack.addEventListener("click", () => { flipCard.classList.add("flipped"); });
       flipToFront.addEventListener("click", () => { flipCard.classList.remove("flipped"); });
+    }
+
+    // Mat flip card
+    const matCard = document.getElementById("mat-flip-card");
+    const matToBack = document.getElementById("mat-flip-to-back");
+    const matToFront = document.getElementById("mat-flip-to-front");
+    if (matCard && matToBack && matToFront) {
+      matToBack.addEventListener("click",  () => { matCard.classList.add("flipped"); });
+      matToFront.addEventListener("click", () => { matCard.classList.remove("flipped"); });
     }
 
     renderCards();
@@ -218,10 +231,11 @@
     if (f === "lvlm" && card.level !== "M") return false;
     if (f === "lvlp" && card.level !== "P") return false;
     if (f === "lvl2plus" && !["2","3","4","5","6","7","8","9"].includes(card.level)) return false;
+    if (f === "trap" && !card.tags.includes("trap")) return false;
     // Mechanic filters — map to class-specific tag values
     if (f === "mechanic1" && !card.tags.includes(getTagConfig().mechanic1.filter)) return false;
     if (f === "mechanic2" && !card.tags.includes(getTagConfig().mechanic2.filter)) return false;
-    if (f === "loss" && !card.top.isLoss && !card.bottom.isLoss) return false;
+    if (f === "loss" && !card.top?.isLoss && !card.bottom?.isLoss) return false;
     if (f === "bruiser") {
       if (!card.builds.includes("bruiser") && !card.builds.includes("damage") && !card.builds.includes("dps") && !card.builds.includes("both")) return false;
     }
@@ -231,7 +245,7 @@
 
     if (state.cardSearch) {
       const s = state.cardSearch;
-      const searchable = [card.name, card.top.text, card.bottom.text, card.commentary].join(" ").toLowerCase();
+      const searchable = [card.name, card.commentary].join(" ").toLowerCase();
       if (!searchable.includes(s)) return false;
     }
 
@@ -265,9 +279,12 @@
       tags.push(`<span class="tag ${tc.mechanic1.tagClass}">${tc.mechanic1.label}</span>`);
     if (card.tags.includes(tc.mechanic2.filter))
       tags.push(`<span class="tag ${tc.mechanic2.tagClass}">${tc.mechanic2.label}</span>`);
+    // Chainguard: also show Trap badge for cards tagged "trap"
+    if (state.activeClass === "chainguard" && card.tags.includes("trap") && tc.mechanic2.filter !== "trap")
+      tags.push(`<span class="tag tag-trap">Trap</span>`);
     if (card.tags.includes("aoe"))
       tags.push(`<span class="tag tag-shackle">AoE</span>`);
-    if (card.top.isLoss || card.bottom.isLoss)
+    if (card.top?.isLoss || card.bottom?.isLoss)
       tags.push(`<span class="tag tag-loss">Loss</span>`);
 
     // Build tags — dynamic per class
@@ -305,18 +322,10 @@
             class="card-image"
             src="${card.imageUrl}"
             alt="${card.name} ability card"
-            loading="lazy"
+            loading="eager"
             onerror="this.parentElement.classList.add('card-image-error'); this.parentElement.innerHTML='<span class=\'card-image-fallback\'>Image unavailable</span>'"
           >
         </div>` : ""}
-        <div class="card-half">
-          <div class="half-label">Top</div>
-          <div class="half-text">${card.top.text}${card.top.isLoss ? ' <span class="tag tag-loss" style="vertical-align:middle">Loss</span>' : ""}</div>
-        </div>
-        <div class="card-half">
-          <div class="half-label">Bottom</div>
-          <div class="half-text">${card.bottom.text}${card.bottom.isLoss ? ' <span class="tag tag-loss" style="vertical-align:middle">Loss</span>' : ""}</div>
-        </div>
         <div class="card-commentary">${card.commentary}</div>
       </div>
     `).join("");
@@ -561,6 +570,10 @@
       const prayerChip = document.getElementById("chip-lvlp");
       if (prayerChip) prayerChip.style.display = cls === "hierophant" ? "" : "none";
 
+      // Show Trap chip only for Chainguard
+      const trapChip = document.getElementById("chip-trap");
+      if (trapChip) trapChip.style.display = cls === "chainguard" ? "" : "none";
+
       // Reset flip card to front
       const flipCard = document.getElementById("milestone-flip-card");
       if (flipCard) flipCard.classList.remove("flipped");
@@ -570,6 +583,9 @@
       updateMechanicChipLabels();
 
       renderOverview();
+      // Clear grid first to force image reload on class switch
+      const grid = document.getElementById("cards-grid");
+      if (grid) grid.innerHTML = "";
       renderCards();
       renderBuilds();
       renderPerks();
@@ -591,6 +607,8 @@
   // ===== RENDER OVERVIEW =====
   const CLASS_OVERVIEW = {
     chainguard: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-chainguard.png",
+      matBack: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-chainguard-back.png",
       mechanics: [
         {
           label: "Unique mechanic",
@@ -610,6 +628,8 @@
       hp: [10,12,14,16,18,20,22,24,26]
     },
     luminary: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-luminary.png",
+      matBack: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-luminary-back.png",
       mechanics: [
         {
           label: "Unique mechanic",
@@ -629,6 +649,8 @@
       hp: [10,12,14,16,18,20,22,24,26]
     },
     chieftain: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-chieftain.png",
+      matBack: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-chieftain-back.png",
       mechanics: [
         {
           label: "Unique mechanic",
@@ -648,6 +670,8 @@
       hp: [8,9,11,12,14,15,17,18,20]
     },
     hierophant: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-hierophant.png",
+      matBack: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-hierophant-back.png",
       mechanics: [
         {
           label: "Unique mechanic",
@@ -671,6 +695,16 @@
   function renderOverview() {
     const ov = CLASS_OVERVIEW[state.activeClass];
     if (!ov) return;
+
+    // Update mat images
+    const matFront = document.getElementById("mat-img-front");
+    const matBack  = document.getElementById("mat-img-back");
+    if (matFront) matFront.src = ov.matFront || "";
+    if (matBack)  matBack.src  = ov.matBack  || "";
+
+    // Reset mat flip to front on class switch
+    const matCard = document.getElementById("mat-flip-card");
+    if (matCard) matCard.classList.remove("flipped");
 
     const mechBlocks = document.querySelectorAll(".info-block");
     if (mechBlocks.length >= 4) {
@@ -999,7 +1033,7 @@
     },
     hierophant: {
       mechanic1: { filter: "prayer",  label: "Prayer",  tagClass: "tag-shackle" },
-      mechanic2: { filter: "burn",    label: "Burn",    tagClass: "tag-trap" },
+      mechanic2: { filter: "",        label: "",         tagClass: "" },
     },
   };
 
@@ -1012,7 +1046,10 @@
     const chip1 = document.getElementById("chip-mechanic1");
     const chip2 = document.getElementById("chip-mechanic2");
     if (chip1) chip1.textContent = tc.mechanic1.label;
-    if (chip2) chip2.textContent = tc.mechanic2.label;
+    if (chip2) {
+      chip2.textContent = tc.mechanic2.label;
+      chip2.style.display = tc.mechanic2.label ? "" : "none";
+    }
   }
 
   // ===== START =====
