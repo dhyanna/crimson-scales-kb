@@ -10,6 +10,7 @@
     luminary: LUMINARY_DATA,
     chieftain: CHIEFTAIN_DATA,
     hierophant: HIEROPHANT_DATA,
+    hollowpact: HOLLOWPACT_DATA,
   };
 
   // ===== STATE =====
@@ -600,6 +601,7 @@
       chieftain: "An Orchid Summoner who rides Mounted animal companions around the battlefield, controlling their actions while freeing up utility actions for healing, Commands, and tactical plays.",
       luminary: "A frontliner who deploys persistent Glow abilities and side-steps through enemy formations with Scuttle, leveraging Fire, Ice, Dark, and Light for powerful elemental effects.",
       hierophant: "A ranged 11-card battle-priest who distributes Prayer cards to allies, curses the enemy modifier deck, and leverages a burn-card economy (Spiritual Gains) that lets them cast devastating loss attacks all scenario long.",
+      hollowpact: "A medium-low HP Savvas who accumulates and spends Void Energy, manipulates their attack modifier deck with Voidsight, teleports around the battlefield, and deploys Void Pit obstacles that power up higher-level abilities.",
     };
     return descs[cls] || "";
   }
@@ -689,6 +691,27 @@
       role: "The Hierophant is an 11-card ranged class with the smallest HP pool. Almost all attacks are ranged, keeping them safe despite low health. Two viable paths: a Damage/Battle-Priest build that leverages burn cards, curse synergy, and Spiritual Gains for high damage output; and a Support build focused on Prayer distribution, heals, and shields. Becomes a powerhouse at Level 5 (Spiritual Gains) and again at Level 9 (Bringer of Miracles).",
       xp: [0,45,95,150,200,275,345,420,500],
       hp: [6,7,9,10,12,13,15,16,18]
+    },
+    hollowpact: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-hollowpact.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-hollowpact-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Void Energy",
+          chipClass: "shackle-chip",
+          text: "Void Energy accumulates as you use your abilities (cap: 3). It must be spent via abilities or you suffer penalties — at 2 unspent Void you gain Muddle, at 3 you gain Wound at the end of your turn. Managing this resource is the central challenge of the class. Void Energy generates immediately (unlike standard elements which generate at end of turn)."
+        },
+        {
+          label: "Mechanic",
+          chip: "Voidsight",
+          chipClass: "swing-chip",
+          text: "Look at the top 2 cards of your attack modifier deck. You may place one on the bottom; the remaining card(s) can be put back in any order. This is much more streamlined than the Diviner's version — it lets you guarantee strong hits on key turns, and purge unwanted modifiers before they cause problems."
+        }
+      ],
+      role: "The Savvas Hollowpact is a 10-card, medium-low HP (7hp at Level 1) class that blends Melee and Ranged abilities with Teleport actions. Unique Void Energy functions like an element that only powers the Hollowpact's own abilities and generates immediately rather than at end of turn. Void Pit obstacles created by many abilities become increasingly central to the class's power at higher levels. A complex class with significant upsides and downsides built into many effects — one of the most complex of the starter Crimson Scales classes.",
+      xp: [0,45,95,150,200,275,345,420,500],
+      hp: [7,8,10,11,13,14,16,17,17]
     },
   };
 
@@ -1003,6 +1026,73 @@
         { name: "Sacred Death", desc: "Bottom card recovery is surprisingly useful even for support — lets you replay a discard's bottom action." },
       ],
     },
+    hollowpact: {
+      perksDesc: "The Hollowpact's perks follow its subtheme of upsides and downsides. Prioritise the effects that replace -2 and -1 cards with Rolling Void and Curse early — they thin the deck and add the resources your class wants (Dark and Void) with some nice added CC. The ignore negative scenario effects/gain +0 Ward Self perk felt good. The Voidsight perks get a lot better once you have a consistent source of Voidsight generation. The -2 Earth +2 Dark perk is interesting but the -2 Earth is quite a stinker for the majority of your career barring a party member who wants it.",
+      builds: [
+        {
+          id: "bruiser",
+          icon: "⚡",
+          iconClass: "bruiser-icon",
+          name: "Void Control",
+          tagline: "Void Pits, Teleport, Stun and Voidsight",
+          btnClass: "bruiser-btn",
+          desc: "The primary build path — manipulate your attack modifier deck with Voidsight, create Void Pit obstacles to power your abilities, Teleport to stay safe, and offload Void via consumptions to avoid Muddle/Wound.",
+          playstyle: "Lead with Touch of the Void (Init 29) or Find an Opening (Init 15) early. Use Void Step Bottom as your most reliable Void dump into Dark generation. Place Void Pits strategically — by Level 4-5 many abilities want them as targeting requirements. Voidsight before big attacks to guarantee hits on key turns. Stay mobile with Teleports; this class wants to hit and run. Manage Void carefully — spend before end of turn to avoid Muddle at 2 or Wound at 3.",
+          coreCards: [
+            { name: "Touch of the Void", desc: "Non-Loss Stun + Voidsight + Dark. Ran for entire career." },
+            { name: "Void Step", desc: "Teleport 2 Attack 2 top, Void-to-Teleport-4 Dark bottom. Reliable Void dump." },
+            { name: "Find an Opening", desc: "Initiative 15 — fastest card. Voidsight + Stun + party damage aura." },
+            { name: "Obliterate", desc: "Level 4 powerhouse — Attack 12-18 Disarm multiple targets. Room-clearing Loss." },
+            { name: "Reaching Darkness", desc: "Attack 2 Range 5 Poison top — first enhancement target. Staple Ranged action." },
+            { name: "Prescient Voidmastery / No Escape", desc: "Level 9 capstones — both excellent. Go for what looks most fun." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Shrouded Grasp (Init 23) or Nether Binding — Grasp for Dark Invisibility; Binding if party wants Earth/Dark setup" },
+            { lvl: "3", text: "Majestic Malevolence (Init 89) — best late Initiative, fantastic Top/Bottom; also consider Void-Enhanced Armory for Shield" },
+            { lvl: "4", text: "Obliterate (Init 13) — room-turning Loss Top + excellent Bottom. Or Stalking Quarry for non-Loss flexibility" },
+            { lvl: "5", text: "Sever Reality (Init 78) — great late Initiative + Voidsight Bottom; or Enduring Darkness for Ward/Regenerate" },
+            { lvl: "6", text: "Implosion — AoE Muddle from Void Pits + Move 4 Infuse Void; essential payoff for Void Pit setup" },
+            { lvl: "7", text: "Ruinous Barrage — conditional Triple Attack + Stun Loss; solid Bottom hit-and-run" },
+            { lvl: "8", text: "Entropy Unleashed — AoE Poison payoff; stronger pick over Tendrils of Night for most" },
+            { lvl: "9", text: "No Escape — Stun + Wound Loss + incredible Bottom. Or Prescient Voidmastery for Voidsight Multi-Attack" },
+          ],
+        },
+        {
+          id: "trapbuild",
+          icon: "🌑",
+          iconClass: "trap-icon",
+          name: "Dark/Teleport",
+          tagline: "Dark element cycling, long-range Teleports, healing",
+          btnClass: "trap-btn",
+          desc: "Lean into Dark element generation and consumption — Heal + Regenerate, long Teleports, and Invisibility. Less Void Pit focused, more element cycling focused.",
+          playstyle: "Use Borrowed Vitality and Hollow Embrace for early healing. Generate Dark via Void Step Bottom, Reaching Darkness, and Radiant Glare. Spend Dark on Touch of the Void Stun, Shrouded Grasp Invisibility, and Borrowed Vitality Regenerate. Nether Binding Bottom (Teleport 4-5 Heal 4 Infuse Dark) is your engine — it catapults you forward, heals an ally, and sets up the following turn.",
+          coreCards: [
+            { name: "Touch of the Void", desc: "Non-Loss Stun + Dark Infuse. Cornerstone of both paths." },
+            { name: "Borrowed Vitality", desc: "Bottom: Move 3 Dark consumption Heal 2 Regenerate. Strong early sustain." },
+            { name: "Nether Binding", desc: "Bottom: Teleport 4-5 Heal 4 Infuse Dark. Level 2 engine for this build." },
+            { name: "Hollow Embrace", desc: "Bottom: Dark or Void consumption Heal 2. Good mid-combat healing." },
+            { name: "Enduring Darkness", desc: "Bottom: Move 4 Heal Regenerate Infuse elements. Great repeatable value." },
+            { name: "Sever Reality", desc: "Bottom: Voidsight Teleport 3 Attack 2 Curse. Reliable combo setup." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Nether Binding — Bottom Teleport 4-5 Heal 4 Infuse Dark is the engine for this build" },
+            { lvl: "3", text: "Void-Enhanced Armory (Init 17) — fast Initiative, Shield + Persistent +1 Attack on Void spend" },
+            { lvl: "4", text: "Stalking Quarry (Init 14) — non-Loss flexibility, Move 4 Shield Infuse Dark bottom" },
+            { lvl: "5", text: "Enduring Darkness — Move 4 Heal Regenerate Infuse elements; great repeatable value" },
+            { lvl: "6", text: "Implosion — AoE Muddle payoff" },
+            { lvl: "7", text: "Ruinous Barrage" },
+            { lvl: "8", text: "Tendrils of Night or Entropy Unleashed" },
+            { lvl: "9", text: "Prescient Voidmastery or No Escape" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Touch of the Void", desc: "Non-Loss Stun at Initiative 29 — ran for the entire career. Core for both builds." },
+        { name: "Void Step", desc: "Teleport 2 Attack top, Void-to-Teleport-4 Dark bottom. Reliable Void dump and Dark generator." },
+        { name: "Find an Opening", desc: "Initiative 15. Voidsight Attack + Stun top. The class's fastest reliable card." },
+        { name: "Reaching Darkness", desc: "Attack 2 Range 5 Poison top. First enhancement target. Staple Ranged action for both builds." },
+      ],
+    },
   };
 
 
@@ -1034,6 +1124,10 @@
     hierophant: {
       mechanic1: { filter: "prayer",  label: "Prayer",  tagClass: "tag-shackle" },
       mechanic2: { filter: "",        label: "",         tagClass: "" },
+    },
+    hollowpact: {
+      mechanic1: { filter: "void",      label: "Void",      tagClass: "tag-shackle" },
+      mechanic2: { filter: "voidsight", label: "Voidsight", tagClass: "tag-trap" },
     },
   };
 
