@@ -171,7 +171,7 @@
     state.activeBuild = build;
     state.cardFilter = "all";
     // Map build id to filter chip data-filter value
-    const filterMap = { bruiser: "bruiser", trap: "trapbuild", support: "trapbuild", damage: "bruiser", dps: "bruiser", tank: "trapbuild" };
+    const filterMap = { bruiser: "bruiser", trap: "trapbuild", support: "trapbuild", damage: "bruiser", dps: "bruiser", tank: "trapbuild", trapbuild: "trapbuild" };
     const filterVal = filterMap[build] || "bruiser";
     switchTab("cards");
     document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
@@ -241,7 +241,7 @@
       if (!card.builds.includes("bruiser") && !card.builds.includes("damage") && !card.builds.includes("dps") && !card.builds.includes("both")) return false;
     }
     if (f === "trapbuild") {
-      if (!card.builds.includes("trap") && !card.builds.includes("support") && !card.builds.includes("tank") && !card.builds.includes("both")) return false;
+      if (!card.builds.includes("trap") && !card.builds.includes("support") && !card.builds.includes("tank") && !card.builds.includes("trapbuild") && !card.builds.includes("both")) return false;
     }
 
     if (state.cardSearch) {
@@ -1039,22 +1039,22 @@
           desc: "The primary build path — manipulate your attack modifier deck with Voidsight, create Void Pit obstacles to power your abilities, Teleport to stay safe, and offload Void via consumptions to avoid Muddle/Wound.",
           playstyle: "Lead with Touch of the Void (Init 29) or Find an Opening (Init 15) early. Use Void Step Bottom as your most reliable Void dump into Dark generation. Place Void Pits strategically — by Level 4-5 many abilities want them as targeting requirements. Voidsight before big attacks to guarantee hits on key turns. Stay mobile with Teleports; this class wants to hit and run. Manage Void carefully — spend before end of turn to avoid Muddle at 2 or Wound at 3.",
           coreCards: [
-            { name: "Touch of the Void", desc: "Non-Loss Stun + Voidsight + Dark. Ran for entire career." },
-            { name: "Void Step", desc: "Teleport 2 Attack 2 top, Void-to-Teleport-4 Dark bottom. Reliable Void dump." },
-            { name: "Find an Opening", desc: "Initiative 15 — fastest card. Voidsight + Stun + party damage aura." },
-            { name: "Obliterate", desc: "Level 4 powerhouse — Attack 12-18 Disarm multiple targets. Room-clearing Loss." },
-            { name: "Reaching Darkness", desc: "Attack 2 Range 5 Poison top — first enhancement target. Staple Ranged action." },
-            { name: "Prescient Voidmastery / No Escape", desc: "Level 9 capstones — both excellent. Go for what looks most fun." },
+            { name: "Find an Opening", desc: "Initiative 15 — fastest card. Voidsight + Stun top. Sets up ally damage via Void Pits." },
+            { name: "Untethered Advance", desc: "AoE Attack 4 top + Move 3 Create Void Pit bottom. Core Void Pit generator." },
+            { name: "Withering Deluge", desc: "Bottom: Move 3 Create Void Pit — the primary setup card for this build." },
+            { name: "Obliterate", desc: "Level 4 room-clearer — Attack 12-18 Disarm multiple targets, creates Void Pits on kills." },
+            { name: "Implosion", desc: "Level 6 AoE Muddle payoff — fires from any adjacent Void Pit, no range limit." },
+            { name: "Entropy Unleashed", desc: "Level 8 AoE Poison — Voidsight setup makes this consistently land on priority targets." },
           ],
           levelups: [
-            { lvl: "2", text: "Shrouded Grasp (Init 23) or Nether Binding — Grasp for Dark Invisibility; Binding if party wants Earth/Dark setup" },
-            { lvl: "3", text: "Majestic Malevolence (Init 89) — best late Initiative, fantastic Top/Bottom; also consider Void-Enhanced Armory for Shield" },
-            { lvl: "4", text: "Obliterate (Init 13) — room-turning Loss Top + excellent Bottom. Or Stalking Quarry for non-Loss flexibility" },
-            { lvl: "5", text: "Sever Reality (Init 78) — great late Initiative + Voidsight Bottom; or Enduring Darkness for Ward/Regenerate" },
-            { lvl: "6", text: "Implosion — AoE Muddle from Void Pits + Move 4 Infuse Void; essential payoff for Void Pit setup" },
-            { lvl: "7", text: "Ruinous Barrage — conditional Triple Attack + Stun Loss; solid Bottom hit-and-run" },
-            { lvl: "8", text: "Entropy Unleashed — AoE Poison payoff; stronger pick over Tendrils of Night for most" },
-            { lvl: "9", text: "No Escape — Stun + Wound Loss + incredible Bottom. Or Prescient Voidmastery for Voidsight Multi-Attack" },
+            { lvl: "2", text: "Shrouded Grasp (Init 23) — Pull enemy to Void Pit bottom; Top Dark Immobilize Invisibility" },
+            { lvl: "3", text: "Majestic Malevolence (Init 89) — Top targets from Void Pits; best late Initiative period" },
+            { lvl: "4", text: "Void-Enhanced Armory — fast Initiative Shield top; or Empowered Assault for Teleport/Stun" },
+            { lvl: "5", text: "Obliterate (Init 13) — primary pick; room-turning Loss + great Push/Void Pit bottom" },
+            { lvl: "6", text: "Implosion — AoE Muddle from Void Pits; essential payoff for this build's obstacle placement" },
+            { lvl: "7", text: "Gateway to the Abyss — uncapped AoE Attack 4 Wound Loss + Push 5 bottom; core Void Pit payoff" },
+            { lvl: "8", text: "Entropy Unleashed — AoE Poison with Voidsight setup; stronger pick for this build" },
+            { lvl: "9", text: "No Escape — two Void Pits + huge Teleport bottom; or Prescient Voidmastery for multi-attack" },
           ],
         },
         {
@@ -1067,30 +1067,31 @@
           desc: "Lean into Dark element generation and consumption — Heal + Regenerate, long Teleports, and Invisibility. Less Void Pit focused, more element cycling focused.",
           playstyle: "Use Borrowed Vitality and Hollow Embrace for early healing. Generate Dark via Void Step Bottom, Reaching Darkness, and Radiant Glare. Spend Dark on Touch of the Void Stun, Shrouded Grasp Invisibility, and Borrowed Vitality Regenerate. Nether Binding Bottom (Teleport 4-5 Heal 4 Infuse Dark) is your engine — it catapults you forward, heals an ally, and sets up the following turn.",
           coreCards: [
-            { name: "Touch of the Void", desc: "Non-Loss Stun + Dark Infuse. Cornerstone of both paths." },
-            { name: "Borrowed Vitality", desc: "Bottom: Move 3 Dark consumption Heal 2 Regenerate. Strong early sustain." },
-            { name: "Nether Binding", desc: "Bottom: Teleport 4-5 Heal 4 Infuse Dark. Level 2 engine for this build." },
-            { name: "Hollow Embrace", desc: "Bottom: Dark or Void consumption Heal 2. Good mid-combat healing." },
-            { name: "Enduring Darkness", desc: "Bottom: Move 4 Heal Regenerate Infuse elements. Great repeatable value." },
-            { name: "Sever Reality", desc: "Bottom: Voidsight Teleport 3 Attack 2 Curse. Reliable combo setup." },
+            { name: "Touch of the Void", desc: "Non-Loss Stun + Voidsight + Dark Infuse. Ran for entire career. Core of this build." },
+            { name: "Void Step", desc: "Teleport 2 Attack top; Void-to-Teleport-4 Dark bottom. Most reliable Void dump." },
+            { name: "Reaching Darkness", desc: "Attack 2 Range 5 Poison top — first enhancement target. Keeps you safe at range." },
+            { name: "Nether Binding", desc: "Both builds — Bottom Teleport 4-5 Heal 4 Infuse Dark is the engine; Top creates Void Pit." },
+            { name: "Enduring Darkness", desc: "Bottom Move 4 Heal Regenerate Infuse elements — great repeatable value action." },
+            { name: "Sever Reality", desc: "Bottom Voidsight Teleport 3 Attack 2 Curse — value-packed setup for the following turn." },
           ],
           levelups: [
-            { lvl: "2", text: "Nether Binding — Bottom Teleport 4-5 Heal 4 Infuse Dark is the engine for this build" },
-            { lvl: "3", text: "Void-Enhanced Armory (Init 17) — fast Initiative, Shield + Persistent +1 Attack on Void spend" },
-            { lvl: "4", text: "Stalking Quarry (Init 14) — non-Loss flexibility, Move 4 Shield Infuse Dark bottom" },
-            { lvl: "5", text: "Enduring Darkness — Move 4 Heal Regenerate Infuse elements; great repeatable value" },
-            { lvl: "6", text: "Implosion — AoE Muddle payoff" },
-            { lvl: "7", text: "Ruinous Barrage" },
-            { lvl: "8", text: "Tendrils of Night or Entropy Unleashed" },
-            { lvl: "9", text: "Prescient Voidmastery or No Escape" },
+            { lvl: "2", text: "Nether Binding (Init 64) — both Top (Void Pit) and Bottom (Teleport 4-5 Heal 4 Infuse Dark) are excellent" },
+            { lvl: "3", text: "Empowered Assault (Init 19) — Teleport Attack with Dark Stun bottom; upgrade over Void Step" },
+            { lvl: "4", text: "Void-Enhanced Armory (Init 17) — fast Initiative, Shield top + Persistent +1 Attack on Void spend" },
+            { lvl: "5", text: "Stalking Quarry (Init 14) — non-Loss flexibility; Move 4 Shield Infuse Dark bottom is excellent" },
+            { lvl: "6", text: "Enduring Darkness — Move 4 Heal Regenerate Infuse elements; great repeatable bottom action" },
+            { lvl: "7", text: "Ruinous Barrage — Bottom Attack 3 Immobilize Teleport 3 hit-and-run is perfect for this build" },
+            { lvl: "8", text: "Tendrils of Night or Entropy Unleashed depending on party needs" },
+            { lvl: "9", text: "Prescient Voidmastery — Voidsight multi-attack setup fits this build's focus on modifier manipulation" },
           ],
         },
       ],
       bothBuilds: [
-        { name: "Touch of the Void", desc: "Non-Loss Stun at Initiative 29 — ran for the entire career. Core for both builds." },
-        { name: "Void Step", desc: "Teleport 2 Attack top, Void-to-Teleport-4 Dark bottom. Reliable Void dump and Dark generator." },
-        { name: "Find an Opening", desc: "Initiative 15. Voidsight Attack + Stun top. The class's fastest reliable card." },
-        { name: "Reaching Darkness", desc: "Attack 2 Range 5 Poison top. First enhancement target. Staple Ranged action for both builds." },
+        { name: "Find an Opening", desc: "Initiative 15 — fastest card. Voidsight + Stun + party damage aura. Core for both builds." },
+        { name: "Nether Binding", desc: "Top creates a Void Pit; Bottom Teleport 4-5 Heal 4 Infuse Dark. Excellent for both paths." },
+        { name: "Nether Blades", desc: "Voidsight AoE Attack + Void generation top. Bottom Attack 2 Move 1 stayed relevant for a long time." },
+        { name: "Stalking Quarry", desc: "Attack 4 with multiple Void sinks and best-in-class Bottom Move 4 Shield Infuse Dark." },
+        { name: "Enervating Strike", desc: "Unconditional Attack + Heal top with Void spends. Reasonable Initiative for a slower-than-average class." },
       ],
     },
   };

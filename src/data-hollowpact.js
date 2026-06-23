@@ -16,8 +16,8 @@ const HOLLOWPACT_DATA = {
 
   milestone: {
     imageUrl: BASE_WH + "milestones/crimson-scales/cs-ms-hollowpact-front.png",
-    reward: "Permanently add <strong>Cleansed Voidheart</strong> (Level M card) to your supply. The guide notes this is the Solo Scenario item for this class and is described as incredible — it entirely removes the downside of having 2 or more Void at the end of your turns, allowing you to play far more recklessly without worrying about balancing Void generation vs. spending. Highly recommended to acquire as soon as you meet the requirements.",
-    commentary: "Complete the Hollowpact's personal milestone goal to permanently add the Level M card to your supply. See the milestone card for the exact goal condition.",
+    reward: "Permanently add <strong>The Void Consumes</strong> (Level M card) to your supply. The top action spends Triple Void for Attack 6 with Push 1 and Advantage — one of the hardest hitting single attacks on the class — while also creating a Void Pit and infusing Dark, keeping your element and obstacle economy going simultaneously. The bottom is a flexible utility action: Move 2, destroy an adjacent obstacle to gain a Void and optionally replace it with a Void Pit, then Immobilize any enemy adjacent to a Void Pit. Both halves synergise perfectly with the class's Void Pit focus and make this a card you'll want to play every scenario.",
+    commentary: "Goal: Perform Voidsight while you have at least one Void Energy token 10 times. This is the Hollowpact's core gameplay loop — using Voidsight while managing Void Energy is something you'll do naturally every scenario. Cards like Touch of the Void, Find an Opening, and Nether Blades all trigger Voidsight, so this milestone completes itself as long as you remember to hold at least one Void when you use them. Once complete, The Void Consumes is added permanently to your hand.",
   },
 
   cards: [
@@ -28,10 +28,10 @@ const HOLLOWPACT_DATA = {
       initiative: 20,
       imageUrl: BASE_HO + "cs-void-step.jpeg",
       tags: ["void", "teleport"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Teleport 2 · Attack 2 · Gain 1 Void · XP", isLoss: false },
       bottom: { text: "Void consumption: Teleport 4 · Generate Dark · Infuse Dark", isLoss: false },
-      commentary: "A strong start and a card played for the entire Level 1-5 time as Hollowpact with no changes from the finalized product. Teleport 2 Attack 2 upgradeable to Attack 3 with a spare Void is great — very reminiscent of the Mindthief's Scurry at the same Initiative 20. The Bottom Void-to-Teleport 4 Infuse Dark is the primary reason to keep it: notably easier to trigger than attack-tied Void consumptions, and Dark is consistently your most valuable element. Played similarly to a Move 2 Jump that could also be done while Immobilized."
+      commentary: "A strong start and a card played for the entire Level 1-5 time as Hollowpact. Teleport 2 Attack 2 upgradeable to Attack 3 with a spare Void is great — very reminiscent of the Mindthief's Scurry at the same Initiative 20. The Bottom is where this card really shines: suffer 1 damage to immediately gain a Void, which can then be spent on the spot to Teleport 4. This makes it one of your most reliable Void dumps — you're always in control of when you trigger it, unlike attack-tied Void consumptions that depend on enemies being in range. Plays similarly to a Move 2 Jump that can be executed even while Immobilized, which is a notable edge case worth keeping in mind."
     },
     {
       name: "Nether Blades",
@@ -41,8 +41,8 @@ const HOLLOWPACT_DATA = {
       tags: ["aoe", "voidsight"],
       builds: ["both"],
       top: { text: "Voidsight · Attack 2 · AoE hex pattern · Gain 1 Void", isLoss: false },
-      bottom: { text: "Attack 2 · Move 1", isLoss: false },
-      commentary: "The Top looked better in theory than practice — the AoE formation doesn't come together as naturally as it seems, as monsters rarely form the right pattern unless you reposition. Often read as just Voidsight Attack 2 Gain Void, which is fine at Level 1 but felt lackluster a few levels in. The Voidsight is your best (damage-free) way to generate Void at Level 1, but not consistent enough to rely on. Initiative 55 is poor for this class. The Bottom Attack 2 Move 1 is a solid staple that stayed relevant for quite a while."
+      bottom: { text: "Move 2 · Void consumption: Teleport 4 · Infuse Dark", isLoss: false },
+      commentary: "The Top looked better in theory than practice — the AoE formation doesn't come together as naturally as it seems, as monsters rarely form the right pattern unless you reposition. Often read as just Voidsight Attack 2 Gain Void, which is fine at Level 1 but felt lackluster a few levels in. The Voidsight is your best (damage-free) way to generate Void at Level 1, but not consistent enough to rely on. Initiative 55 is poor for this class. The Bottom is where this card earns its keep — Move 2 with an optional Void consumption for Teleport 4 and Dark Infusion. This makes it one of your most reliable ways to dump Void while also generating Dark, your most valuable element. Unlike Void Step's suffer-1-damage trigger, this one costs no HP — a meaningful difference at a class that already takes incidental damage from various effects."
     },
     {
       name: "Withering Deluge",
@@ -50,7 +50,7 @@ const HOLLOWPACT_DATA = {
       initiative: 52,
       imageUrl: BASE_HO + "cs-withering-deluge.jpeg",
       tags: ["aoe", "void"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Void consumption: Attack 5 · WOUND · Target 2 · Gain 2 Void · XP (Loss)", isLoss: true },
       bottom: { text: "Move 3 · Create a Void Pit obstacle in an adjacent empty hex", isLoss: false },
       commentary: "A card personally cut at Level 1, though its Bottom got significantly better with the finalized version's greater focus on Void Pit obstacles. The Top is an opportunistic Loss requiring careful timing with a Bottom Generator to avoid Muddle. Attack 5 Wound on 2 targets is excellent but demands both Void available and good target positioning — subpar and best suited as a 'last room' play without both. The new Bottom is an unconditional Move 3 Create Void Pit, which is great value and brings this solidly into the middle of the Level 1 pack."
@@ -63,8 +63,8 @@ const HOLLOWPACT_DATA = {
       tags: ["void"],
       builds: ["both"],
       top: { text: "Attack 3 · Heal 1 Self · Void consumption: POISON and MUDDLE", isLoss: false },
-      bottom: { text: "Attack 1 · WOUND · Void consumption: Attack 3 WOUND · Gain 1 Void", isLoss: false },
-      commentary: "Initially higher on the playables list but borderline on the finalized version due to more competition. The unconditional Attack + Heal plus a reasonable Void spend, a fast Initiative for a slower-than-average class — it's all there. The Top was used mostly for self-healing as the party lacked a dedicated Damage Soak. Poison/Muddle Void consumption will vary party to party. The Bottom Attack 1 Wound (or Attack 3 Wound with Void) is a clean Void dump with upside. A class that struggles with XP generation, so note that Dark and Void consumptions are where most XP comes from."
+      bottom: { text: "Move 4 Jump · Self and all adjacent figures suffer 2 damage · Gain 2 Void · 2 XP (Loss)", isLoss: true },
+      commentary: "A clean Level 1 card that mostly reads as Attack 2 Heal 1 Self with optional Poison and Muddle from Void consumption — not bad at all for Level 1, and the fast Initiative 37 helps. The Top was used mostly for self-healing as the party lacked a dedicated Damage Soak; Poison/Muddle consumption will vary party to party. The Bottom is a 2 XP Loss — Move 4 Jump where you and all adjacent figures suffer 2 damage and gain 2 Void. The self-damage and friendly-fire make this situational at best, but the 2 Void gain on top of a Jump is interesting for those turns when you desperately need to dump or generate Void fast. Mostly this card lives as a reliable Top action and the Bottom stays in reserve. Won't stick in the hand for long as better options arrive, but earns its keep early."
     },
     {
       name: "Borrowed Vitality",
@@ -72,7 +72,7 @@ const HOLLOWPACT_DATA = {
       initiative: 37,
       imageUrl: BASE_HO + "cs-borrowed-vitality.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Heal 3 Self · Gain 2 Void · Void consumption: Heal 2 bonus, REGENERATE", isLoss: false },
       bottom: { text: "Move 3 · Dark consumption: Heal 2 Self, REGENERATE", isLoss: false },
       commentary: "Exclusively ran at Level 1 then cut immediately at Level 2. Heal 3 Self top is below curve and the extra ability was difficult to utilize. The 2 Void plus bonus Heal is net neutral barring specific affects. The Bottom is what pushed it — Move 3 with Dark consumption giving Heal 2 and Regenerate plays nicely with the self-damaging (and Void-Wounding) aspects of the class. Dark is always lying around on this class. Initiative 37 is on the awkward side of fast. Ultimately a fine cut for many aspirant Hollowpacts given the Level 1 competition."
@@ -83,10 +83,10 @@ const HOLLOWPACT_DATA = {
       initiative: 46,
       imageUrl: BASE_HO + "cs-untethered-advance.jpeg",
       tags: ["aoe", "void"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Attack 4 · AoE hex pattern · Move 2 after · Void consumption: Create Void Pit · XP", isLoss: false },
-      bottom: { text: "Move 3 · Void consumption: Create Void Pit · Generate Dark", isLoss: false },
-      commentary: "A classic card with two good halves and an abysmal Initiative to compensate — a sign the developer knew the power level and used Initiative as a lever. The Top AoE Attack 4 is one of the hardest hitting single attacks for quite a long time, feeling like Attack 4 (1xp) or Attack 3 Move 2 (both!). The Move 2 afterwards plays into the Hit and Run aspect. Move 3 with upside is a reoccurring trend; the Bottom Void Pit creation and Dark generation are both appreciated. Initiative 46 is close to the worst — ensure you play some fast and slow cards to compensate."
+      bottom: { text: "Move 3 · You may disarm one adjacent trap or destroy one adjacent obstacle. If you do, gain 1 Void.", isLoss: false },
+      commentary: "A classic card with two good halves and an abysmal Initiative to compensate — a sign the developer knew the power level and used Initiative as a lever. The Top AoE Attack 4 is one of the hardest hitting single attacks for quite a long time, feeling like Attack 4 XP or Attack 3 Move 2 depending on how the hit lands. The Move 2 afterwards plays into the Hit and Run aspect this class wants to emphasize. The Bottom is a decent terrain control option — Move 3 followed by the option to disarm a trap or destroy an obstacle for a free Void token. This pairs naturally with the class's Void Pit creation, as you can convert enemy obstacles or traps into Void Pits on subsequent turns. Initiative 46 is close to the worst — ensure you play some fast and slow cards to compensate."
     },
     {
       name: "Touch of the Void",
@@ -94,7 +94,7 @@ const HOLLOWPACT_DATA = {
       initiative: 29,
       imageUrl: BASE_HO + "cs-touch-of-the-void.jpeg",
       tags: ["void", "voidsight"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Voidsight · Attack 1/2 · STUN · Gain 1 Void · Dark Infuse · XP", isLoss: false },
       bottom: { text: "Heal 7 Self · POISON and WOUND Self · Gain 1 Void (Loss)", isLoss: true },
       commentary: "Ran for the entire career because of one simple word: Stun. Voidsight Attack 1/2 is reasonable but adding an unconditional Stun takes this to territory where any Gloomhaven aficionado will take it. One of the better non-Loss Stuns in the expansion; many Crimson Scales classes will likely be our last look at non-Loss Stuns without heavy conditions. Converting Void to +1 Attack, a Dark Infusion AND xp is fantastic. Initiative 29 is fine (on a CC ability) but dicey when you need the Stun for a specific monster. The Bottom is a massive Heal 7 with two significant downsides — used almost exclusively as a Top action card."
@@ -116,32 +116,32 @@ const HOLLOWPACT_DATA = {
       initiative: 79,
       imageUrl: BASE_HO + "cs-reaching-darkness.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Attack 2 · Range 5 · POISON · Void consumption: +1 Attack · Gain 1 Void · XP", isLoss: false },
       bottom: { text: "2 damage · Teleport nebulous range · Attack 2 · STUN · Infuse Dark · XP (Loss)", isLoss: true },
       commentary: "So liked it was the first enhancement in Crimson Scales — adding Poison for good value. The simplicity of Attack 2 Range 5 that makes both elements you care about just great, and such a nice enabler for next turn. Almost never felt bad to play this Top action as this was often a Room and/or Scenario opener — hit at slow Initiative to stay safe and get ready for an explosive turn 2. Initiative 79 is one of the slowest ones early on but staple useful. The Bottom is a situational but powerful Loss: 2 Damage plus a Teleport of nebulous range plus Attack 2 Stun Infuse Dark has some nice final room potential. Used the Top a vast majority of the time."
-    },
-    {
-      name: "Hollow Embrace",
-      level: "1",
-      initiative: 51,
-      imageUrl: BASE_HO + "cs-hollow-embrace.jpeg",
-      tags: ["void"],
-      builds: ["both"],
-      top: { text: "Suffer 2 damage · Attack 3 · Gain 1 Void · Target 2 if ally is adjacent to one target · Range 2", isLoss: false },
-      bottom: { text: "Dark consumption: Heal 2 Self · Void consumption: Heal 2 Self", isLoss: false },
-      commentary: "Will straddle the play vs cut line depending on what the player needs. Both halves are decent but not overly exciting, and the Initiative is another awful 50-something. The Top required an adjacent ally and ideally two monsters within Range 2, plus willingness to take 2 damage — roughly equivalent to two Attack 3s. Not impressive with one target and fine but scary with two. The Bottom was where more energy was spent — a nice Bottom Heal mid combat with a powerful way to spend the Dark. There's space within level 1 Hollowpact kit for this effect and the Heal action, so this has some extra value."
-    },
-    {
+    },    {
       name: "Channel the Void",
       level: "1",
       initiative: 33,
       imageUrl: BASE_HO + "cs-channel-the-void.jpeg",
-      tags: ["void", "voidsight"],
+      tags: ["void"],
       builds: ["both"],
-      top: { text: "Voidsight · INVISIBLE Self · Gain 2 Void · Dark Infuse · XP (Loss)", isLoss: true },
-      bottom: { text: "Move 3 · Void consumption: Move 5 Self, MUDDLE Self", isLoss: false },
-      commentary: "A strange card where it absolutely has a place in a reasonable amount of starting Level 1 hands, but absolutely feels like an X card. Voidsight, Invisible, Dark and Void, plus XP — a lot of nice little bonuses, especially when added together. Disarming self is a hell of a cost; boiled down to primarily a way to safely Long Rest when things turned sour. Dark Infusion was trinket text barring another ally needing it. The Bottom is an effective Move 3 (or Move 5 with Muddle self) — the Muddle is the sticking point on the usual flow of move in, attack, move out. An effective Move 5 is a bit better than average fare of 3s."
+      top: { text: "Self and all adjacent figures suffer 1 damage · Gain 1 Void · Disarm one adjacent trap or destroy one adjacent obstacle · If you do, gain 1 Void", isLoss: false },
+      bottom: { text: "Attack 1 · WOUND · Double Void consumption: Attack 3 · WOUND", isLoss: false },
+      commentary: "A strange card where both halves feel like they belong on an X card. The Top asks you to damage yourself and adjacent allies to gain Void, then optionally control terrain for a second Void — netting up to 2 Void while converting a trap or obstacle, which sets up the class's Void Pit synergies nicely. The self-damage and friendly fire are the sticking point, making this best used when you have space to operate. The Bottom is a rare bottom attack — Attack 1 Wound by default, upgradeable to Attack 3 Wound by spending Double Void. A clean Void dump with meaningful upside, and a Wound is always welcome. Think carefully about which half you need most each turn — both are genuinely useful but rarely simultaneously."
+    },
+
+    {
+      name: "Hollow Embrace",
+      level: "X",
+      initiative: 51,
+      imageUrl: BASE_HO + "cs-hollow-embrace.jpeg",
+      tags: ["void"],
+      builds: ["trapbuild"],
+      top: { text: "Suffer 2 damage · Attack 3 · Gain 1 Void · Target 2 if ally is adjacent to one target · Range 2", isLoss: false },
+      bottom: { text: "Dark consumption: Heal 2 Self · Void consumption: Heal 2 Self", isLoss: false },
+      commentary: "Will straddle the play vs cut line depending on what the player needs. Both halves are decent but not overly exciting, and the Initiative is another awful 50-something. The Top required an adjacent ally and ideally two monsters within Range 2, plus willingness to take 2 damage — roughly equivalent to two Attack 3s. Not impressive with one target and fine but scary with two. The Bottom was where more energy was spent — a nice Bottom Heal mid combat with a powerful way to spend the Dark. There's space within level 1 Hollowpact kit for this effect and the Heal action, so this has some extra value."
     },
 
     // ── LEVEL X ────────────────────────────────────────────
@@ -152,7 +152,7 @@ const HOLLOWPACT_DATA = {
       imageUrl: BASE_HO + "cs-one-with-nothingness.jpeg",
       tags: ["void", "voidsight"],
       builds: ["both"],
-      top: { text: "Voidsight · INVISIBLE Self · Gain 1 Void · Dark Infuse · XP (Loss)", isLoss: true },
+      top: { text: "Voidsight · INVISIBLE Self · Gain 1 Void · Dark Infuse · XP (Loss)", isLoss: false },
       bottom: { text: "Move 3 · Void consumption: Move 5 Self, MUDDLE Self", isLoss: false },
       commentary: "Definitely worthy of the X card category — takes the 'downsides to powerful abilities' concept that both Cragheart and Hollowpact possess and hones it. Voidsight, Invisible, Dark and Void, even XP — a lot of nice little bonuses especially when added together. Disarming self is a hell of a cost, and this boiled down to primarily a way to safely Long Rest when things turned sour. Dark Infusion was trinket text barring another ally needing it. The Bottom continues the trend of a card with a bit of everything — Move 3 is always fine, and the optional Void consumption gives quasi-Move 5 with Muddle Self."
     },
@@ -162,7 +162,7 @@ const HOLLOWPACT_DATA = {
       initiative: 33,
       imageUrl: BASE_HO + "cs-greed-before-need.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Loot 2 · Create Void Pit · XP if enemy is adjacent to the Void Pit", isLoss: false },
       bottom: { text: "Move 3 · Earth or Wild element consumption: Hold Over Dark for next turn", isLoss: false },
       commentary: "Personally ran due to Personal Quest needing to loot, and liking both halves enough where it didn't feel like a burden primarily as a Loot. The Top is a nice nod to Loot 2.0 from Frosthaven — some nice incidental damage and doing something the class wants to do (Create a Void). Won't always happen as you will be looting 'empty' rooms a reasonable amount. Initiative 33 is fine but nothing particularly impressive. The Bottom is Move 3 with upside, with this one's usefulness initially being pretty locked in to what allies can produce. My party had incidental Earth generation that my party member didn't always need, so this was absolutely a welcome ability."
@@ -186,18 +186,18 @@ const HOLLOWPACT_DATA = {
       initiative: 23,
       imageUrl: BASE_HO + "cs-shrouded-grasp.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Attack 3 · IMMOBILIZE · Dark consumption: INVISIBLE Self, CURSE", isLoss: false },
       bottom: { text: "Move 4 · Create Void Pit · PULL target adjacent to Void Pit", isLoss: false },
       commentary: "A similar trajectory to Nether Binding — two solid halves, although both are a little weaker in vacuum, packed with a much better Initiative at 23. The Top is definitely something where you would not be looking to play it without the Dark Consumption — Attack 3 Immobilize with no extra mobility is nothing special. The Invisibility definitely pushes this to great, as it's a cheeky way to ensure your enemy doesn't land an Attack while not even having to move away. The Bottom is marginally weaker but solid — a way to bring an enemy to you without actually jumping into the fray yourself, functioning as a Move 4 Create Void. Both halves are swingy in nature requiring conditions to shine."
     },
     {
       name: "Empowered Assault",
-      level: "2",
+      level: "3",
       initiative: 19,
       imageUrl: BASE_HO + "cs-empowered-assault.jpeg",
       tags: ["void", "teleport"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Teleport 2 · Attack 2 · MUDDLE Self · Suffer 1 damage · Void consumption: +2 Attack · XP", isLoss: false },
       bottom: { text: "Teleport 4 · Suffer 1 damage · Dark consumption: STUN adjacent enemy · Void consumption: Gain Void", isLoss: false },
       commentary: "Numerically superior to Void Step although the similarity in Initiative (19 vs 20) makes this a sort of non-pick for some, as both cards do similar things but Assault also introduces more downsides (Muddle on Top, extra damage on Bottom). Both halves are definitely an improvement over Void Step, but it's a fairly nebulous comparison. The Bottom Dark Consumption to Stun an adjacent enemy after Teleport is fantastic — the most impactful upgrade over Void Step. Note that due to card formatting you can skip the 2 damage/Void generation when using the Bottom, which is important. Magatis gives the nod to Majestic Malevolence over both for its solid new things and best late Initiative."
@@ -210,18 +210,18 @@ const HOLLOWPACT_DATA = {
       initiative: 89,
       imageUrl: BASE_HO + "cs-majestic-malevolence.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Attack 3 · Range 3 · Void Pit or obstacle: target from it instead · Heal Self · Dark Infuse · 2 XP", isLoss: false },
       bottom: { text: "Create Void Pit · Gain Void Energy · Attack 3 · MUDDLE (optional 2 Void: better version)", isLoss: false },
       commentary: "Already happy with this card, and since played they added text for the Top to target from Void Pit Obstacles instead of yourself — fantastic utility that solidifies Nether Binding as a strong pick at Level 2. The Top is flexible and reasonable without Dark, getting a lot better with it (a reoccurring trend). Range 1 would be fairly prohibitive normally, but between you and your Void Pits this should be easy enough to have a couple targets — you can always target yourself for the Heal. The Bottom underwent a big change: looks like a reasonable way to make both a Void Pit and gain Void Energy, with a nice option to spend 2 Voids for Attack 3 Muddle. Initiative 89 is great and the best late Initiative period."
     },
     {
       name: "Void-Enhanced Armory",
-      level: "3",
+      level: "4",
       initiative: 17,
       imageUrl: BASE_HO + "cs-void-enhanced-armory.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Attack 3 · Shield 1 · Infuse Dark · Double Void consumption: +2 Attack · 2 XP", isLoss: false },
       bottom: { text: "Gain +1 Attack on all attacks once per turn while spending Void · XP (Persistent Loss)", isLoss: true },
       commentary: "A bit of a strange card that encourages a new sort of playstyle — actually trying to soak some damage for the team via incidental Shielding. You got a couple more cards upcoming with similar effects, so it's a nice option to have but you won't become some sort of main frontliner. Attack 3 Shield 1 Infuse Dark is fine although nothing exceptional, and the Double Void spender for +2 Attack is mostly a way to dump excess Void that may become problematic if held onto too long. Initiative 17 makes good sense for the Top half, where Shields need to go quickly. The Bottom is a strange Persistent Loss clarified to only spend Void once per turn for +1 Attack — leery about spending many Losses on this class, so think this could be good but risky when things go sideways."
@@ -234,14 +234,14 @@ const HOLLOWPACT_DATA = {
       initiative: 13,
       imageUrl: BASE_HO + "cs-obliterate.jpeg",
       tags: ["void", "aoe"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Attack 3-4 · DISARM · AoE pattern · Void Pit on kill · Infuse Dark · 2 XP (Loss)", isLoss: true },
       bottom: { text: "Move 4 · PUSH 2 · Void consumption: 2-4 True Damage · Generate Dark", isLoss: false },
       commentary: "The pinnacle card — one bit of awkwardness is the similarity in Initiative values (13 vs 17) between the two Level 4 choices, making this a sort of non-pick dilemma. The Top was primarily used with Double Void for a massive Attack 12-18 Disarm 2-3x, but even three Attack 4 Disarms creating Void Pits if they kill is great. This card also Infuses Dark and gives 2xp — used the Top mid to late of almost every scenario. Felt like an ace in the hole to turn pretty much any room into a pile of coins quickly, and any that did live certainly didn't get to attack this round. The Bottom Move 4 Push 2 is great, and being able to gain Void and deal 2-4 True Damage tacked onto it gives a nice payoff for Void Pits nearby."
     },
     {
       name: "Stalking Quarry",
-      level: "4",
+      level: "5",
       initiative: 14,
       imageUrl: BASE_HO + "cs-stalking-quarry.jpeg",
       tags: ["void", "voidsight", "teleport"],
@@ -258,36 +258,47 @@ const HOLLOWPACT_DATA = {
       initiative: 78,
       imageUrl: BASE_HO + "cs-sever-reality.jpeg",
       tags: ["void", "voidsight"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Attack 4 · WOUND · Infuse Dark · Void consumption: Gain Void · 2 XP", isLoss: false },
       bottom: { text: "Voidsight · Teleport 3 · Attack 2 · CURSE · Void consumption: big bonus", isLoss: false },
       commentary: "A reasonable top, a great Bottom action, and a reasonably late Initiative — a card played happily overall although feels quite a bit less 'Transformational' than many other Level 5 cards in Crimson Scales. The Top Attack 4 Wound Infuse Dark and Void is both a setup card and effectively an Attack 5 working great with Voidsight to setup big hits. The Bottom Voidsight Teleport 3 Attack 2 Curse is such a value-packed Bottom action — incidental Curses that don't take away from your Top action, as you can whack something to soften it up with the Curse and finish it off with the Top. Initiative 78 is the first late option since Level 3, and one of the only ones at all between Levels 2-6."
     },
     {
       name: "Enduring Darkness",
-      level: "5",
+      level: "6",
       initiative: 26,
       imageUrl: BASE_HO + "cs-enduring-darkness.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Dark consumption: WARD Self · Gain 2 Void · XP", isLoss: false },
       bottom: { text: "Move 4 · Heal 1 · REGENERATE · Infuse Dark · Infuse something else", isLoss: false },
       commentary: "A truly unique top effect with Dark Consumption — could represent so much damage reduced in the right circumstance. Ward often functions pretty similarly to a Shield 2-3 for a single hit, which is a little less exciting than imagined. Combines nicely with the couple of Shield options at previous level ups, so keep that in mind on your level up if your team needs someone who can absorb damage. Essentially just produces 2 Void for how it actually advances a way forwards to win the scenario — a fairly steep price. If you desperately need Void, or elements (as with the Bottom), this card has legs but both halves are a little underwhelming by Level 6. The Bottom Move 4 Heal Regenerate Infuse elements is a great value action — repeatable actions that hold a lot of value."
     },
 
-    // ── LEVEL 6 ────────────────────────────────────────────
     {
       name: "Implosion",
       level: "6",
       initiative: 49,
       imageUrl: BASE_HO + "cs-implosion.jpeg",
       tags: ["void", "aoe"],
-      builds: ["both"],
+      builds: ["bruiser"],
       top: { text: "Attack 3 · AoE MUDDLE · Void Pit requirement: no range limit · Gain Void · 2 Void consumption: better version", isLoss: false },
       bottom: { text: "Move 4 · Infuse Void · PULL optional", isLoss: false },
       commentary: "More of a payoff for simply having Void Pit obstacles than for Void accumulation itself. Creating a Void Pit for 2 Void is a steep cost unless you just want to offload it to avoid the Muddle. With a little bit of preplanning or a Bottom action that creates Void Pits, this becomes a great AoE Attack 3 Muddle without too much setup — works great with the small amount of Cursing the class does. No range restrictions means it fires from any Void Pit adjacent to monsters, so there's no feel bad moment of having the right situation but being too far away. Initiative 49 isn't ideal but is far from a deal breaker. The Bottom is essentially Move 4 Infuse Void, with the Pull being very rarely relevant but helping set up some odds AoEs."
     },
 
+    {
+      name: "Gateway to the Abyss",
+      level: "7",
+      initiative: 66,
+      imageUrl: BASE_HO + "cs-gateway-to-the-abyss.jpeg",
+      tags: ["void", "aoe"],
+      builds: ["bruiser"],
+      top: { text: "Double Void consumption: Attack 4 · WOUND · Target all enemies, no range limit · Gain 2 Void · 2 XP (Loss)", isLoss: true },
+      bottom: { text: "Move 4 · Void consumption: PUSH 5 adjacent enemy · Deal 2 True Damage", isLoss: false },
+      commentary: "Another pretty absurd Loss that requires Double Void to even really exist as a card. No cap on how many monsters it can hit, and an effective Attack 4 counting the Wound on each means this can pretty easily obliterate a room mid combat. Requires fair bit of pre-planning (Double Void for the ability, monsters in the right positions) so this is a Loss you won't play every scenario but will have a large impact when you can line it up. The 3 true damage to allies is unfortunate but potentially a way to reign in a card with such limitless potential. Initiative 66 is at least later than most of our options lately, although still far from the nice late Initiatives in the 80-95 range. The Bottom is pretty vanilla without Void but the class should have no real issues generating Void at this point — the ability to shunt an adjacent target up to 5 hexes away and deal 2 true damage is great when stapled onto a Move 4.",
+    },
+    // ── LEVEL 6 ────────────────────────────────────────────
     // ── LEVEL 7 ────────────────────────────────────────────
     {
       name: "Ruinous Barrage",
@@ -295,7 +306,7 @@ const HOLLOWPACT_DATA = {
       initiative: 38,
       imageUrl: BASE_HO + "cs-ruinous-barrage.jpeg",
       tags: ["void"],
-      builds: ["both"],
+      builds: ["trapbuild"],
       top: { text: "Attack 4 · Attack 4 · Attack 4 · STUN one · Dual Void + Dark consumption: better version · 2 XP (Loss)", isLoss: true },
       bottom: { text: "Attack 3 · IMMOBILIZE · Teleport 3 · Suffer 1 damage · Void consumption: gain Void", isLoss: false },
       commentary: "Perhaps the least impressive Level 7 Loss effect by default without meeting any conditions, but having all 3 (Dual Void + Dark) is definitely where you want to be — 2 hefty Attacks that can target different enemies followed by a nice little Stun means this can take care of 2 monsters very easily and potentially 3. Initiative 38 is unimpressive and not fast enough to ensure monsters are still in the right position. The Bottom is a nice hit-and-run style attack — self-sufficient provided you have either the 1 life to pay or already have the Void. Attack 3 Immobilize Teleport 3 as a Bottom action means you can hit something else with your Top, bop a healthy monster with this Bottom and get away scot free. A conditional Top Loss with a good spammable Bottom."
@@ -307,8 +318,8 @@ const HOLLOWPACT_DATA = {
       level: "8",
       initiative: 28,
       imageUrl: BASE_HO + "cs-entropy-unleashed.jpeg",
-      tags: ["void", "aoe"],
-      builds: ["both"],
+      tags: ["void", "voidsight", "aoe"],
+      builds: ["bruiser"],
       top: { text: "Attack 2 · AoE 2-3 targets · POISON · Void/element consumption: +1 Poison · Voidsight setup", isLoss: false },
       bottom: { text: "Teleport range · Attack 3 · POISON · Void consumption: extra Wound · Infuse Dark · XP", isLoss: false },
       commentary: "Finally a payoff for the ability to maneuver both ourselves and our enemies into the right positions — also a payoff for creating random Earth we don't really end up using much. The baseline is pretty terrible at this point (Voidsight Attack 2 on two to three targets), but it's really not difficult to get this to be Attack 3 with ANY spare element and this becomes legitimately powerful with the +1 Poison from Double Void. Hitting 2-3 Targets for Attack 4 Poison that is setup by a nice Voidsight means confidence your first hit or two will land on your priority target. Initiative 28 is one of the faster ones since Level 5. You absolutely will want to hit 2 targets with this card, although that shouldn't be difficult — 3 will be challenging but not impossible."
@@ -331,9 +342,9 @@ const HOLLOWPACT_DATA = {
       level: "9",
       initiative: 0,
       imageUrl: BASE_HO + "cs-prescient-voidmastery.jpeg",
-      tags: ["void", "voidsight"],
+      tags: ["void"],
       builds: ["both"],
-      top: { text: "Voidsight · Attack 3-5 · DISARM · multiple targets possible · Infuse Dark · 2 XP (Loss)", isLoss: true },
+      top: { text: "Voidsight · Attack 3-5 · DISARM · multiple targets possible · Infuse Dark · 2 XP (Loss)", isLoss: false },
       bottom: { text: "Move 4 · WOUND AoE · Suffer 3 damage · Gain 3 Void", isLoss: false },
       commentary: "A pretty fun Level 9 with two unique halves tied together by a fantastic Initiative that will definitely cement Hollowpact as a good class for Initiative Control, although not the best as they do lack a few more super-late Initiatives. The Top has a Blinkblade sort of feel to it — potentially a couple Attack 3-5s, one of which will likely Disarm a target. Could potentially prevent a lot of damage via killing the monster before they actually get to complete their turn. The Bottom is the latest in a series of Move 4s with pretty big upsides — 3 Damage when we have 17 life isn't the end of the world, but generating 3 Void is definitely going to push you to start spending them ASAP. Dealing some true damage backed by a Wound is a fun way to make this feel powerful, as it's not often big moves also Inflict AoE Wounds."
     },
@@ -344,22 +355,22 @@ const HOLLOWPACT_DATA = {
       imageUrl: BASE_HO + "cs-no-escape.jpeg",
       tags: ["void", "teleport"],
       builds: ["both"],
-      top: { text: "Attack · STUN · WOUND · potential 6-9 damage · 2 XP (Loss)", isLoss: true },
+      top: { text: "Attack · STUN · WOUND · potential 6-9 damage · 2 XP (Loss)", isLoss: false },
       bottom: { text: "Create 2 Void Pits and Gain Void Token in a big Range · Teleport 4-9", isLoss: false },
       commentary: "An apt name for a very neat card — reminiscent of Obliterate Bottom which was loved for its flexibility, and tacking on a big Stun and Wound on top and potentially dealing in the realm of 6-9 damage is awesome. This takes up both the Level 9 choice and Top action so it's far from cataclysmic in power level, but Stun is so good it doesn't matter too much what else the card does. The Bottom is quite the action as well — it unconditionally makes two Void Pits as well as a Void Token in a big Range around you, and followed up by something that will range from a Teleport 4-9. The fact that you still get to use the Void Pit obstacles for whatever your other actions want is great, and this sounds so fun to play. A class that was good, zany, and pretty unique, while still feeling like it referenced and built off of Gloomhaven's past."
     },
 
     // ── LEVEL M (Milestone) ────────────────────────────────
     {
-      name: "Cleansed Voidheart",
+      name: "The Void Consumes",
       level: "M",
       initiative: 0,
       imageUrl: BASE_WH + "milestone-ability-cards/trail-of-ashes/toa-msa-hollowpact.png",
-      tags: [],
-      builds: ["both"],
-      top: { text: "See card image for full text.", isLoss: false },
-      bottom: { text: "See card image for full text.", isLoss: false },
-      commentary: "The Hollowpact's Milestone reward — described by the guide as incredible. It entirely removes the downside of having 2 or more Void at the end of your turns, allowing you to play far more recklessly without worrying about balancing Void generation vs. spending. The guide strongly recommends picking it up once you meet the requirements to do so."
+      tags: ["void"],
+      builds: ["bruiser"],
+      top: { text: "Triple Void consumption: Attack 6 · PUSH 1 · Advantage · Create a Void Pit obstacle in an adjacent empty hex · Infuse Dark · XP", isLoss: false },
+      bottom: { text: "Move 2 · Destroy one adjacent obstacle. If you do, gain Void. You may create a Void Pit obstacle in the hex the destroyed obstacle occupied. · IMMOBILIZE — target one enemy adjacent to a Void Pit.", isLoss: false },
+      commentary: "A perfect encapsulation of the Hollowpact's identity. The top is the class's hardest hitting single attack — Attack 6 with Advantage and Push 1 — while simultaneously creating a Void Pit and infusing Dark. It requires Triple Void, making careful Void management essential, but the payoff is enormous. The bottom is a flexible utility action at Initiative 35: Move 2, convert any adjacent obstacle into a Void Pit while gaining a Void token, then Immobilize an enemy adjacent to any Void Pit. Both halves feed the Void Pit engine and reward the playstyle the class builds toward all campaign."
     },
   ],
 
@@ -416,7 +427,7 @@ const HOLLOWPACT_DATA = {
     },
     {
       category: "🎒 Items",
-      text: "The Solo Scenario item Cleansed Voidheart is incredible for this class — it entirely removes the downside of having 2 or more Void at the end of your turns. Highly recommended to acquire as soon as you meet the requirements to do so. It allows you to play far more recklessly without worrying about balancing Void generation vs. spending."
+      text: "The Solo Scenario item for this class is described in the guide as incredible — it entirely removes the downside of having 2 or more Void at the end of your turns. Highly recommended to acquire as soon as you meet the requirements to do so. It allows you to play far more recklessly without worrying about balancing Void generation vs. spending."
     },
     {
       category: "📈 Perks",
