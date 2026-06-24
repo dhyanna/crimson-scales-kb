@@ -11,6 +11,7 @@
     chieftain: CHIEFTAIN_DATA,
     hierophant: HIEROPHANT_DATA,
     hollowpact: HOLLOWPACT_DATA,
+    mirefoot: MIREFOOT_DATA,
   };
 
   // ===== STATE =====
@@ -602,6 +603,7 @@
       luminary: "A frontliner who deploys persistent Glow abilities and side-steps through enemy formations with Scuttle, leveraging Fire, Ice, Dark, and Light for powerful elemental effects.",
       hierophant: "A ranged 11-card battle-priest who distributes Prayer cards to allies, curses the enemy modifier deck, and leverages a burn-card economy (Spiritual Gains) that lets them cast devastating loss attacks all scenario long.",
       hollowpact: "A medium-low HP Savvas who accumulates and spends Void Energy, manipulates their attack modifier deck with Voidsight, teleports around the battlefield, and deploys Void Pit obstacles that power up higher-level abilities.",
+      mirefoot: "A 10-card, low-health Quatryl DPS/Assassin who leverages upgraded conditions (Wound 2, Poison 3) and Difficult Terrain to dash in and out of combat, dealing devastating burst damage while staying mobile and elusive.",
     };
     return descs[cls] || "";
   }
@@ -712,6 +714,27 @@
       role: "The Savvas Hollowpact is a 10-card, medium-low HP (7hp at Level 1) class that blends Melee and Ranged abilities with Teleport actions. Unique Void Energy functions like an element that only powers the Hollowpact's own abilities and generates immediately rather than at end of turn. Void Pit obstacles created by many abilities become increasingly central to the class's power at higher levels. A complex class with significant upsides and downsides built into many effects — one of the most complex of the starter Crimson Scales classes.",
       xp: [0,45,95,150,200,275,345,420,500],
       hp: [7,8,10,11,13,14,16,17,17]
+    },
+    mirefoot: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-mirefoot.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-mirefoot-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Upgraded Conditions",
+          chipClass: "shackle-chip",
+          text: "The Mirefoot applies enhanced versions of standard conditions — Wound 2 and Poison 3 being the primary examples. These are multiplicative: Poison 3 adds +3 Attack (not +1) to every Attack Action against the target, and Wound 2 deals 2 True Damage at the start of each turn instead of 1. The Mirefoot's raw Attack values are deliberately low to compensate for this extraordinary damage output."
+        },
+        {
+          label: "Mechanic",
+          chip: "Difficult Terrain",
+          chipClass: "swing-chip",
+          text: "Many Mirefoot abilities place and utilize Difficult Terrain hexes. A Difficult Terrain hex can be occupied by a figure but cannot have any other overlay tiles (traps, obstacles). Most terrain placements are optional. Terrain is a great tactical asset against low-Move enemies and powers several ability effects that require the target or yourself to be on it."
+        }
+      ],
+      role: "The Quatryl Mirefoot is a 10-card, low-health (6hp at Level 1) DPS/Assassin class with strong similarities to both the Mindthief and Scoundrel. It wants to dash in and out of combat, apply devastating upgraded conditions, and leverage excellent Initiative control to stay safe. Gains power in higher player counts. Struggles significantly against Retaliate and high-Shield enemies, though upgraded Poisons help counteract Shields. A class where every card in the starting hand is viable — strong design with no obvious dead weight.",
+      xp: [0,45,95,150,200,275,345,420,500],
+      hp: [6,8,9,11,12,14,15,17,18]
     },
   };
 
@@ -1094,6 +1117,73 @@
         { name: "Enervating Strike", desc: "Unconditional Attack + Heal top with Void spends. Reasonable Initiative for a slower-than-average class." },
       ],
     },
+    mirefoot: {
+      perksDesc: "Start with replace -2 with 0 and replace -1 with +1 to improve your baseline deck. The 'X based on Poison value' perks are mid-tier — often end up as +1s. Rolling conditional Invisibility perks are great for the Difficult Terrain build. Replacing +1s with +0 Wound 2s is swingy but potentially very powerful if you reliably go before monsters.",
+      builds: [
+        {
+          id: "bruiser",
+          icon: "☠️",
+          iconClass: "bruiser-icon",
+          name: "Poison/Wound DPS",
+          tagline: "Upgraded conditions, burst damage, hit and run",
+          btnClass: "bruiser-btn",
+          desc: "Stack Poison and apply Wound 2 to high-priority targets. Use excellent Initiative control to dash in before monsters act, apply a devastating condition, then get out before taking damage. Let upgraded Conditions do the heavy lifting.",
+          playstyle: "Lead with Death Sentence Top (Init 8) or Blood Thinner (Init 11) on the scariest Elite each room. Follow up with Throwing Daggers Active for Range 3 access on melee attacks, keeping you safe from Retaliate. Use Neurotoxin Top to apply Poison broadly. Save Paralytic Agent for the most dangerous activation each rest cycle. Keep Wound 2 targets on a mental clock — they'll die within a turn or two without spending more actions on them.",
+          coreCards: [
+            { name: "Blood Thinner", desc: "Initiative 11 Wound 2 + XP top. Ran until retirement. The class's signature kill condition." },
+            { name: "Death Sentence", desc: "Initiative 8 Attack 2 Stun Poison 3 Loss. A Death Sentence for any non-immune monster." },
+            { name: "Paralytic Agent", desc: "Repeatable Stun at Initiative 76. Wanted every rest cycle." },
+            { name: "Throwing Daggers", desc: "Level 2 — converts melee attacks to Range 3 for 3 uses. Opens up the entire class." },
+            { name: "Neurotoxin", desc: "Ranged Poison AoE top. Sleeper hit played in starting hand all the way to Level 4." },
+            { name: "Compound Toxin", desc: "Level 5 — reliable Poison 3 every rest cycle. Basically always Attack 2 Poison 3." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Throwing Daggers — mandatory; converts melee attacks to Range 3, unlocks the class's full potential" },
+            { lvl: "3", text: "Potent Mixture (Init 17) for single-target Poison 3 burst; or Hide and Seek for Invisibility utility" },
+            { lvl: "4", text: "Fireroot Sap (Init 91) — late Initiative + both halves Wound; or Radiant Forest Fungi for Move/Shield" },
+            { lvl: "5", text: "Compound Toxin — reliable Poison 3 each cycle; Personal Poison is a strong alternative for mass Wound" },
+            { lvl: "6", text: "Anticoagulant (Init 12) — replaces Blood Thinner; or Tainted Waters for Difficult Terrain payoff" },
+            { lvl: "7", text: "Sludge Bomb (Init 7) — Ranged Immobilize + Wound + terrain; or Wild Stings for AoE Attack 8" },
+            { lvl: "8", text: "Whitefire Balm — primarily for the incredible Wound 2 Stun Bottom; Twist the Blade is alternative" },
+            { lvl: "9", text: "Lingering Swamp Moss — non-Loss Poison 4 at Init 94; or Complex Toxicology for AoE True Damage" },
+          ],
+        },
+        {
+          id: "trapbuild",
+          icon: "🌿",
+          iconClass: "trap-icon",
+          name: "Difficult Terrain",
+          tagline: "Terrain control, area denial, Ranged payoffs",
+          btnClass: "trap-btn",
+          desc: "Build the battlefield with Difficult Terrain to lock down slow enemies, enable Bogstep-style power plays, and set up AoE attacks that require terrain. Combine with Ranged actions to attack safely from elevated positions.",
+          playstyle: "Open with Ground Solvent Top to Poison targets and create terrain. Use Sinkhole Loss to mass-Immobilize and terrain-fill an area. Combine with Airborne Spores Bottom (Range 3 Muddle all Poisoned) for devastating chip damage. At higher levels Tainted Waters (Poison 2 Wound 2 Range 4 on terrain targets) and Sludge Bomb provide excellent terrain payoffs. Keep Bogstep ready for turns where you're sitting on terrain for the Attack 4 Immobilize.",
+          coreCards: [
+            { name: "Ground Solvent", desc: "Creates terrain and Poisons — sets up everything the Terrain build wants." },
+            { name: "Bogstep", desc: "Attack 4 Immobilize on Difficult Terrain top. Bring in/out as terrain is available." },
+            { name: "Sinkhole", desc: "Mass Immobilize + create terrain in all hexes. Great at Level 2 with Throwing Daggers." },
+            { name: "Airborne Spores", desc: "Level X — Bottom targets all Poisoned within Range 3 for chip damage + Muddle." },
+            { name: "Tainted Waters", desc: "Level 6 — Poison 2 Wound 2 Range 4 on terrain targets. Huge terrain build payoff." },
+            { name: "Sludge Bomb", desc: "Level 7 — Ranged Immobilize + terrain generation at Initiative 7. Repeatable Sinkhole feel." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Throwing Daggers — mandatory for both builds; also enables Ranged Sinkhole follow-ups safely" },
+            { lvl: "3", text: "Hide and Seek (Init 43) — Loot + terrain top; Invisible bottom for terrain build mobility" },
+            { lvl: "4", text: "Radiant Forest Fungi (Init 6) — Move 3+ through terrain bottom; Shield on terrain top for party" },
+            { lvl: "5", text: "Compound Toxin Bottom — Poison 2 all Poisoned targets on Difficult Terrain; great terrain payoff" },
+            { lvl: "6", text: "Tainted Waters (Init 88) — the terrain build's crown jewel; Poison 2 Wound 2 Range 4 Loss" },
+            { lvl: "7", text: "Sludge Bomb (Init 7) — Ranged Immobilize terrain generation; feels like repeatable Sinkhole" },
+            { lvl: "8", text: "Whitefire Balm — Bottom Wound 2 Stun is too good for both builds; Difficult Terrain Top bonus" },
+            { lvl: "9", text: "Lingering Swamp Moss Bottom — Persistent: Ranged Attacks create terrain adjacent; near-complete melee safety" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Blood Thinner", desc: "Initiative 11 Wound 2 top. Ran until retirement. The class's signature condition — both builds want this every rest cycle." },
+        { name: "Death Sentence", desc: "Initiative 8 Stun Poison 3 Loss. A Death Sentence for any non-immune monster regardless of build." },
+        { name: "Throwing Daggers", desc: "Level 2 mandatory pickup. Converts melee attacks to Range 3 — opens up the entire class regardless of build." },
+        { name: "Whitefire Balm", desc: "Level 8 — primarily for the incredible Wound 2 Stun bottom. Both builds plan rests around using this." },
+      ],
+    },
   };
 
 
@@ -1129,6 +1219,10 @@
     hollowpact: {
       mechanic1: { filter: "void",      label: "Void",      tagClass: "tag-shackle" },
       mechanic2: { filter: "voidsight", label: "Voidsight", tagClass: "tag-trap" },
+    },
+    mirefoot: {
+      mechanic1: { filter: "wound",   label: "Condition",     tagClass: "tag-shackle" },
+      mechanic2: { filter: "terrain", label: "Terrain",       tagClass: "tag-trap" },
     },
   };
 

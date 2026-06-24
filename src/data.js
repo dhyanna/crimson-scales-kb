@@ -45,7 +45,7 @@ const CHAINGUARD_DATA = {
       initiative: 30,
       cardNum: 61,
       tags: ["shackle", "swing"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "SWING 3 · Target one adjacent enemy. Add MUDDLE if the Attack 3 hits.",
         isLoss: false
@@ -121,7 +121,7 @@ const CHAINGUARD_DATA = {
       initiative: 18,
       cardNum: 65,
       tags: ["trap"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "Create a 3 damage POISON trap in an adjacent empty hex.",
         isLoss: false
@@ -140,7 +140,7 @@ const CHAINGUARD_DATA = {
       initiative: 25,
       cardNum: 66,
       tags: ["loss"],
-      builds: [],
+      builds: ["both"],
       top: {
         text: "Attack 3 · PUSH 2 · Move 2 · Attack 3.",
         isLoss: true
@@ -254,7 +254,7 @@ const CHAINGUARD_DATA = {
       initiative: 52,
       cardNum: 71,
       tags: ["shackle", "trap", "swing"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "Shackle and SWING 3 Range 2 · If you cannot swing the target into a hex because of an obstacle or wall, the target suffers 2 damage and you gain XP.",
         isLoss: false
@@ -311,7 +311,7 @@ const CHAINGUARD_DATA = {
       initiative: 81,
       cardNum: 74,
       tags: ["shackle"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "PULL 3 · Shackle · Range 4 · If a trap is sprung by the target of the Pull ability, the target suffers 3 damage, gains MUDDLE, and you gain XP.",
         isLoss: false
@@ -349,7 +349,7 @@ const CHAINGUARD_DATA = {
       initiative: 24,
       cardNum: 76,
       tags: ["trap", "swing"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "SWING 6 targeting one Shackled enemy · At any point during the ability, you may perform 'PUSH 3' targeting the Shackled enemy · Attack X where X is equal to the number of hexes the enemy moved with this action.",
         isLoss: true
@@ -463,7 +463,7 @@ const CHAINGUARD_DATA = {
       initiative: 27,
       cardNum: 82,
       tags: ["trap"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "Create a 5 damage MUDDLE trap in an adjacent empty hex · When the trap is sprung, all enemies adjacent to the trap suffer 2 damage, then discard this card. (Active)",
         isLoss: false
@@ -501,7 +501,7 @@ const CHAINGUARD_DATA = {
       initiative: 28,
       cardNum: 84,
       tags: ["shackle", "swing"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "SWING 4 targeting one enemy within 2 hexes · One enemy the target moves through suffers 2 damage · Attack 5 targeting the enemy targeted with the Swing ability.",
         isLoss: false
@@ -558,7 +558,7 @@ const CHAINGUARD_DATA = {
       initiative: 33,
       cardNum: 87,
       tags: ["loss"],
-      builds: ["trap"],
+      builds: ["trapbuild"],
       top: {
         text: "Whenever you cause a Shackled enemy to spring a damage trap during your turn, that enemy suffers double the damage value of the trap · Suffer 1 damage each time you Shackle an enemy. (Persistent Loss)",
         isLoss: true
