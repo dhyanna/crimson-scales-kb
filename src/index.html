@@ -183,7 +183,8 @@
       margin-bottom: 12px;
     }
     .campaign-card-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
-    .campaign-card-group { font-size: 12px; color: var(--color-text-secondary, #888); }
+    .campaign-card-group { font-size: 12px; color: var(--color-text-secondary, #888); display: flex; align-items: center; gap: 4px; }
+    .campaign-group-icon img { width: 16px; height: 16px; border-radius: 2px; vertical-align: middle; }
     .campaign-delete-btn {
       background: none; border: none; cursor: pointer;
       font-size: 16px; padding: 2px 6px; border-radius: 4px; opacity: 0.5;
@@ -203,7 +204,7 @@
       border-radius: 6px;
       padding: 6px 8px;
     }
-    .campaign-player-icon { font-size: 18px; }
+    .campaign-player-icon { width: 36px; height: 36px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
     .campaign-player-name { font-size: 12px; font-weight: 600; }
     .campaign-player-class { font-size: 11px; color: var(--color-text-secondary, #888); }
 
@@ -319,7 +320,21 @@
     .wizard-group-header {
       display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
     }
-    .wizard-group-icon { font-size: 24px; }
+    .class-svg-icon {
+      display: inline-block;
+      vertical-align: middle;
+      object-fit: contain;
+      color: var(--color-text, #e0e0e0);
+      filter: brightness(0) invert(1);
+    }
+    .wizard-group-icon { font-size: 24px; flex-shrink: 0; }
+    .wizard-group-img-icon {
+      width: 48px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
     .wizard-group-name { font-size: 15px; font-weight: 700; }
     .wizard-group-tagline { font-size: 12px; color: var(--color-text-secondary, #888); }
     .wizard-group-badge {
@@ -415,6 +430,62 @@
     .cs-toast.cs-toast-show { transform: translateX(-50%) translateY(0); }
     .cs-toast.cs-toast-error { border-color: #e05; color: #f88; }
 
+    /* ── Auth area ── */
+    .campaign-auth-area { padding: 0 20px 12px; flex-shrink: 0; }
+    .auth-dev-badge {
+      background: rgba(255,160,0,0.15);
+      color: #ffa000;
+      border: 1px solid rgba(255,160,0,0.3);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .auth-user-info { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .auth-email { font-size: 12px; color: var(--color-text-secondary, #888); }
+    .auth-signout-btn {
+      background: none; border: 1px solid var(--color-border, #333);
+      color: var(--color-text-secondary, #888); border-radius: 6px;
+      padding: 4px 10px; font-size: 12px; cursor: pointer;
+    }
+    .auth-signin-prompt { display: flex; flex-direction: column; gap: 8px; }
+    .auth-magic-btn { margin: 0; }
+    .auth-hint { font-size: 11px; color: var(--color-text-secondary, #888); margin: 0; text-align: center; }
+    /* ── Dev picker ── */
+    .dev-picker {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: rgba(255,160,0,0.08);
+      border: 1px solid rgba(255,160,0,0.2);
+      border-radius: 6px;
+    }
+    .dev-picker-label { font-size: 11px; color: #ffa000; white-space: nowrap; }
+    .dev-picker-select { flex: 1; font-size: 12px; padding: 4px 8px; }
+    /* ── Player badges ── */
+    .campaign-player-me {
+      border: 1px solid var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.08);
+    }
+    .player-me-badge {
+      background: var(--color-accent, #c9a84c);
+      color: #000;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .player-unclaimed { font-size: 11px; color: var(--color-text-secondary, #888); font-style: italic; }
+    .wizard-confirm-player-email { font-size: 11px; color: var(--color-text-secondary, #888); }
+    .wizard-confirm-note {
+      font-size: 12px; color: var(--color-text-secondary, #888);
+      background: rgba(100,160,255,0.08);
+      border: 1px solid rgba(100,160,255,0.2);
+      border-radius: 6px; padding: 10px 14px; margin-top: 16px;
+    }
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -518,6 +589,7 @@
       <h2 class="campaign-panel-title">📜 Campaigns</h2>
       <button class="campaign-panel-close" id="close-campaigns-btn">✕</button>
     </div>
+    <div id="campaign-auth-area" class="campaign-auth-area"></div>
     <div class="campaign-panel-actions">
       <button class="campaign-new-btn" id="new-campaign-btn">＋ New Campaign</button>
     </div>

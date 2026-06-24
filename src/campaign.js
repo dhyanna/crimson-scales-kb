@@ -1,21 +1,143 @@
-// campaign.js — Campaign management module for Crimson Scales KB
-// Requires Supabase JS client loaded before this script
+// campaign.js — Campaign management with Supabase Auth
+// Requires: <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-// ── CONFIG (replace with real values after Supabase setup) ──
 const SUPABASE_URL  = 'https://djssjkjcckqkgwzkjnif.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqc3Nqa2pjY2txa2d3emtqbmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMjcwNzgsImV4cCI6MjA5NzkwMzA3OH0.mKpyxNhSAW7zFhX2A71CoC1WbGMYOr4rJ8hHnLw1jJs';
 
+// ── DEV BYPASS ───────────────────────────────────────────────
+// Set to true to skip auth and manually pick your player identity
+const DEV_MODE = true;
+let devPlayerOverride = null; // set to a campaign_players.id when bypassing
+
+// ── SUPABASE CLIENT ──────────────────────────────────────────
 let _sb = null;
 function sb() {
   if (!_sb) _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
   return _sb;
 }
 
+// ── AUTH STATE ───────────────────────────────────────────────
+let currentUser = null;
+let currentPlayer = null; // campaign_players row claimed by this user
+
+async function initAuth() {
+  const { data: { session } } = await sb().auth.getSession();
+  currentUser = session?.user ?? null;
+  updateAuthUI();
+
+  sb().auth.onAuthStateChange(async (_event, session) => {
+    currentUser = session?.user ?? null;
+    if (currentUser) await resolveCurrentPlayer();
+    updateAuthUI();
+    loadCampaigns();
+  });
+
+  if (currentUser) await resolveCurrentPlayer();
+}
+
+async function resolveCurrentPlayer() {
+  if (!currentUser) return;
+  // Find any campaign_player row with this user's email that hasn't been claimed yet
+  const { data } = await sb()
+    .from('campaign_players')
+    .select('*')
+    .eq('player_email', currentUser.email)
+    .is('user_id', null)
+    .limit(1);
+
+  if (data && data.length > 0) {
+    // Claim this player record
+    await sb()
+      .from('campaign_players')
+      .update({ user_id: currentUser.id })
+      .eq('id', data[0].id);
+  }
+
+  // Now load their player record
+  const { data: players } = await sb()
+    .from('campaign_players')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  currentPlayer = players?.[0] ?? null;
+}
+
+async function sendMagicLink(email) {
+  const { error } = await sb().auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href }
+  });
+  if (error) throw error;
+}
+
+async function signOut() {
+  await sb().auth.signOut();
+  currentUser = null;
+  currentPlayer = null;
+  devPlayerOverride = null;
+  updateAuthUI();
+  loadCampaigns();
+}
+
+function getEffectivePlayer(allPlayers) {
+  if (DEV_MODE && devPlayerOverride) {
+    return allPlayers.find(p => p.id === devPlayerOverride) ?? null;
+  }
+  if (currentUser) {
+    return allPlayers.find(p => p.user_id === currentUser.id) ?? null;
+  }
+  return null;
+}
+
+function updateAuthUI() {
+  const authArea = document.getElementById('campaign-auth-area');
+  if (!authArea) return;
+
+  if (DEV_MODE) {
+    authArea.innerHTML = `
+      <div class="auth-dev-badge">🛠 Dev Mode</div>
+    `;
+    return;
+  }
+
+  if (currentUser) {
+    authArea.innerHTML = `
+      <div class="auth-user-info">
+        <span class="auth-email">${currentUser.email}</span>
+        <button class="auth-signout-btn" id="auth-signout-btn">Sign out</button>
+      </div>
+    `;
+    document.getElementById('auth-signout-btn')?.addEventListener('click', signOut);
+  } else {
+    authArea.innerHTML = `
+      <div class="auth-signin-prompt">
+        <input class="wizard-input auth-email-input" id="auth-email-input"
+          type="email" placeholder="Your email address">
+        <button class="campaign-new-btn auth-magic-btn" id="auth-magic-btn">
+          ✉️ Send Magic Link
+        </button>
+        <p class="auth-hint">Enter the email used when your campaign was created.</p>
+      </div>
+    `;
+    document.getElementById('auth-magic-btn')?.addEventListener('click', async () => {
+      const email = document.getElementById('auth-email-input')?.value?.trim();
+      if (!email) return;
+      try {
+        await sendMagicLink(email);
+        showToast('Magic link sent! Check your email.');
+        document.getElementById('auth-email-input').value = '';
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
+    });
+  }
+}
+
 // ── STARTING GROUPS ──────────────────────────────────────────
 const STARTING_GROUPS = {
   naturalists: {
     name: "Naturalists",
-    icon: "🌿",
+    icon: '<img src="naturalists.png" class="wizard-group-img-icon" alt="Naturalists">',
     tagline: "Masters of terrain, conditions, and the wild",
     classes: ["mirefoot", "hollowpact", "chieftain", "luminary"],
     description: "The Naturalists excel at controlling the battlefield with terrain and conditions. The Mirefoot poisons and wounds from range, the Hollowpact teleports and creates Void Pits, the Chieftain commands powerful summon mounts, and the Luminary illuminates the party with Glow abilities."
@@ -50,15 +172,20 @@ const STARTING_GROUPS = {
   }
 };
 
-// Class display names
 const CLASS_DISPLAY = {
-  mirefoot:   { name: "Quatryl Mirefoot",   symbol: "Sprig",        icon: "🌿" },
-  hollowpact: { name: "Savvas Hollowpact",  symbol: "Vortex",       icon: "🌀" },
-  chieftain:  { name: "Orchid Chieftain",   symbol: "Tusks",        icon: "🦏" },
-  luminary:   { name: "Lurker Luminary",    symbol: "Crescent Sun", icon: "✨" },
-  chainguard: { name: "Inox Chainguard",    symbol: "Chains",       icon: "⛓️" },
-  hierophant: { name: "Human Hierophant",   symbol: "Hierophant",   icon: "✝️" },
+  mirefoot:   { name: "Quatryl Mirefoot",   symbol: "Sprig",        icon: "cs-mirefoot-icon.svg" },
+  hollowpact: { name: "Savvas Hollowpact",  symbol: "Vortex",       icon: "cs-hollowpact-icon.svg" },
+  chieftain:  { name: "Orchid Chieftain",   symbol: "Tusks",        icon: "cs-chieftain-icon.svg" },
+  luminary:   { name: "Lurker Luminary",    symbol: "Crescent Sun", icon: "cs-luminary-icon.svg" },
+  chainguard: { name: "Inox Chainguard",    symbol: "Chains",       icon: "cs-chainguard-icon.svg" },
+  hierophant: { name: "Human Hierophant",   symbol: "Hierophant",   icon: "cs-hierophant-icon.svg" },
 };
+
+function classIcon(classId, size = 32) {
+  const cls = CLASS_DISPLAY[classId];
+  if (!cls) return '<span style="font-size:20px">?</span>';
+  return `<img src="${cls.icon}" width="${size}" height="${size}" alt="${cls.name}" class="class-svg-icon">`;
+}
 
 // ── DB HELPERS ───────────────────────────────────────────────
 async function getCampaigns() {
@@ -80,10 +207,15 @@ async function createCampaign(name, startingGroup) {
   return data;
 }
 
-async function addPlayer(campaignId, playerName, classId) {
+async function addPlayer(campaignId, playerName, playerEmail, classId) {
   const { data, error } = await sb()
     .from('campaign_players')
-    .insert({ campaign_id: campaignId, player_name: playerName, class_id: classId })
+    .insert({
+      campaign_id: campaignId,
+      player_name: playerName,
+      player_email: playerEmail.toLowerCase().trim(),
+      class_id: classId
+    })
     .select()
     .single();
   if (error) throw error;
@@ -95,50 +227,47 @@ async function deleteCampaign(id) {
   if (error) throw error;
 }
 
-async function deletePlayer(id) {
-  const { error } = await sb().from('campaign_players').delete().eq('id', id);
-  if (error) throw error;
-}
-
 // ── WIZARD STATE ─────────────────────────────────────────────
 let wizardState = {
   step: 0,
   campaignName: '',
-  playerNames: ['', '', '', ''],
+  players: [
+    { name: '', email: '' },
+    { name: '', email: '' },
+    { name: '', email: '' },
+    { name: '', email: '' },
+  ],
   selectedGroup: null,
-  classAssignments: {}, // playerIndex → classId
+  classAssignments: {},
 };
 
 function resetWizard() {
   wizardState = {
     step: 0,
     campaignName: '',
-    playerNames: ['', '', '', ''],
+    players: [
+      { name: '', email: '' },
+      { name: '', email: '' },
+      { name: '', email: '' },
+      { name: '', email: '' },
+    ],
     selectedGroup: null,
     classAssignments: {},
   };
 }
 
-// ── RENDER HELPERS ───────────────────────────────────────────
+// ── RENDER STEPS ─────────────────────────────────────────────
 function renderWizardStep() {
   const container = document.getElementById('wizard-content');
   if (!container) return;
 
-  // Update progress dots
   document.querySelectorAll('.wizard-step-dot').forEach(dot => {
     const s = parseInt(dot.dataset.step);
     dot.classList.toggle('active', s === wizardState.step);
     dot.classList.toggle('done', s < wizardState.step);
   });
 
-  const steps = [
-    renderStep0_Name,
-    renderStep1_Players,
-    renderStep2_Group,
-    renderStep3_Assign,
-    renderStep4_Confirm,
-  ];
-
+  const steps = [renderStep0_Name, renderStep1_Players, renderStep2_Group, renderStep3_Assign, renderStep4_Confirm];
   container.innerHTML = steps[wizardState.step]();
   bindWizardEvents();
 }
@@ -152,40 +281,47 @@ function renderStep0_Name() {
         type="text" placeholder="e.g. The Searing Plains Campaign"
         value="${wizardState.campaignName}" maxlength="60">
     </div>
-    ${wizardNav(false, true)}
+    ${wizardNav(false, !!wizardState.campaignName)}
   `;
 }
 
 function renderStep1_Players() {
-  const inputs = [0,1,2,3].map(i => `
+  const rows = [0,1,2,3].map(i => `
     <div class="wizard-player-row">
       <span class="wizard-player-num">Player ${i+1}</span>
-      <input class="wizard-input wizard-player-input" id="wizard-player-${i}"
-        type="text" placeholder="Player name" maxlength="30"
-        value="${wizardState.playerNames[i]}">
+      <input class="wizard-input wizard-player-name" id="wizard-player-name-${i}"
+        type="text" placeholder="Name" maxlength="30"
+        value="${wizardState.players[i].name}">
+      <input class="wizard-input wizard-player-email" id="wizard-player-email-${i}"
+        type="email" placeholder="Email"
+        value="${wizardState.players[i].email}">
     </div>
   `).join('');
+
+  const canNext = wizardState.players.every(p => p.name && p.email);
   return `
     <div class="wizard-step">
-      <h3 class="wizard-step-title">Player Names</h3>
-      <p class="wizard-step-desc">Enter the names of the four players starting this campaign.</p>
-      <div class="wizard-players">${inputs}</div>
+      <h3 class="wizard-step-title">Players</h3>
+      <p class="wizard-step-desc">Enter each player's name and email. A magic link will be sent to each email so they can access their character across any device.</p>
+      <div class="wizard-players">${rows}</div>
     </div>
-    ${wizardNav(true, true)}
+    ${wizardNav(true, canNext)}
   `;
 }
 
 function renderStep2_Group() {
   const cards = Object.entries(STARTING_GROUPS).map(([id, g]) => {
     const classes = g.classes
-      .map(c => CLASS_DISPLAY[c] ? `<span class="wizard-class-pill">${CLASS_DISPLAY[c].icon} ${CLASS_DISPLAY[c].name}</span>` : `<span class="wizard-class-pill wizard-class-unknown">Unknown</span>`)
+      .map(c => CLASS_DISPLAY[c]
+        ? `<span class="wizard-class-pill">${classIcon(c, 18)} ${CLASS_DISPLAY[c].name}</span>`
+        : `<span class="wizard-class-pill wizard-class-unknown">Unknown</span>`)
       .join('');
     const selected = wizardState.selectedGroup === id ? 'wizard-group-selected' : '';
     const hasGuides = g.classes.every(c => CLASS_DISPLAY[c]);
     return `
       <div class="wizard-group-card ${selected}" data-group="${id}">
         <div class="wizard-group-header">
-          <span class="wizard-group-icon">${g.icon}</span>
+          <div class="wizard-group-icon">${g.icon}</div>
           <div>
             <div class="wizard-group-name">${g.name}</div>
             <div class="wizard-group-tagline">${g.tagline}</div>
@@ -200,7 +336,7 @@ function renderStep2_Group() {
   return `
     <div class="wizard-step">
       <h3 class="wizard-step-title">Choose Starting Group</h3>
-      <p class="wizard-step-desc">Each starting group contains four character classes. Select the group your party will play.</p>
+      <p class="wizard-step-desc">Select the group your party will play.</p>
       <div class="wizard-groups">${cards}</div>
     </div>
     ${wizardNav(true, !!wizardState.selectedGroup)}
@@ -209,16 +345,16 @@ function renderStep2_Group() {
 
 function renderStep3_Assign() {
   const group = STARTING_GROUPS[wizardState.selectedGroup];
-  const rows = group.classes.map((classId, i) => {
+  const rows = group.classes.map((classId) => {
     const cls = CLASS_DISPLAY[classId];
     if (!cls) return '';
-    const opts = wizardState.playerNames
-      .map((name, pi) => `<option value="${pi}" ${wizardState.classAssignments[pi] === classId ? 'selected' : ''}>${name || `Player ${pi+1}`}</option>`)
+    const opts = wizardState.players
+      .map((p, pi) => `<option value="${pi}" ${wizardState.classAssignments[pi] === classId ? 'selected' : ''}>${p.name || `Player ${pi+1}`}</option>`)
       .join('');
     return `
       <div class="wizard-assign-row">
         <div class="wizard-assign-class">
-          <span class="wizard-class-icon">${cls.icon}</span>
+          <span class="wizard-class-icon">${classIcon(classId, 36)}</span>
           <div>
             <div class="wizard-assign-name">${cls.name}</div>
             <div class="wizard-assign-symbol">${cls.symbol}</div>
@@ -245,21 +381,25 @@ function renderStep3_Assign() {
 function isAssignmentComplete() {
   const group = STARTING_GROUPS[wizardState.selectedGroup];
   if (!group) return false;
-  const assigned = Object.values(wizardState.classAssignments);
   const knownClasses = group.classes.filter(c => CLASS_DISPLAY[c]);
-  return knownClasses.every(c =>
-    Object.entries(wizardState.classAssignments).some(([pi, cid]) => cid === c)
-  ) && new Set(assigned).size === assigned.length;
+  const assignedClasses = Object.values(wizardState.classAssignments);
+  const assignedPlayers = Object.keys(wizardState.classAssignments);
+  return knownClasses.every(c => assignedClasses.includes(c)) &&
+         new Set(assignedPlayers).size === assignedPlayers.length;
 }
 
 function renderStep4_Confirm() {
   const group = STARTING_GROUPS[wizardState.selectedGroup];
-  const assignments = Object.entries(wizardState.classAssignments).map(([pi, classId]) => {
+  const rows = Object.entries(wizardState.classAssignments).map(([pi, classId]) => {
     const cls = CLASS_DISPLAY[classId];
+    const player = wizardState.players[pi];
     return `<div class="wizard-confirm-row">
-      <span class="wizard-confirm-player">${wizardState.playerNames[pi] || `Player ${parseInt(pi)+1}`}</span>
+      <div class="wizard-confirm-player">
+        <div class="wizard-confirm-player-name">${player.name}</div>
+        <div class="wizard-confirm-player-email">${player.email}</div>
+      </div>
       <span class="wizard-confirm-arrow">→</span>
-      <span class="wizard-confirm-class">${cls.icon} ${cls.name}</span>
+      <span class="wizard-confirm-class">${classIcon(classId, 20)} ${cls.name}</span>
     </div>`;
   }).join('');
 
@@ -276,8 +416,9 @@ function renderStep4_Confirm() {
       </div>
       <div class="wizard-confirm-block">
         <div class="wizard-confirm-label">Players & Classes</div>
-        <div class="wizard-confirm-assignments">${assignments}</div>
+        <div class="wizard-confirm-assignments">${rows}</div>
       </div>
+      <p class="wizard-confirm-note">✉️ A magic link will be sent to each player's email so they can access their character on any device.</p>
     </div>
     <div class="wizard-nav">
       <button class="wizard-btn wizard-btn-back" id="wizard-back">← Back</button>
@@ -287,19 +428,16 @@ function renderStep4_Confirm() {
 }
 
 function wizardNav(showBack, canNext) {
-  const isLast = wizardState.step === 3;
   return `
     <div class="wizard-nav">
       ${showBack ? '<button class="wizard-btn wizard-btn-back" id="wizard-back">← Back</button>' : '<span></span>'}
-      <button class="wizard-btn wizard-btn-primary" id="wizard-next" ${canNext ? '' : 'disabled'}>
-        ${isLast ? 'Review →' : 'Next →'}
-      </button>
+      <button class="wizard-btn wizard-btn-primary" id="wizard-next" ${canNext ? '' : 'disabled'}>Next →</button>
     </div>
   `;
 }
 
 function bindWizardEvents() {
-  // Step 0 — campaign name
+  // Step 0
   const nameInput = document.getElementById('wizard-campaign-name');
   if (nameInput) {
     nameInput.addEventListener('input', e => {
@@ -310,13 +448,15 @@ function bindWizardEvents() {
     nameInput.focus();
   }
 
-  // Step 1 — player names
+  // Step 1 — names and emails
   [0,1,2,3].forEach(i => {
-    const inp = document.getElementById(`wizard-player-${i}`);
-    if (inp) inp.addEventListener('input', e => {
-      wizardState.playerNames[i] = e.target.value.trim();
-      const next = document.getElementById('wizard-next');
-      if (next) next.disabled = !wizardState.playerNames.every(n => n);
+    document.getElementById(`wizard-player-name-${i}`)?.addEventListener('input', e => {
+      wizardState.players[i].name = e.target.value.trim();
+      updateStep1Next();
+    });
+    document.getElementById(`wizard-player-email-${i}`)?.addEventListener('input', e => {
+      wizardState.players[i].email = e.target.value.trim();
+      updateStep1Next();
     });
   });
 
@@ -332,18 +472,16 @@ function bindWizardEvents() {
     });
   });
 
-  // Step 3 — assign players to classes
+  // Step 3 — assign
   document.querySelectorAll('.wizard-select').forEach(sel => {
     sel.addEventListener('change', e => {
       const classId = sel.dataset.class;
       const playerIdx = e.target.value;
-      // Remove any previous assignment for this class
-      Object.entries(wizardState.classAssignments).forEach(([pi, cid]) => {
-        if (cid === classId) delete wizardState.classAssignments[pi];
+      Object.keys(wizardState.classAssignments).forEach(pi => {
+        if (wizardState.classAssignments[pi] === classId) delete wizardState.classAssignments[pi];
       });
-      // Remove any previous assignment for this player
       if (playerIdx !== '') {
-        Object.entries(wizardState.classAssignments).forEach(([pi, cid]) => {
+        Object.keys(wizardState.classAssignments).forEach(pi => {
           if (pi === playerIdx) delete wizardState.classAssignments[pi];
         });
         wizardState.classAssignments[playerIdx] = classId;
@@ -353,18 +491,21 @@ function bindWizardEvents() {
     });
   });
 
-  // Nav buttons
+  // Nav
   document.getElementById('wizard-next')?.addEventListener('click', () => {
     wizardState.step++;
     renderWizardStep();
   });
-
   document.getElementById('wizard-back')?.addEventListener('click', () => {
     wizardState.step--;
     renderWizardStep();
   });
-
   document.getElementById('wizard-create')?.addEventListener('click', submitCampaign);
+}
+
+function updateStep1Next() {
+  const next = document.getElementById('wizard-next');
+  if (next) next.disabled = !wizardState.players.every(p => p.name && p.email);
 }
 
 async function submitCampaign() {
@@ -373,23 +514,52 @@ async function submitCampaign() {
   try {
     const campaign = await createCampaign(wizardState.campaignName, wizardState.selectedGroup);
     for (const [playerIdx, classId] of Object.entries(wizardState.classAssignments)) {
-      await addPlayer(campaign.id, wizardState.playerNames[playerIdx], classId);
+      const p = wizardState.players[playerIdx];
+      await addPlayer(campaign.id, p.name, p.email, classId);
+    }
+    // Send magic links to all players
+    if (!DEV_MODE) {
+      for (const p of wizardState.players) {
+        if (p.email) {
+          try { await sendMagicLink(p.email); } catch (_) {}
+        }
+      }
     }
     resetWizard();
     closeCampaignWizard();
     loadCampaigns();
-    showToast('Campaign created!');
+    showToast(DEV_MODE ? 'Campaign created!' : 'Campaign created! Magic links sent to all players.');
   } catch (err) {
-    showToast('Error creating campaign: ' + err.message, true);
+    showToast('Error: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = '🎲 Create Campaign'; }
   }
+}
+
+// ── DEV MODE PLAYER PICKER ───────────────────────────────────
+function renderDevPicker(players) {
+  if (!DEV_MODE || !players.length) return '';
+  const opts = players.map(p => {
+    const cls = CLASS_DISPLAY[p.class_id];
+    return `<option value="${p.id}" ${devPlayerOverride === p.id ? 'selected' : ''}>
+      ${p.player_name} (${cls ? cls.name : p.class_id})
+    </option>`;
+  }).join('');
+  return `
+    <div class="dev-picker">
+      <span class="dev-picker-label">🛠 Acting as:</span>
+      <select class="wizard-select dev-picker-select" id="dev-player-select">
+        <option value="">— pick player —</option>
+        ${opts}
+      </select>
+    </div>
+  `;
 }
 
 // ── CAMPAIGNS LIST ───────────────────────────────────────────
 async function loadCampaigns() {
   const container = document.getElementById('campaigns-list');
   if (!container) return;
-  container.innerHTML = '<div class="campaigns-loading">Loading campaigns…</div>';
+  container.innerHTML = '<div class="campaigns-loading">Loading…</div>';
   try {
     const campaigns = await getCampaigns();
     if (!campaigns.length) {
@@ -397,40 +567,46 @@ async function loadCampaigns() {
       return;
     }
     container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('');
-    bindCampaignListEvents();
+    bindCampaignListEvents(campaigns);
   } catch (err) {
-    container.innerHTML = `<div class="campaigns-error">Error loading campaigns: ${err.message}</div>`;
+    container.innerHTML = `<div class="campaigns-error">Error: ${err.message}</div>`;
   }
 }
 
 function renderCampaignCard(campaign) {
-  const group = STARTING_GROUPS[campaign.starting_group] || {};
-  const players = (campaign.campaign_players || []).map(p => {
-    const cls = CLASS_DISPLAY[p.class_id] || { icon: '?', name: p.class_id };
-    return `<div class="campaign-player">
-      <span class="campaign-player-icon">${cls.icon}</span>
+  const players = (campaign.campaign_players || []);
+  const allPlayers = players;
+  const myPlayer = getEffectivePlayer(allPlayers);
+
+  const playerCards = players.map(p => {
+    const cls = CLASS_DISPLAY[p.class_id] || { name: p.class_id };
+    const isMe = myPlayer?.id === p.id;
+    const claimed = !!p.user_id;
+    return `<div class="campaign-player ${isMe ? 'campaign-player-me' : ''}">
+      <div class="campaign-player-icon">${classIcon(p.class_id, 36)}</div>
       <div class="campaign-player-info">
-        <div class="campaign-player-name">${p.player_name}</div>
+        <div class="campaign-player-name">${p.player_name} ${isMe ? '<span class="player-me-badge">You</span>' : ''}</div>
         <div class="campaign-player-class">${cls.name}</div>
+        ${!claimed && !DEV_MODE ? '<div class="player-unclaimed">Awaiting login</div>' : ''}
       </div>
     </div>`;
   }).join('');
 
+  const devPicker = DEV_MODE ? renderDevPicker(players) : '';
+
   return `
     <div class="campaign-card" data-id="${campaign.id}">
       <div class="campaign-card-header">
-        <div>
-          <div class="campaign-card-name">${campaign.name}</div>
-          <div class="campaign-card-group">${group.icon || ''} ${group.name || campaign.starting_group}</div>
-        </div>
+        <div class="campaign-card-name">${campaign.name}</div>
         <button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>
       </div>
-      <div class="campaign-players">${players}</div>
+      <div class="campaign-players">${playerCards}</div>
+      ${devPicker}
     </div>
   `;
 }
 
-function bindCampaignListEvents() {
+function bindCampaignListEvents(campaigns) {
   document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
@@ -444,47 +620,46 @@ function bindCampaignListEvents() {
       }
     });
   });
+
+  // Dev picker changes
+  document.querySelectorAll('.dev-picker-select').forEach(sel => {
+    sel.addEventListener('change', e => {
+      devPlayerOverride = e.target.value || null;
+      // Re-render to update "You" badges
+      loadCampaigns();
+    });
+  });
 }
 
 // ── MODAL OPEN/CLOSE ─────────────────────────────────────────
 function openCampaignPanel() {
-  const panel = document.getElementById('campaign-panel');
-  if (panel) panel.classList.add('campaign-panel-open');
+  document.getElementById('campaign-panel')?.classList.add('campaign-panel-open');
   loadCampaigns();
 }
-
 function closeCampaignPanel() {
-  const panel = document.getElementById('campaign-panel');
-  if (panel) panel.classList.remove('campaign-panel-open');
+  document.getElementById('campaign-panel')?.classList.remove('campaign-panel-open');
 }
-
 function openCampaignWizard() {
   resetWizard();
-  const modal = document.getElementById('campaign-wizard-modal');
-  if (modal) modal.classList.add('campaign-modal-open');
+  document.getElementById('campaign-wizard-modal')?.classList.add('campaign-modal-open');
   renderWizardStep();
 }
-
 function closeCampaignWizard() {
-  const modal = document.getElementById('campaign-wizard-modal');
-  if (modal) modal.classList.remove('campaign-modal-open');
+  document.getElementById('campaign-wizard-modal')?.classList.remove('campaign-modal-open');
 }
 
 function showToast(msg, isError = false) {
   let toast = document.getElementById('cs-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'cs-toast';
-    document.body.appendChild(toast);
-  }
+  if (!toast) { toast = document.createElement('div'); toast.id = 'cs-toast'; document.body.appendChild(toast); }
   toast.textContent = msg;
   toast.className = 'cs-toast' + (isError ? ' cs-toast-error' : '');
   toast.classList.add('cs-toast-show');
-  setTimeout(() => toast.classList.remove('cs-toast-show'), 3000);
+  setTimeout(() => toast.classList.remove('cs-toast-show'), 3500);
 }
 
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  initAuth();
   document.getElementById('open-campaigns-btn')?.addEventListener('click', openCampaignPanel);
   document.getElementById('close-campaigns-btn')?.addEventListener('click', closeCampaignPanel);
   document.getElementById('campaign-backdrop')?.addEventListener('click', closeCampaignPanel);
