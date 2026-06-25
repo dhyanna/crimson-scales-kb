@@ -5,8 +5,9 @@ const SUPABASE_URL  = 'https://djssjkjcckqkgwzkjnif.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqc3Nqa2pjY2txa2d3emtqbmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMjcwNzgsImV4cCI6MjA5NzkwMzA3OH0.mKpyxNhSAW7zFhX2A71CoC1WbGMYOr4rJ8hHnLw1jJs';
 
 // ── DEV BYPASS ───────────────────────────────────────────────
-// Set to true to skip auth and manually pick your player identity
-const DEV_MODE = true;
+// Add ?dev to the URL to enable dev mode (skips auth, shows player picker)
+// e.g. https://cs.searing-plains.com?dev
+const DEV_MODE = new URLSearchParams(window.location.search).has('dev');
 let devPlayerOverride = null; // set to a campaign_players.id when bypassing
 
 // ── SUPABASE CLIENT ──────────────────────────────────────────
