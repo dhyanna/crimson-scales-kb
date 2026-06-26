@@ -198,10 +198,10 @@ async function getCampaigns() {
   return data;
 }
 
-async function createCampaign(name, startingGroup) {
+async function createCampaign(name, partyName, startingGroup) {
   const { data, error } = await sb()
     .from('campaigns')
-    .insert({ name, starting_group: startingGroup })
+    .insert({ name, party_name: partyName, starting_group: startingGroup })
     .select()
     .single();
   if (error) throw error;
@@ -232,6 +232,7 @@ async function deleteCampaign(id) {
 let wizardState = {
   step: 0,
   campaignName: '',
+  partyName: '',
   players: [
     { name: '', email: '' },
     { name: '', email: '' },
@@ -246,6 +247,7 @@ function resetWizard() {
   wizardState = {
     step: 0,
     campaignName: '',
+    partyName: '',
     players: [
       { name: '', email: '' },
       { name: '', email: '' },
@@ -268,7 +270,7 @@ function renderWizardStep() {
     dot.classList.toggle('done', s < wizardState.step);
   });
 
-  const steps = [renderStep0_Name, renderStep1_Players, renderStep2_Group, renderStep3_Assign, renderStep4_Confirm];
+  const steps = [renderStep0_Name, renderStep1_Players, renderStep2_Group, renderStep3_PartyName, renderStep4_Assign, renderStep5_Confirm];
   container.innerHTML = steps[wizardState.step]();
   bindWizardEvents();
 }
@@ -344,7 +346,21 @@ function renderStep2_Group() {
   `;
 }
 
-function renderStep3_Assign() {
+
+function renderStep3_PartyName() {
+  return `
+    <div class="wizard-step">
+      <h3 class="wizard-step-title">Party Name</h3>
+      <p class="wizard-step-desc">Give your party of adventurers a name.</p>
+      <input class="wizard-input" id="wizard-party-name"
+        type="text" placeholder="e.g. The Searing Plains Crew"
+        value="${wizardState.partyName}" maxlength="60">
+    </div>
+    ${wizardNav(true, !!wizardState.partyName)}
+  `;
+}
+
+function renderStep4_Assign() {
   const group = STARTING_GROUPS[wizardState.selectedGroup];
   const rows = group.classes.map((classId) => {
     const cls = CLASS_DISPLAY[classId];
@@ -389,7 +405,7 @@ function isAssignmentComplete() {
          new Set(assignedPlayers).size === assignedPlayers.length;
 }
 
-function renderStep4_Confirm() {
+function renderStep5_Confirm() {
   const group = STARTING_GROUPS[wizardState.selectedGroup];
   const rows = Object.entries(wizardState.classAssignments).map(([pi, classId]) => {
     const cls = CLASS_DISPLAY[classId];
@@ -410,6 +426,10 @@ function renderStep4_Confirm() {
       <div class="wizard-confirm-block">
         <div class="wizard-confirm-label">Campaign</div>
         <div class="wizard-confirm-value">${wizardState.campaignName}</div>
+      </div>
+      <div class="wizard-confirm-block">
+        <div class="wizard-confirm-label">Party Name</div>
+        <div class="wizard-confirm-value">${wizardState.partyName}</div>
       </div>
       <div class="wizard-confirm-block">
         <div class="wizard-confirm-label">Starting Group</div>
@@ -460,6 +480,17 @@ function bindWizardEvents() {
       updateStep1Next();
     });
   });
+
+  // Step 3 — party name
+  const partyInput = document.getElementById('wizard-party-name');
+  if (partyInput) {
+    partyInput.addEventListener('input', e => {
+      wizardState.partyName = e.target.value.trim();
+      const next = document.getElementById('wizard-next');
+      if (next) next.disabled = !wizardState.partyName;
+    });
+    partyInput.focus();
+  }
 
   // Step 2 — group selection
   document.querySelectorAll('.wizard-group-card').forEach(card => {
@@ -513,7 +544,7 @@ async function submitCampaign() {
   const btn = document.getElementById('wizard-create');
   if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
   try {
-    const campaign = await createCampaign(wizardState.campaignName, wizardState.selectedGroup);
+    const campaign = await createCampaign(wizardState.campaignName, wizardState.partyName, wizardState.selectedGroup);
     for (const [playerIdx, classId] of Object.entries(wizardState.classAssignments)) {
       const p = wizardState.players[playerIdx];
       await addPlayer(campaign.id, p.name, p.email, classId);
@@ -599,7 +630,10 @@ function renderCampaignCard(campaign) {
   return `
     <div class="campaign-card" data-id="${campaign.id}">
       <div class="campaign-card-header">
-        <div class="campaign-card-name">${campaign.name}</div>
+        <div>
+          <div class="campaign-card-name">${campaign.name}</div>
+          ${campaign.party_name ? `<div class="campaign-card-party">${campaign.party_name}</div>` : ''}
+        </div>
         <button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>
       </div>
       <div class="campaign-players">${playerCards}</div>

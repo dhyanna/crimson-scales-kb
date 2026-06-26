@@ -183,6 +183,7 @@
       margin-bottom: 12px;
     }
     .campaign-card-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+    .campaign-card-party { font-size: 12px; color: var(--color-accent, #c9a84c); margin-bottom: 2px; }
     .campaign-card-group { font-size: 12px; color: var(--color-text-secondary, #888); display: flex; align-items: center; gap: 4px; }
     .campaign-group-icon img { width: 16px; height: 16px; border-radius: 2px; vertical-align: middle; }
     .campaign-delete-btn {
@@ -558,6 +559,11 @@
       display: flex; align-items: center; gap: 10px;
     }
     .db-section-hint { font-size: 12px; color: var(--color-text-secondary, #888); }
+    .db-section-hint-row {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1;
+      justify-content: space-between;
+    }
+    .db-section-hint-row > span { font-size: 12px; color: var(--color-text-secondary, #888); }
     .db-count {
       background: var(--color-surface, #1e1e2e);
       border-radius: 20px; padding: 2px 10px;
@@ -757,6 +763,32 @@
       white-space: nowrap;
     }
 
+    /* Build toggles */
+    .db-build-toggles {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .db-build-label {
+      font-size: 11px; color: var(--color-text-secondary, #888); flex-shrink: 0;
+    }
+    .db-build-toggle {
+      padding: 3px 11px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      cursor: pointer; border: 1px solid var(--color-border, #333);
+      background: var(--color-card, #252538); color: var(--color-text, #e0e0e0);
+      transition: all 0.15s;
+    }
+    .db-build-toggle:hover { border-color: var(--color-accent, #c9a84c); }
+    .db-build-toggle-active {
+      background: var(--color-accent, #c9a84c);
+      border-color: var(--color-accent, #c9a84c);
+      color: #000;
+    }
+    /* Card highlight states */
+    .db-card-highlighted .db-card-img-wrap {
+      border-color: var(--color-accent, #c9a84c);
+      box-shadow: 0 0 0 2px rgba(201,168,76,0.4);
+    }
+    .db-card-dimmed { opacity: 0.35; }
+
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -885,6 +917,8 @@
         <div class="wizard-step-dot" data-step="3">4</div>
         <div class="wizard-step-line"></div>
         <div class="wizard-step-dot" data-step="4">5</div>
+        <div class="wizard-step-line"></div>
+        <div class="wizard-step-dot" data-step="5">6</div>
       </div>
       <div id="wizard-content" class="wizard-content"></div>
     </div>

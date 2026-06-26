@@ -7,6 +7,7 @@ let db = {
   state: null,         // character_state row
   cards: [],           // character_cards rows
   allClassCards: [],   // full card list from JS data for this class
+  activeBuild: null,   // 'bruiser' | 'trapbuild' | null
 };
 
 // ── HAND SIZES PER CLASS ─────────────────────────────────────
@@ -106,6 +107,44 @@ async function earnMilestone() {
   db.state.hand_size = newHandSize;
 }
 
+async function undoLevelUp() {
+  if (db.state.current_level <= 1) return;
+
+  const lastLevel = db.state.current_level;
+
+  // Find the card added at the last level-up
+  const lastCard = db.cards.find(c => c.level_obtained === lastLevel);
+  if (!lastCard) return;
+
+  // Remove it from character_cards
+  await sb().from('character_cards').delete().eq('id', lastCard.id);
+  db.cards = db.cards.filter(c => c.id !== lastCard.id);
+
+  // Remove ALL cards that were involved in this level-up from passed_over_cards
+  // (the chosen card + the ones passed over at that level — identified as the
+  // two new-level cards and any previously passed-over cards that were in the picker)
+  const newLevel = lastLevel - 1;
+  const classData = CLASS_REGISTRY[db.player.class_id];
+  const newLevelCardIds = (classData?.cards ?? [])
+    .filter(c => parseInt(c.level) === lastLevel)
+    .map(c => c.id || slugify(c.name));
+
+  // Strip all cards from this level out of passed_over_cards
+  const passedOver = (db.state.passed_over_cards ?? [])
+    .filter(id => !newLevelCardIds.includes(id) && id !== lastCard.card_id);
+
+  await sb().from('character_state').update({
+    current_level: newLevel,
+    passed_over_cards: passedOver,
+    updated_at: new Date().toISOString(),
+  }).eq('id', db.state.id);
+  db.state.current_level = newLevel;
+  db.state.passed_over_cards = passedOver;
+
+  renderDeckBuilder();
+  showToast(`Level up undone — back to Level ${newLevel}.`);
+}
+
 async function levelUp(chosenCardId, passedOverIds) {
   const newLevel = db.state.current_level + 1;
   const classId = db.player.class_id;
@@ -166,6 +205,7 @@ function handCount() {
 async function openDeckBuilder(player) {
   db.player = player;
   db.allClassCards = CLASS_REGISTRY[player.class_id]?.cards ?? [];
+  db.activeBuild = null;
 
   const overlay = document.getElementById('deckbuilder-overlay');
   overlay.classList.add('db-open');
@@ -209,6 +249,26 @@ function renderDeckBuilder() {
   const handFull = hand >= handSize;
   const handOk = hand === handSize;
 
+  // Build toggle buttons from CLASS_BUILDS
+  const buildsData = CLASS_BUILDS?.[db.player.class_id];
+  const buildToggles = buildsData?.builds?.length ? `
+    <div class="db-build-toggles">
+      <span class="db-build-label">Highlight build:</span>
+      ${buildsData.builds.map(b => `
+        <button class="db-build-toggle ${db.activeBuild === b.id ? 'db-build-toggle-active' : ''}"
+          data-build="${b.id}">${b.name}</button>
+      `).join('')}
+    </div>
+  ` : '';
+
+  function cardBuildClass(card) {
+    if (!db.activeBuild) return '';
+    const cid = card.id || slugify(card.name);
+    const builds = card.builds ?? [];
+    const matches = builds.includes(db.activeBuild) || builds.includes('both');
+    return matches ? 'db-card-highlighted' : 'db-card-dimmed';
+  }
+
   document.getElementById('deckbuilder-content').innerHTML = `
     <div class="db-layout">
 
@@ -223,6 +283,7 @@ function renderDeckBuilder() {
         </div>
         <div class="db-header-actions">
           ${db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
+          ${db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn">↩ Undo Level Up</button>` : ''}
           <button class="db-btn db-btn-close" id="db-close-btn">✕ Close</button>
         </div>
       </div>
@@ -239,10 +300,13 @@ function renderDeckBuilder() {
               ${hand} / ${handSize}
             </span>
           </div>
-          <div class="db-section-hint">${handOk ? '✓ Ready' : hand > handSize ? '⚠ Too many cards' : `Need ${handSize - hand} more`}</div>
+          <div class="db-section-hint-row">
+            <span>${handOk ? '✓ Ready' : hand > handSize ? '⚠ Too many cards' : `Need ${handSize - hand} more`}</span>
+            ${buildToggles}
+          </div>
         </div>
         <div class="db-card-grid" id="db-hand-grid">
-          ${handCards.map(c => renderCardTile(c, true)).join('')}
+          ${handCards.map(c => renderCardTile(c, true, false, cardBuildClass(c))).join('')}
           ${hand === 0 ? '<div class="db-empty">No cards in hand — move cards up from your sideboard</div>' : ''}
         </div>
       </div>
@@ -257,7 +321,7 @@ function renderDeckBuilder() {
           <div class="db-section-hint">Cards available but not in your hand</div>
         </div>
         <div class="db-card-grid" id="db-sideboard-grid">
-          ${sideboardCards.map(c => renderCardTile(c, false, handFull)).join('')}
+          ${sideboardCards.map(c => renderCardTile(c, false, handFull, cardBuildClass(c))).join('')}
           ${sideboardCards.length === 0 ? '<div class="db-empty">All available cards are in your hand</div>' : ''}
         </div>
       </div>
@@ -299,15 +363,14 @@ function renderMilestoneTracker(milestoneCard) {
   `;
 }
 
-function renderCardTile(card, inHand, handFull = false) {
+function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
   const cid = card.id || slugify(card.name);
-  const canAdd = !inHand && !handFull;
   const action = inHand ? 'remove' : 'add';
   const btnLabel = inHand ? '↓ Move to Sideboard' : '↑ Add to Hand';
   const btnClass = inHand ? 'db-card-btn-remove' : `db-card-btn-add ${handFull ? 'db-card-btn-disabled' : ''}`;
 
   return `
-    <div class="db-card-tile" data-card-id="${cid}">
+    <div class="db-card-tile ${highlightClass}" data-card-id="${cid}">
       <div class="db-card-img-wrap" data-card-id="${cid}">
         <img src="${card.imageUrl}" class="db-card-img" alt="${card.name}"
           onerror="this.parentElement.classList.add('db-img-error')">
@@ -383,6 +446,14 @@ function openLevelUpPicker() {
   let selectedCardId = null;
 
   modal.querySelectorAll('.db-levelup-card').forEach(card => {
+    card.addEventListener('mouseover', () => {
+      const img = card.querySelector('.db-levelup-img');
+      const cardId = card.dataset.cardId;
+      if (img) zoomHoveredCard = { src: img.src, cardId };
+    });
+    card.addEventListener('mouseout', () => {
+      zoomHoveredCard = null;
+    });
     card.addEventListener('click', () => {
       modal.querySelectorAll('.db-levelup-card').forEach(c => c.classList.remove('db-levelup-selected'));
       card.classList.add('db-levelup-selected');
@@ -411,7 +482,20 @@ function openLevelUpPicker() {
 function bindDeckBuilderEvents() {
   document.getElementById('db-close-btn')?.addEventListener('click', closeDeckBuilder);
   document.getElementById('db-levelup-btn')?.addEventListener('click', openLevelUpPicker);
+  document.getElementById('db-undo-levelup-btn')?.addEventListener('click', async () => {
+    if (!confirm(`Undo level up? This will remove the card chosen at Level ${db.state.current_level} and return you to Level ${db.state.current_level - 1}.`)) return;
+    await undoLevelUp();
+  });
   document.getElementById('db-earn-milestone')?.addEventListener('click', handleEarnMilestone);
+
+  // Build toggles
+  document.querySelectorAll('.db-build-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const build = btn.dataset.build;
+      db.activeBuild = db.activeBuild === build ? null : build;
+      renderDeckBuilder();
+    });
+  });
 
   // Check boxes
   document.querySelectorAll('.db-check-box').forEach(btn => {

@@ -1186,6 +1186,7 @@
       ],
     },
   };
+  window.CLASS_BUILDS = CLASS_BUILDS;
 
 
   function updateBuildChipLabels(cls) {
