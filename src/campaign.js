@@ -590,6 +590,7 @@ function renderCampaignCard(campaign) {
         <div class="campaign-player-class">${cls.name}</div>
         ${!claimed && !DEV_MODE ? '<div class="player-unclaimed">Awaiting login</div>' : ''}
       </div>
+      ${isMe ? `<button class="campaign-deck-btn" data-player-json='${JSON.stringify({id:p.id,player_name:p.player_name,class_id:p.class_id,user_id:p.user_id})}'>🃏 Deck</button>` : ''}
     </div>`;
   }).join('');
 
@@ -619,6 +620,16 @@ function bindCampaignListEvents(campaigns) {
       } catch (err) {
         showToast('Error: ' + err.message, true);
       }
+    });
+  });
+
+  // Deck builder buttons
+  document.querySelectorAll('.campaign-deck-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const player = JSON.parse(btn.dataset.playerJson);
+      closeCampaignPanel();
+      openDeckBuilder(player);
     });
   });
 

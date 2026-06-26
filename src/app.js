@@ -13,6 +13,7 @@
     hollowpact: HOLLOWPACT_DATA,
     mirefoot: MIREFOOT_DATA,
   };
+  window.CLASS_REGISTRY = CLASS_REGISTRY;
 
   // ===== STATE =====
   const state = {

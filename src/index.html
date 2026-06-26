@@ -478,6 +478,20 @@
       vertical-align: middle;
       margin-left: 4px;
     }
+    .campaign-deck-btn {
+      margin-left: auto;
+      background: var(--color-accent, #c9a84c);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .campaign-deck-btn:hover { opacity: 0.85; }
     .player-unclaimed { font-size: 11px; color: var(--color-text-secondary, #888); font-style: italic; }
     .wizard-confirm-player-email { font-size: 11px; color: var(--color-text-secondary, #888); }
     .wizard-confirm-note {
@@ -486,6 +500,263 @@
       border: 1px solid rgba(100,160,255,0.2);
       border-radius: 6px; padding: 10px 14px; margin-top: 16px;
     }
+    /* ── Deck Builder ── */
+    .deckbuilder-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: var(--color-bg, #13131f);
+      z-index: 1200;
+      overflow-y: auto;
+    }
+    .deckbuilder-overlay.db-open { display: block; }
+    .deckbuilder-content { min-height: 100vh; }
+    .db-loading {
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; color: var(--color-text-secondary, #888); font-size: 16px;
+    }
+    .db-layout { max-width: 1100px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    /* Header */
+    .db-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+    }
+    .db-header-left { display: flex; align-items: center; gap: 14px; }
+    .db-class-name { font-size: 20px; font-weight: 700; }
+    .db-player-name { font-size: 13px; color: var(--color-text-secondary, #888); margin-top: 2px; }
+    .db-header-actions { display: flex; gap: 10px; }
+    .db-btn {
+      padding: 8px 18px; border-radius: 8px; font-size: 13px;
+      font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s;
+    }
+    .db-btn:hover { opacity: 0.85; }
+    .db-btn-primary { background: var(--color-accent, #c9a84c); color: #000; }
+    .db-btn-secondary {
+      background: var(--color-card, #252538);
+      color: var(--color-text, #e0e0e0);
+      border: 1px solid var(--color-border, #333);
+    }
+    .db-btn-close {
+      background: var(--color-card, #252538);
+      color: var(--color-text-secondary, #888);
+      border: 1px solid var(--color-border, #333);
+    }
+
+    /* Sections */
+    .db-section {
+      background: var(--color-surface, #1e1e2e);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 12px; margin-bottom: 20px; overflow: hidden;
+    }
+    .db-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--color-border, #333);
+      background: var(--color-card, #252538);
+    }
+    .db-section-title {
+      font-size: 14px; font-weight: 700;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .db-section-hint { font-size: 12px; color: var(--color-text-secondary, #888); }
+    .db-count {
+      background: var(--color-surface, #1e1e2e);
+      border-radius: 20px; padding: 2px 10px;
+      font-size: 12px; font-weight: 700;
+    }
+    .db-count-ok { background: rgba(100,200,100,0.15); color: #6dc86d; }
+    .db-count-over { background: rgba(220,80,80,0.15); color: #e05555; }
+    .db-count-under { background: rgba(201,168,76,0.15); color: #c9a84c; }
+    .db-empty {
+      color: var(--color-text-secondary, #888); font-size: 13px;
+      text-align: center; padding: 30px; grid-column: 1 / -1;
+    }
+
+    /* Card grid */
+    .db-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px; padding: 16px;
+    }
+    .db-card-tile { display: flex; flex-direction: column; gap: 6px; }
+    .db-card-img-wrap {
+      position: relative; border-radius: 8px; overflow: hidden;
+      aspect-ratio: 2/3; background: var(--color-card, #252538);
+      border: 1px solid var(--color-border, #333);
+      cursor: pointer;
+    }
+    .db-card-img-wrap:hover .db-card-overlay { opacity: 1; }
+    .db-card-img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .db-img-error .db-card-img { display: none; }
+    .db-card-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.15s;
+    }
+    .db-card-btn {
+      padding: 7px 12px; border-radius: 6px; font-size: 12px;
+      font-weight: 700; cursor: pointer; border: none;
+      text-align: center; white-space: nowrap;
+    }
+    .db-card-btn-add { background: var(--color-accent, #c9a84c); color: #000; }
+    .db-card-btn-remove { background: #444; color: #fff; }
+    .db-card-btn-disabled { opacity: 0.4; cursor: not-allowed; }
+    .db-card-label {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 2px;
+    }
+    .db-card-name { font-size: 11px; color: var(--color-text, #e0e0e0); flex: 1; }
+    .db-card-level {
+      font-size: 10px; color: var(--color-text-secondary, #888);
+      background: var(--color-card, #252538);
+      border-radius: 4px; padding: 1px 5px; flex-shrink: 0;
+    }
+
+    /* Milestone tracker */
+    .db-milestone-section {}
+    .db-milestone-inner {
+      display: flex; gap: 20px; padding: 16px; align-items: flex-start;
+      flex-wrap: wrap;
+    }
+    .db-milestone-img {
+      width: 140px; border-radius: 8px; flex-shrink: 0;
+      border: 1px solid var(--color-border, #333);
+    }
+    .db-milestone-checks { flex: 1; min-width: 200px; }
+    .db-checks-label {
+      font-size: 12px; color: var(--color-text-secondary, #888); margin-bottom: 12px;
+    }
+    .db-checks-grid {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;
+    }
+    .db-check-box {
+      width: 36px; height: 36px; border-radius: 6px;
+      border: 2px solid var(--color-border, #333);
+      background: var(--color-card, #252538);
+      color: var(--color-text, #e0e0e0);
+      font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .db-check-filled {
+      background: var(--color-accent, #c9a84c);
+      border-color: var(--color-accent, #c9a84c);
+      color: #000;
+    }
+    .db-earn-milestone-btn { margin-top: 4px; }
+
+    /* Level up modal */
+    .db-modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1300;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .db-modal {
+      background: var(--color-surface, #1e1e2e);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 14px;
+      width: 100%; max-width: 700px;
+      max-height: 90vh; overflow-y: auto;
+      padding: 24px;
+    }
+    .db-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .db-modal-title { font-size: 18px; font-weight: 700; margin: 0; }
+    .db-modal-desc { font-size: 13px; color: var(--color-text-secondary, #888); margin: 0 0 20px; }
+    .db-levelup-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+    }
+    .db-levelup-card {
+      position: relative; cursor: pointer; border-radius: 8px; overflow: hidden;
+      border: 2px solid var(--color-border, #333);
+      transition: border-color 0.15s;
+    }
+    .db-levelup-card:hover { border-color: var(--color-accent, #c9a84c); }
+    .db-levelup-card.db-levelup-selected {
+      border-color: var(--color-accent, #c9a84c);
+      box-shadow: 0 0 0 2px rgba(201,168,76,0.3);
+    }
+    .db-levelup-img { width: 100%; display: block; }
+    .db-levelup-badge {
+      position: absolute; top: 6px; left: 6px;
+      background: rgba(0,0,0,0.75);
+      color: var(--color-text-secondary, #888);
+      font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .db-levelup-new { color: var(--color-accent, #c9a84c); }
+
+    .db-card-zoom {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1400;
+      background: rgba(0,0,0,0.88);
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 30px;
+      pointer-events: none;
+    }
+    .db-card-zoom.db-zoom-active { display: flex; }
+    .db-card-zoom img {
+      max-height: 78vh;
+      max-width: 40vw;
+      border-radius: 12px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.8);
+      object-fit: contain;
+      flex-shrink: 0;
+    }
+    .db-zoom-commentary {
+      max-width: 340px;
+      max-height: 78vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .db-zoom-card-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--color-accent, #c9a84c);
+    }
+    .db-zoom-card-text {
+      font-size: 13px;
+      color: var(--color-text, #e0e0e0);
+      line-height: 1.6;
+      background: var(--color-card, #252538);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .db-zoom-card-commentary {
+      font-size: 13px;
+      color: var(--color-text-secondary, #aaa);
+      line-height: 1.6;
+      font-style: italic;
+    }
+    .db-zoom-hint {
+      position: fixed;
+      bottom: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: var(--color-text-secondary, #888);
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      pointer-events: none;
+      z-index: 1401;
+      white-space: nowrap;
+    }
+
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -842,10 +1113,16 @@
   <script src="data-luminary.js"></script>
   <script src="data-chieftain.js"></script>
   <script src="data-hierophant.js"></script>
+  <!-- ── DECK BUILDER OVERLAY ── -->
+  <div class="deckbuilder-overlay" id="deckbuilder-overlay">
+    <div id="deckbuilder-content" class="deckbuilder-content"></div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="data-hollowpact.js"></script>
   <script src="data-mirefoot.js"></script>
   <script src="app.js"></script>
   <script src="campaign.js"></script>
+  <script src="deckbuilder.js"></script>
 </body>
 </html>
