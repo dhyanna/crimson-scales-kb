@@ -3,11 +3,13 @@
 
 // ── STATE ────────────────────────────────────────────────────
 let db = {
-  player: null,        // campaign_players row
+  character: null,     // characters row
+  player: null,        // players row
   state: null,         // character_state row
   cards: [],           // character_cards rows
   allClassCards: [],   // full card list from JS data for this class
-  activeBuild: null,   // 'bruiser' | 'trapbuild' | null
+  activeBuild: null,
+  activeCardTab: 'milestone',
 };
 
 // ── HAND SIZES PER CLASS ─────────────────────────────────────
@@ -21,7 +23,7 @@ const BASE_HAND_SIZES = {
 };
 
 function getHandSize() {
-  const base = BASE_HAND_SIZES[db.player?.class_id] ?? 10;
+  const base = BASE_HAND_SIZES[db.character?.class_id] ?? 10;
   return db.state?.milestone_earned ? base + 1 : base;
 }
 
@@ -36,37 +38,42 @@ const MILESTONE_REWARD_IDS = {
 };
 
 // ── DB HELPERS ───────────────────────────────────────────────
-async function loadCharacterData(playerId) {
+async function loadCharacterData(characterId) {
   const [stateRes, cardsRes] = await Promise.all([
-    sb().from('character_state').select('*').eq('player_id', playerId).single(),
-    sb().from('character_cards').select('*').eq('player_id', playerId),
+    sb().from('character_state').select('*').eq('character_id', characterId).single(),
+    sb().from('character_cards').select('*').eq('character_id', characterId),
   ]);
   db.state = stateRes.data;
   db.cards = cardsRes.data ?? [];
 }
 
-async function initCharacter(player) {
-  // Create character_state
-  const handSize = BASE_HAND_SIZES[player.class_id] ?? 10;
-  const { data: state } = await sb()
+async function initCharacter(character) {
+  const handSize = BASE_HAND_SIZES[character.class_id] ?? 10;
+  const { data: state, error } = await sb()
     .from('character_state')
-    .insert({ player_id: player.id, hand_size: handSize })
+    .insert({ character_id: character.id, hand_size: handSize })
     .select().single();
+  if (error) { console.error('initCharacter state error:', error); return; }
   db.state = state;
 
-  // Add all Level 1 and Level X cards to the pool
-  const classData = CLASS_REGISTRY[player.class_id];
-  if (!classData) return;
+  // Add all Level 1 and Level X cards to the pool (only if KB data exists)
+  const classData = CLASS_REGISTRY[character.class_id];
+  if (!classData) { db.cards = []; return; }
+
   const startingCards = classData.cards.filter(c => c.level === '1' || c.level === 'X');
   const rows = startingCards.map(c => ({
-    player_id: player.id,
+    character_id: character.id,
     card_id: c.id || slugify(c.name),
-    class_id: player.class_id,
+    class_id: character.class_id,
     in_hand: false,
     level_obtained: null,
   }));
-  const { data: cards } = await sb().from('character_cards').insert(rows).select();
-  db.cards = cards ?? [];
+  if (rows.length) {
+    const { data: cards } = await sb().from('character_cards').insert(rows).select();
+    db.cards = cards ?? [];
+  } else {
+    db.cards = [];
+  }
 }
 
 async function saveHandToggle(cardId, inHand) {
@@ -84,13 +91,13 @@ async function saveMilestoneChecks(checks) {
 }
 
 async function earnMilestone() {
-  const classId = db.player.class_id;
+  const classId = db.character.class_id;
   const rewardId = MILESTONE_REWARD_IDS[classId];
   const newHandSize = getHandSize() + 1;
 
   // Add reward card to pool AND hand
   const { data: newCard } = await sb().from('character_cards').insert({
-    player_id: db.player.id,
+    character_id: db.character.id,
     card_id: rewardId,
     class_id: classId,
     in_hand: true,
@@ -124,7 +131,7 @@ async function undoLevelUp() {
   // (the chosen card + the ones passed over at that level — identified as the
   // two new-level cards and any previously passed-over cards that were in the picker)
   const newLevel = lastLevel - 1;
-  const classData = CLASS_REGISTRY[db.player.class_id];
+  const classData = CLASS_REGISTRY[db.character.class_id];
   const newLevelCardIds = (classData?.cards ?? [])
     .filter(c => parseInt(c.level) === lastLevel)
     .map(c => c.id || slugify(c.name));
@@ -147,11 +154,11 @@ async function undoLevelUp() {
 
 async function levelUp(chosenCardId, passedOverIds) {
   const newLevel = db.state.current_level + 1;
-  const classId = db.player.class_id;
 
   // Add chosen card to pool (sideboard by default)
+  const classId = db.character.class_id;
   const { data: newCard } = await sb().from('character_cards').insert({
-    player_id: db.player.id,
+    character_id: db.character.id,
     card_id: chosenCardId,
     class_id: classId,
     in_hand: false,
@@ -202,19 +209,41 @@ function handCount() {
 }
 
 // ── OPEN / CLOSE ─────────────────────────────────────────────
-async function openDeckBuilder(player) {
+async function openDeckBuilder(character, player) {
+  db.character = character;
   db.player = player;
-  db.allClassCards = CLASS_REGISTRY[player.class_id]?.cards ?? [];
+  db.allClassCards = CLASS_REGISTRY[character.class_id]?.cards ?? [];
   db.activeBuild = null;
+  db.activeCardTab = 'milestone';
 
   const overlay = document.getElementById('deckbuilder-overlay');
   overlay.classList.add('db-open');
   renderDeckBuilderLoading();
 
-  await loadCharacterData(player.id);
+  // If this class has no KB data, we can still show the deck builder
+  // but card pool will be empty — show a notice
+  const hasKbData = !!CLASS_REGISTRY[player.class_id];
+
+  await loadCharacterData(character.id);
 
   if (!db.state) {
-    await initCharacter(player);
+    await initCharacter(character);
+  }
+
+  // If state still null after init (e.g. DB error), show error
+  if (!db.state) {
+    document.getElementById('deckbuilder-content').innerHTML =
+      `<div class="db-loading">Error loading character data. Please close and try again.</div>`;
+    return;
+  }
+
+  // First time setup: name character and pick PQ card
+  if (!character.character_name || !character.pq_card_id) {
+    runFirstTimeSetup(character, player, () => {
+      db.character = character;
+      renderDeckBuilder();
+    });
+    return;
   }
 
   renderDeckBuilder();
@@ -222,7 +251,7 @@ async function openDeckBuilder(player) {
 
 function closeDeckBuilder() {
   document.getElementById('deckbuilder-overlay')?.classList.remove('db-open');
-  db = { player: null, state: null, cards: [], allClassCards: [] };
+  db = { character: null, player: null, state: null, cards: [], allClassCards: [], activeBuild: null, activeCardTab: 'milestone' };
 }
 
 // ── RENDER ───────────────────────────────────────────────────
@@ -232,12 +261,14 @@ function renderDeckBuilderLoading() {
 }
 
 function renderDeckBuilder() {
-  const cls = CLASS_DISPLAY[db.player.class_id];
+  const cls = CLASS_DISPLAY[db.character.class_id] ?? ALL_CLASSES?.[db.character.class_id];
+  const hasKbData = !!CLASS_REGISTRY[db.character.class_id];
+  db.hasKbData = hasKbData;
   const handSize = getHandSize();
   const hand = handCount();
   const owned = ownedCardIds();
   const inHand = handCardIds();
-  const milestoneCard = getMilestoneCardData(db.player.class_id);
+  const milestoneCard = getMilestoneCardData(db.character.class_id);
 
   // Partition cards
   const handCards = db.allClassCards.filter(c => inHand.has(c.id || slugify(c.name)));
@@ -246,11 +277,24 @@ function renderDeckBuilder() {
     return owned.has(cid) && !inHand.has(cid) && c.level !== 'M';
   });
 
+  const noKbNotice = !hasKbData ? `
+    <div class="db-section" style="margin-bottom:16px">
+      <div class="db-section-header">
+        <div class="db-section-title">📖 No Class Guide Yet</div>
+      </div>
+      <div style="padding:16px;font-size:13px;color:var(--color-text-secondary,#888);line-height:1.6">
+        A class guide for <strong>${cls?.name ?? db.player.class_id}</strong> hasn't been added to the
+        Knowledge Base yet. Milestone, PQ tracking, and character management are still available above.
+        Card pool management will be enabled once the guide is added.
+      </div>
+    </div>
+  ` : '';
+
   const handFull = hand >= handSize;
   const handOk = hand === handSize;
 
   // Build toggle buttons from CLASS_BUILDS
-  const buildsData = CLASS_BUILDS?.[db.player.class_id];
+  const buildsData = CLASS_BUILDS?.[db.character.class_id];
   const buildToggles = buildsData?.builds?.length ? `
     <div class="db-build-toggles">
       <span class="db-build-label">Highlight build:</span>
@@ -261,13 +305,11 @@ function renderDeckBuilder() {
     </div>
   ` : '';
 
-  function cardBuildClass(card) {
+  const cardBuildClass = (card) => {
     if (!db.activeBuild) return '';
-    const cid = card.id || slugify(card.name);
     const builds = card.builds ?? [];
-    const matches = builds.includes(db.activeBuild) || builds.includes('both');
-    return matches ? 'db-card-highlighted' : 'db-card-dimmed';
-  }
+    return (builds.includes(db.activeBuild) || builds.includes('both')) ? 'db-card-highlighted' : 'db-card-dimmed';
+  };
 
   document.getElementById('deckbuilder-content').innerHTML = `
     <div class="db-layout">
@@ -275,24 +317,27 @@ function renderDeckBuilder() {
       <!-- Header -->
       <div class="db-header">
         <div class="db-header-left">
-          ${classIcon(db.player.class_id, 40)}
+          ${classIcon(db.character.class_id, 40)}
           <div>
-            <div class="db-class-name">${cls.name}</div>
+            <div class="db-class-name">${db.character.character_name ? `${db.character.character_name} · ` : ''}${cls.name}</div>
             <div class="db-player-name">${db.player.player_name} · Level ${db.state.current_level}</div>
           </div>
         </div>
         <div class="db-header-actions">
           ${db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
-          ${db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn">↩ Undo Level Up</button>` : ''}
+          ${db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn" ${!db.hasKbData ? 'disabled' : ''}>↩ Undo Level Up</button>` : ''}
+          <button class="db-btn db-btn-secondary db-btn-retire" id="db-retire-btn">⚰️ Retire / Set Aside</button>
           <button class="db-btn db-btn-close" id="db-close-btn">✕ Close</button>
         </div>
       </div>
 
-      <!-- Milestone card -->
-      ${!db.state.milestone_earned && milestoneCard ? renderMilestoneTracker(milestoneCard) : ''}
+      <!-- Milestone / PQ tabs -->
+      ${renderCardTabs(milestoneCard)}
+
+      ${noKbNotice}
 
       <!-- Hand deck -->
-      <div class="db-section">
+      ${hasKbData ? `
         <div class="db-section-header">
           <div class="db-section-title">
             Hand Deck
@@ -324,7 +369,7 @@ function renderDeckBuilder() {
           ${sideboardCards.map(c => renderCardTile(c, false, handFull, cardBuildClass(c))).join('')}
           ${sideboardCards.length === 0 ? '<div class="db-empty">All available cards are in your hand</div>' : ''}
         </div>
-      </div>
+      </div>` : ''}
 
     </div>
   `;
@@ -332,33 +377,112 @@ function renderDeckBuilder() {
   bindDeckBuilderEvents();
 }
 
-function renderMilestoneTracker(milestoneCard) {
+function renderCardTabs(milestoneCard) {
+  const hasMilestone = !db.state.milestone_earned && milestoneCard;
+  const hasPq = !!db.character.pq_card_id;
+
+  // If neither, show nothing
+  if (!hasMilestone && !hasPq) return '';
+
+  // If only one, show it directly without tabs
+  if (hasMilestone && !hasPq) return renderMilestoneTracker(milestoneCard);
+  if (!hasMilestone && hasPq) return renderPqTracker();
+
+  // Both — show tabbed
+  const milestoneActive = db.activeCardTab === 'milestone';
+  return `
+    <div class="db-section db-tabbed-section">
+      <div class="db-tab-bar">
+        <button class="db-tab ${milestoneActive ? 'db-tab-active' : ''}" data-tab="milestone">
+          🏆 Milestone
+        </button>
+        <button class="db-tab ${!milestoneActive ? 'db-tab-active' : ''}" data-tab="pq">
+          📜 Personal Quest
+        </button>
+      </div>
+      <div class="db-tab-content">
+        ${milestoneActive ? renderMilestoneInner(milestoneCard) : renderPqInner()}
+      </div>
+    </div>
+  `;
+}
+
+function renderMilestoneInner(card) {
   const checks = db.state.milestone_checks;
-  const classData = CLASS_REGISTRY[db.player.class_id];
-  const milestoneImageUrl = classData?.milestone?.imageUrl ?? milestoneCard?.imageUrl;
+  const classData = CLASS_REGISTRY[db.character.class_id];
+  const milestoneImageUrl = classData?.milestone?.imageUrl ?? card?.imageUrl;
   const boxes = Array.from({ length: 10 }, (_, i) =>
     `<button class="db-check-box ${i < checks ? 'db-check-filled' : ''}" data-check="${i}">
       ${i < checks ? '✓' : ''}
     </button>`
   ).join('');
+  return `
+    <div class="db-milestone-inner">
+      <img src="${milestoneImageUrl}" class="db-milestone-img" alt="Milestone card">
+      <div class="db-milestone-checks">
+        <div class="db-checks-label">Tap to add / remove checks — ${checks}/10</div>
+        <div class="db-checks-grid">${boxes}</div>
+        ${checks === 10 ? `
+          <button class="db-btn db-btn-primary db-earn-milestone-btn" id="db-earn-milestone">
+            🎉 Claim Milestone Reward
+          </button>` : ''}
+      </div>
+    </div>
+  `;
+}
 
+function renderPqInner() {
+  const pqId = db.character.pq_card_id;
+  const unlocksClassId = PQ_UNLOCKS_CLASS[pqId];
+  const unlocksClass = unlocksClassId ? (ALL_CLASSES[unlocksClassId]?.name ?? unlocksClassId) : 'Unknown';
+  return `
+    <div class="db-milestone-inner">
+      <img src="${pqCardUrl(pqId)}" class="db-milestone-img db-pq-img" alt="Personal Quest card">
+      <div class="db-milestone-checks">
+        <div class="db-checks-label">Retirement unlocks: <strong>${unlocksClass}</strong></div>
+        <p class="db-checks-label" style="margin-top:8px">
+          Complete the quest criteria shown on your PQ card. When ready, use
+          <strong>Retire / Set Aside</strong> in the header.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function renderPqTracker() {
+  const pqId = db.character.pq_card_id;
+  const unlocksClassId = PQ_UNLOCKS_CLASS[pqId];
+  const unlocksClass = unlocksClassId ? (ALL_CLASSES[unlocksClassId]?.name ?? unlocksClassId) : 'Unknown';
+  return `
+    <div class="db-section db-pq-section">
+      <div class="db-section-header">
+        <div class="db-section-title">📜 Personal Quest</div>
+        <div class="db-section-hint">Retirement unlocks: ${unlocksClass}</div>
+      </div>
+      <div class="db-milestone-inner">
+        <img src="${pqCardUrl(pqId)}" class="db-milestone-img db-pq-img" alt="Personal Quest card">
+        <div class="db-milestone-checks">
+          <p class="db-checks-label">
+            Complete the quest criteria shown on your PQ card to retire your character
+            and unlock <strong>${unlocksClass}</strong> for the campaign.
+          </p>
+          <p class="db-checks-label" style="margin-top:8px">
+            Use the <strong>Retire / Set Aside</strong> button in the header when ready.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMilestoneTracker(milestoneCard) {
   return `
     <div class="db-section db-milestone-section">
       <div class="db-section-header">
         <div class="db-section-title">🏆 Milestone</div>
-        <div class="db-section-hint">${checks}/10 checks — ${10 - checks} remaining</div>
+        <div class="db-section-hint">${db.state.milestone_checks}/10 checks</div>
       </div>
-      <div class="db-milestone-inner">
-        <img src="${milestoneImageUrl}" class="db-milestone-img" alt="Milestone card">
-        <div class="db-milestone-checks">
-          <div class="db-checks-label">Tap to add / remove checks</div>
-          <div class="db-checks-grid">${boxes}</div>
-          ${checks === 10 ? `
-            <button class="db-btn db-btn-primary db-earn-milestone-btn" id="db-earn-milestone">
-              🎉 Claim Milestone Reward
-            </button>` : ''}
-        </div>
-      </div>
+      ${renderMilestoneInner(milestoneCard)}
     </div>
   `;
 }
@@ -393,7 +517,7 @@ function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
 // ── LEVEL UP PICKER ──────────────────────────────────────────
 function openLevelUpPicker() {
   const newLevel = db.state.current_level + 1;
-  const classId = db.player.class_id;
+  const classId = db.character.class_id;
   const owned = ownedCardIds();
   const passedOver = db.state.passed_over_cards ?? [];
 
@@ -481,12 +605,29 @@ function openLevelUpPicker() {
 // ── EVENT BINDING ─────────────────────────────────────────────
 function bindDeckBuilderEvents() {
   document.getElementById('db-close-btn')?.addEventListener('click', closeDeckBuilder);
-  document.getElementById('db-levelup-btn')?.addEventListener('click', openLevelUpPicker);
+  document.getElementById('db-levelup-btn')?.addEventListener('click', () => {
+    if (!db.hasKbData) { showToast('Level up cards unavailable — no class guide exists for this class yet.', true); return; }
+    openLevelUpPicker();
+  });
   document.getElementById('db-undo-levelup-btn')?.addEventListener('click', async () => {
     if (!confirm(`Undo level up? This will remove the card chosen at Level ${db.state.current_level} and return you to Level ${db.state.current_level - 1}.`)) return;
     await undoLevelUp();
   });
+  document.getElementById('db-retire-btn')?.addEventListener('click', () => {
+    openRetirementDialog(db.character, db.character.campaign_id, db.player.id, (action, result) => {
+      closeDeckBuilder();
+      loadCampaigns();
+    });
+  });
   document.getElementById('db-earn-milestone')?.addEventListener('click', handleEarnMilestone);
+
+  // Card tabs (Milestone / PQ)
+  document.querySelectorAll('.db-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      db.activeCardTab = btn.dataset.tab;
+      renderDeckBuilder();
+    });
+  });
 
   // Build toggles
   document.querySelectorAll('.db-build-toggle').forEach(btn => {
@@ -549,7 +690,7 @@ function initCardZoom() {
 
   document.addEventListener('mouseover', e => {
     const wrap = e.target.closest('.db-card-img-wrap');
-    const milestoneImg = e.target.classList?.contains('db-milestone-img') ? e.target : null;
+    const milestoneImg = e.target.classList?.contains('db-milestone-img') || e.target.classList?.contains('db-pq-img') ? e.target : null;
     if (wrap) {
       const img = wrap.querySelector('.db-card-img');
       const tile = wrap.closest('.db-card-tile');
@@ -561,7 +702,7 @@ function initCardZoom() {
   });
 
   document.addEventListener('mouseout', e => {
-    if (!e.target.closest('.db-card-img-wrap') && !e.target.classList?.contains('db-milestone-img')) {
+    if (!e.target.closest('.db-card-img-wrap') && !e.target.classList?.contains('db-milestone-img') && !e.target.classList?.contains('db-pq-img')) {
       zoomHoveredCard = null;
     }
   });

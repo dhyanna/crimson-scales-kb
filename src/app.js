@@ -15,6 +15,13 @@
   };
   window.CLASS_REGISTRY = CLASS_REGISTRY;
 
+  // Expose switchClass for external use (e.g. campaign panel guide links)
+  window.switchClass = function(cls) {
+    if (!CLASS_REGISTRY[cls]) return;
+    const btn = document.querySelector(`.class-btn[data-class="${cls}"]`);
+    if (btn) btn.click();
+  };
+
   // ===== STATE =====
   const state = {
     activeClass: "chainguard",

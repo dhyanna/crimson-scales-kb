@@ -144,6 +144,17 @@
       font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
     }
     .campaign-panel-close:hover { color: var(--color-text, #fff); }
+    .campaign-plus-btn {
+      width: 32px; height: 32px;
+      background: var(--color-accent, #c9a84c);
+      color: #000;
+      border: none; border-radius: 8px;
+      font-size: 20px; line-height: 1;
+      cursor: pointer; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.15s;
+    }
+    .campaign-plus-btn:hover { opacity: 0.85; }
     .campaign-panel-actions { padding: 16px 20px; flex-shrink: 0; }
     .campaign-new-btn {
       width: 100%;
@@ -789,6 +800,174 @@
     }
     .db-card-dimmed { opacity: 0.35; }
 
+    .campaign-card-footer {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--color-border, #333);
+    }
+    .campaign-unlock-btn {
+      width: 100%;
+      background: none;
+      border: 1px solid var(--color-border, #333);
+      border-radius: 6px;
+      color: var(--color-text-secondary, #888);
+      font-size: 12px;
+      padding: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .campaign-unlock-btn:hover {
+      border-color: var(--color-accent, #c9a84c);
+      color: var(--color-accent, #c9a84c);
+    }
+    /* Card tabs */
+    .db-tabbed-section {}
+    .db-tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--color-border, #333);
+      background: var(--color-card, #252538);
+    }
+    .db-tab {
+      padding: 12px 20px;
+      font-size: 13px; font-weight: 600;
+      background: none; border: none;
+      color: var(--color-text-secondary, #888);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+    .db-tab:hover { color: var(--color-text, #e0e0e0); }
+    .db-tab.db-tab-active {
+      color: var(--color-accent, #c9a84c);
+      border-bottom-color: var(--color-accent, #c9a84c);
+    }
+    .db-tab-content { padding: 0; }
+    .campaign-new-char-prompt {
+      background: rgba(201,168,76,0.08);
+      border: 1px solid rgba(201,168,76,0.25);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .campaign-new-char-msg {
+      font-size: 12px;
+      color: var(--color-text-secondary, #888);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .campaign-new-char-msg strong { color: var(--color-text, #e0e0e0); }
+    .campaign-new-char-btn {
+      width: 100%;
+      font-size: 13px;
+      padding: 8px;
+    }
+    .avail-section-label {
+      font-size: 11px; color: var(--color-text-secondary, #888);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      padding: 4px 2px;
+    }
+    .avail-resume-btn {
+      font-size: 11px; font-weight: 700;
+      padding: 3px 8px; border-radius: 4px;
+      background: rgba(100,180,100,0.15); color: #6dc86d;
+      border: 1px solid rgba(100,180,100,0.3);
+      cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .avail-resume-btn:hover { background: rgba(100,180,100,0.25); }
+    .campaign-available-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; margin-top: 8px;
+      background: rgba(201,168,76,0.06);
+      border-radius: 6px; cursor: pointer;
+      font-size: 12px; color: var(--color-accent, #c9a84c);
+      border: 1px solid rgba(201,168,76,0.2);
+      transition: background 0.15s;
+    }
+    .campaign-available-toggle:hover { background: rgba(201,168,76,0.12); }
+    .campaign-available-list {
+      margin-top: 6px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .avail-class-tile {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--color-surface, #1e1e2e);
+      border-radius: 6px; padding: 7px 10px;
+    }
+    .avail-class-icon { flex-shrink: 0; display: flex; align-items: center; }
+    .avail-class-symbol {
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      color: var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.1);
+      border-radius: 4px;
+    }
+    .avail-class-info { flex: 1; }
+    .avail-class-name { font-size: 12px; font-weight: 600; }
+    .avail-class-symbol-label { font-size: 11px; color: var(--color-text-secondary, #888); }
+    .avail-class-kb-link {
+      font-size: 11px; color: var(--color-accent, #c9a84c);
+      text-decoration: none; flex-shrink: 0;
+      padding: 2px 6px;
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .avail-class-kb-link:hover { background: rgba(201,168,76,0.1); }
+    .campaign-inactive-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; margin-top: 8px;
+      background: var(--color-surface, #1e1e2e);
+      border-radius: 6px; cursor: pointer;
+      font-size: 12px; color: var(--color-text-secondary, #888);
+      border: 1px solid var(--color-border, #333);
+      transition: color 0.15s;
+    }
+    .campaign-inactive-toggle:hover { color: var(--color-text, #e0e0e0); }
+    .campaign-inactive-chevron { font-size: 10px; }
+    .campaign-inactive-list { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+    .campaign-player-retired { opacity: 0.6; }
+    .player-status-badge {
+      font-size: 10px; font-weight: 700;
+      padding: 1px 6px; border-radius: 4px;
+      margin-left: 4px; vertical-align: middle;
+    }
+    .player-retired { background: rgba(180,60,60,0.2); color: #e07070; }
+    .player-set-aside { background: rgba(100,130,200,0.2); color: #7090d0; }
+    .db-pq-section {}
+    .db-pq-img { cursor: default; }
+    .db-btn-retire { border-color: rgba(220,80,80,0.4); color: #e07070; }
+    .db-btn-retire:hover { border-color: #e05555; color: #f88; }
+    .retirement-actions { display: flex; gap: 12px; margin: 16px 0; }
+    .retirement-actions .db-btn { flex: 1; }
+    .retirement-note { font-size: 12px; color: var(--color-text-secondary, #888); margin: 0; line-height: 1.5; }
+    .retirement-duplicate-list { color: var(--color-text, #e0e0e0); font-size: 14px; line-height: 1.8; padding-left: 20px; }
+    /* New character grid */
+    .new-char-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 12px; margin-bottom: 8px;
+    }
+    .new-char-card {
+      background: var(--color-card, #252538);
+      border: 2px solid var(--color-border, #333);
+      border-radius: 10px; padding: 14px 10px;
+      cursor: pointer; text-align: center;
+      transition: border-color 0.15s;
+    }
+    .new-char-card:hover { border-color: var(--color-accent, #c9a84c); }
+    .new-char-card.new-char-selected {
+      border-color: var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.08);
+    }
+    .new-char-icon { margin-bottom: 8px; height: 48px; display: flex; align-items: center; justify-content: center; }
+    .new-char-name { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+    .new-char-symbol-label { font-size: 11px; color: var(--color-text-secondary, #888); }
+    .new-char-symbol { font-size: 13px; font-weight: 700; color: var(--color-accent, #c9a84c); }
+    .new-char-kb-badge { font-size: 10px; color: #6dc86d; margin-top: 4px; }
+
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -890,12 +1069,12 @@
   <div class="campaign-panel" id="campaign-panel">
     <div class="campaign-panel-header">
       <h2 class="campaign-panel-title">📜 Campaigns</h2>
-      <button class="campaign-panel-close" id="close-campaigns-btn">✕</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="campaign-plus-btn" id="new-campaign-btn" title="New Campaign">＋</button>
+        <button class="campaign-panel-close" id="close-campaigns-btn">✕</button>
+      </div>
     </div>
     <div id="campaign-auth-area" class="campaign-auth-area"></div>
-    <div class="campaign-panel-actions">
-      <button class="campaign-new-btn" id="new-campaign-btn">＋ New Campaign</button>
-    </div>
     <div id="campaigns-list" class="campaigns-list"></div>
   </div>
   <div class="campaign-panel-backdrop" id="campaign-backdrop"></div>
@@ -1157,6 +1336,7 @@
   <script src="data-mirefoot.js"></script>
   <script src="app.js"></script>
   <script src="campaign.js"></script>
+  <script src="personalquest.js"></script>
   <script src="deckbuilder.js"></script>
 </body>
 </html>
