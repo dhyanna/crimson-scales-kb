@@ -916,6 +916,35 @@
       transition: background 0.15s;
     }
     .avail-class-kb-link:hover { background: rgba(201,168,76,0.1); }
+    .campaign-player-group {
+      border: 1px solid var(--color-border, #333);
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    .campaign-player-group-label {
+      position: absolute;
+      top: -9px; left: 10px;
+      background: var(--color-card, #252538);
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-text-secondary, #888);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .campaign-player-group-extra .campaign-player-group-label {
+      color: #7090d0;
+    }
+    .campaign-player-group-extra {
+      border-color: rgba(100,130,200,0.3);
+    }
+    .campaign-player-group-empty {
+      font-size: 12px;
+      color: var(--color-text-secondary, #888);
+      padding: 4px 2px;
+    }
     .campaign-inactive-toggle {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 10px; margin-top: 8px;
@@ -936,6 +965,86 @@
     }
     .player-retired { background: rgba(180,60,60,0.2); color: #e07070; }
     .player-set-aside { background: rgba(100,130,200,0.2); color: #7090d0; }
+    /* Party Progress */
+    .party-tracker {
+      background: var(--color-surface, #1e1e2e);
+      border-radius: 8px; padding: 12px;
+      margin-bottom: 10px;
+      border: 1px solid var(--color-border, #333);
+    }
+    .party-tracker-title {
+      font-size: 13px; font-weight: 700; margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .party-tracker-count {
+      font-size: 11px; font-weight: 400;
+      color: var(--color-text-secondary, #888);
+    }
+    .party-tracker-desc {
+      font-size: 11px; color: var(--color-text-secondary, #888); margin-bottom: 10px;
+    }
+    .party-tracker-boxes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .party-check-box {
+      width: 34px; height: 34px; border-radius: 6px;
+      border: 2px solid var(--color-border, #333);
+      background: var(--color-card, #252538);
+      color: var(--color-text, #e0e0e0);
+      font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .party-check-filled {
+      background: var(--color-accent, #c9a84c);
+      border-color: var(--color-accent, #c9a84c);
+      color: #000;
+    }
+    .party-tracker-banner {
+      background: rgba(201,168,76,0.12);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 6px; padding: 10px 12px;
+      font-size: 12px; color: var(--color-text, #e0e0e0);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; flex-wrap: wrap; margin-top: 8px;
+    }
+    .party-mark-read-btn {
+      background: var(--color-accent, #c9a84c); color: #000;
+      border: none; border-radius: 6px;
+      padding: 5px 12px; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .party-goal-list { display: flex; flex-direction: column; gap: 6px; }
+    .party-goal-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; padding: 4px 0;
+      border-bottom: 1px solid var(--color-border, #333);
+    }
+    .party-goal-row:last-child { border-bottom: none; }
+    .party-goal-done .party-goal-label { color: var(--color-text-secondary, #888); text-decoration: line-through; }
+    .party-goal-check { font-size: 14px; flex-shrink: 0; }
+    .party-goal-label { flex: 1; }
+    .party-goal-pips { display: flex; align-items: center; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
+    .party-goal-pip {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--color-card, #252538);
+      border: 1px solid var(--color-border, #333);
+      font-size: 10px; display: flex; align-items: center; justify-content: center;
+      color: var(--color-text-secondary, #888);
+    }
+    .pip-done { background: rgba(100,200,100,0.2); border-color: #6dc86d; color: #6dc86d; }
+    .party-side-scenario-btn {
+      font-size: 10px; padding: 2px 7px; border-radius: 4px;
+      background: rgba(201,168,76,0.15); color: var(--color-accent, #c9a84c);
+      border: 1px solid rgba(201,168,76,0.3); cursor: pointer;
+    }
+    /* Deck builder party goals */
+    .db-party-goals-section {}
+    .db-party-goals-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .db-party-goal-row {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 13px; cursor: pointer;
+    }
+    .db-goal-checkbox { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+
     .db-pq-section {}
     .db-pq-img { cursor: default; }
     .db-btn-retire { border-color: rgba(220,80,80,0.4); color: #e07070; }
@@ -1058,6 +1167,7 @@
         <button class="class-btn" data-class="hierophant">Human Hierophant</button>
         <button class="class-btn" data-class="hollowpact">Savvas Hollowpact</button>
         <button class="class-btn" data-class="mirefoot">Quatryl Mirefoot</button>
+        <button class="class-btn" data-class="fireknight">Valrath Fire Knight</button>
       </nav>
       <div class="nav-campaign-row">
         <button class="campaign-nav-btn" id="open-campaigns-btn">🎲 Campaigns</button>
@@ -1334,6 +1444,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="data-hollowpact.js"></script>
   <script src="data-mirefoot.js"></script>
+  <script src="data-fireknight.js"></script>
   <script src="app.js"></script>
   <script src="campaign.js"></script>
   <script src="personalquest.js"></script>

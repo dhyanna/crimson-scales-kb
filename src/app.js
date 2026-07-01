@@ -12,6 +12,7 @@
     hierophant: HIEROPHANT_DATA,
     hollowpact: HOLLOWPACT_DATA,
     mirefoot: MIREFOOT_DATA,
+    fireknight: FIREKNIGHT_DATA,
   };
   window.CLASS_REGISTRY = CLASS_REGISTRY;
 
@@ -612,6 +613,7 @@
       hierophant: "A ranged 11-card battle-priest who distributes Prayer cards to allies, curses the enemy modifier deck, and leverages a burn-card economy (Spiritual Gains) that lets them cast devastating loss attacks all scenario long.",
       hollowpact: "A medium-low HP Savvas who accumulates and spends Void Energy, manipulates their attack modifier deck with Voidsight, teleports around the battlefield, and deploys Void Pit obstacles that power up higher-level abilities.",
       mirefoot: "A 10-card, low-health Quatryl DPS/Assassin who leverages upgraded conditions (Wound 2, Poison 3) and Difficult Terrain to dash in and out of combat, dealing devastating burst damage while staying mobile and elusive.",
+      fireknight: "A dynamic mid-complexity Valrath Vanguard-Support who buffs adjacent allies with Strengthen and Advantage, deploys a Ladder token to choke enemy pathing, and unlocks a Fire Mastery damage engine at higher levels.",
     };
     return descs[cls] || "";
   }
@@ -743,6 +745,27 @@
       role: "The Quatryl Mirefoot is a 10-card, low-health (6hp at Level 1) DPS/Assassin class with strong similarities to both the Mindthief and Scoundrel. It wants to dash in and out of combat, apply devastating upgraded conditions, and leverage excellent Initiative control to stay safe. Gains power in higher player counts. Struggles significantly against Retaliate and high-Shield enemies, though upgraded Poisons help counteract Shields. A class where every card in the starting hand is viable — strong design with no obvious dead weight.",
       xp: [0,45,95,150,200,275,345,420,500],
       hp: [6,8,9,11,12,14,15,17,18]
+    },
+    fireknight: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-fire-knight.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-fire-knight-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "The Ladder",
+          chipClass: "shackle-chip",
+          text: "The Fire Knight carries a unique Ladder token that acts as an impassable obstacle for enemies while allowing you and your allies to traverse the map unhindered. Drop it in chokepoints and enemies are forced to walk around it, severely disrupting their AI pathing. The Ladder also provides combat bonuses when you are on or adjacent to it, and the class milestone is directly tied to using it actively — placing your Ladder token and ending your turn on it during the same turn, 10 times."
+        },
+        {
+          label: "Mechanic",
+          chip: "Support & Adjacency",
+          chipClass: "swing-chip",
+          text: "The Fire Knight specializes in granting Strengthen and Heal actions to the crew, and synergizes effectively with Fire elements to empower ranged attacks and team protections. Many of the best persistent abilities and attack bonuses in your kit rely on being adjacent to an ally — standing just behind or right next to your front-line teammates lets you soak incidental damage while boosting their stats. Persistent non-Loss buffs like Crew Integrity reward this positioning with ongoing value round after round."
+        }
+      ],
+      role: "The Valrath Fire Knight is a dynamic mid-complexity mercenary who acts as a battlefield protector and support engine. The class shines through positioning — staying adjacent to allies triggers defensive buffs, heals, and enhances your own attacks. You are not a pure tank with zero offensive capability, nor a squishy backline sniper; you excel at standing just behind or right next to your front-line teammates. Designed by a real-life firefighter, the class blends a Vanguard-Support identity with a Fire Mastery damage engine that ramps up significantly after Level 5. Convenient Initiative spread makes it easy to play despite a modest starting health pool.",
+      xp: [0,45,95,150,210,275,345,420,500],
+      hp: [9,10,12,14,16,17,19,21,23]
     },
   };
 
@@ -1192,6 +1215,73 @@
         { name: "Whitefire Balm", desc: "Level 8 — primarily for the incredible Wound 2 Stun bottom. Both builds plan rests around using this." },
       ],
     },
+    fireknight: {
+      perksDesc: "The two core builds are Vanguard-Support (lean into adjacency buffs, Strengthen, Advantage, and healing) and Fire Mastery (build toward fire-fueled AoE damage that comes online at Level 5+). Start with 'remove two -1 cards' and 'replace -1 with +0 Strengthen Ally' to improve your baseline deck while adding party utility. The Ladder-conditional +2 perks are excellent regardless of build — you should be using the Ladder actively in either case. The Fire perks (ignore negative item/scenario effects + add +0 Fire card) are efficient two-for-one picks that ease the early fire scarcity problem.",
+      builds: [
+        {
+          id: "support",
+          icon: "🤝",
+          iconClass: "bruiser-icon",
+          name: "Vanguard-Support",
+          tagline: "Adjacency buffs, Strengthen, Advantage, heals",
+          btnClass: "bruiser-btn",
+          desc: "Stay close to allies and amplify the whole party. Distribute Strengthen and Advantage liberally, keep the team topped up with accessible healing, and use persistent non-Loss buffs for ongoing value every round. At Level 1, Coordinated Attack, Combat Medic, and Practical Tools are likely candidates to leave behind as you build out your starting hand.",
+          playstyle: "Open with Collective Combat or Combined Effort to start the adjacency engine, granting Advantage and bonus damage as long as you're near allies. Bring in Crew Integrity for a persistent round-after-round buff that doesn't cost a Loss action. Lean on Combat Medic and Trauma Care to keep the party alive without sacrificing tempo. At higher levels, Mutual Aid and Search and Rescue reinforce the responder identity, with Incident Commander as a capstone party-wide buff at Level 9.",
+          coreCards: [
+            { name: "Collective Combat", desc: "Level 1 — Attack bonus when an adjacent ally also attacks. Core adjacency payoff." },
+            { name: "Combined Effort", desc: "Level 1 — grants Advantage to self or an adjacent ally. Huge against the rough starting modifier deck." },
+            { name: "Crew Integrity", desc: "Level 3 — persistent non-Loss buff while adjacent to allies. Standout repeatable value card." },
+            { name: "Fiery Charisma", desc: "Level X — multi-target Strengthen from the very first scenario." },
+            { name: "Trauma Care", desc: "Level 2 — strong heal plus condition removal." },
+            { name: "Mutual Aid", desc: "Level 6 — party-wide buff or heal, reinforcing the teamwork theme at mid-levels." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Trauma Care for stronger healing and condition removal if the starting hand felt light on sustain" },
+            { lvl: "3", text: "Crew Integrity — persistent adjacency buff, a standout pickup for this build" },
+            { lvl: "4", text: "Jack Of All Trades for flexible generalist utility while deciding build direction" },
+            { lvl: "5", text: "Hook and Ladder for traversal utility that benefits the whole party's positioning" },
+            { lvl: "6", text: "Mutual Aid — party-wide buff/heal reinforcing the Support identity" },
+            { lvl: "7", text: "Search and Rescue — ally-focused utility and rapid repositioning to reach isolated allies" },
+            { lvl: "8", text: "Cauterize Wound — strong late-game heal with Fire-enhanced healing power" },
+            { lvl: "9", text: "Incident Commander — capstone party-wide buff, the Support build's peak power level" },
+          ],
+        },
+        {
+          id: "fire",
+          icon: "🔥",
+          iconClass: "trap-icon",
+          name: "Fire Mastery",
+          tagline: "Fire generation/consumption, AoE damage, unlocked at higher levels",
+          btnClass: "trap-btn",
+          desc: "Build toward a powerful Fire-fueled damage engine. Early levels are about securing reliable fire generation; once that's established around Level 5-6, fire-consuming cards deliver some of the class's biggest damage spikes.",
+          playstyle: "Hold Playing With Fire early to guarantee fire generation alongside consumer cards like Fire Whirl — without both in hand simultaneously, the fire payoffs can feel weak. Be patient through the early levels; the build doesn't truly come online until Searing Blaze and Flaming Axe arrive at Levels 5-6. By Level 8-9, Backdraft and Flashover deliver the build's signature explosive AoE damage spikes, rewarding the early investment.",
+          coreCards: [
+            { name: "Playing With Fire", desc: "Level 1 — one of the only early reliable Fire generators. Near-mandatory for early Fire build players." },
+            { name: "Fire Whirl", desc: "Level 1 — AoE Attack with Fire payoff, though early on the payoff often won't fire without dedicated generation." },
+            { name: "Searing Blaze", desc: "Level 5 — where the Fire build starts feeling consistent, with real payoff for held Fire element." },
+            { name: "Flaming Axe", desc: "Level 6 — the class's namesake weapon, strong single-target Fire-infused damage." },
+            { name: "Backdraft", desc: "Level 8 — explosive Fire payoff attack, named for one of firefighting's most dangerous phenomena." },
+            { name: "Flashover", desc: "Level 9 — capstone AoE nuke, the build's biggest damage spike." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Heavy Irons for a straightforward damage upgrade while the Fire engine is still being assembled" },
+            { lvl: "3", text: "Ladder Assault — rewards Ladder positioning, doubling as milestone progress and real damage" },
+            { lvl: "4", text: "Kindled Tonic — bridges Fire generation with healing, easing the early fire scarcity problem" },
+            { lvl: "5", text: "Searing Blaze — the build's turning point, finally delivering consistent Fire payoff" },
+            { lvl: "6", text: "Flaming Axe — strong single-target Fire damage centerpiece for the build's mid-game" },
+            { lvl: "7", text: "Rolling Flames — AoE Fire payoff rewarding the generation investment made so far" },
+            { lvl: "8", text: "Backdraft — explosive Fire damage spike, one of the build's biggest hits" },
+            { lvl: "9", text: "Flashover — capstone AoE nuke, the ultimate payoff for a fully built Fire engine" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Controlled Aggression", desc: "Level 1 — reliable filler attack that doesn't depend on fire or adjacency setups. Useful for either build early on." },
+        { name: "Light Irons / Heavy Irons", desc: "Fast, low-commitment Attack/Move pairing useful for Initiative control regardless of build." },
+        { name: "Loyal Companion", desc: "Level X — the Dalmatian summon. Fun thematic centerpiece worth considering for either build depending on appetite for summon play." },
+        { name: "Improvised Methods", desc: "Milestone reward — flexible, adapts to any situation. Useful for either build once unlocked." },
+      ],
+    },
   };
   window.CLASS_BUILDS = CLASS_BUILDS;
 
@@ -1232,6 +1322,10 @@
     mirefoot: {
       mechanic1: { filter: "wound",   label: "Condition",     tagClass: "tag-shackle" },
       mechanic2: { filter: "terrain", label: "Terrain",       tagClass: "tag-trap" },
+    },
+    fireknight: {
+      mechanic1: { filter: "support", label: "Support",   tagClass: "tag-shackle" },
+      mechanic2: { filter: "fire",    label: "Fire",      tagClass: "tag-trap" },
     },
   };
 

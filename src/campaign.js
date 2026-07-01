@@ -118,7 +118,7 @@ function getActiveCharacter(characters, playerId) {
 const STARTING_GROUPS = {
   naturalists:  { name: "Naturalists",  icon: '<img src="naturalists.png" class="wizard-group-img-icon" alt="Naturalists">', tagline: "Masters of terrain, conditions, and the wild", classes: ["mirefoot","hollowpact","chieftain","luminary"], description: "The Naturalists excel at controlling the battlefield with terrain and conditions." },
   militants:    { name: "Militants",    icon: "⚔️", tagline: "Front-line fighters built for aggression",      classes: ["bombard","fireknight","hierophant","mirefoot"],     description: "Coming soon — class guides in development." },
-  protectors:   { name: "Protectors",  icon: "🛡️", tagline: "Shields and support for the whole party",       classes: ["chainguard","chieftain","fireknight","hierophant"],  description: "Coming soon — class guides in development." },
+  protectors:   { name: "Protectors",  icon: "🛡️", tagline: "Shields and support for the whole party",       classes: ["chainguard","chieftain","fireknight","hierophant"],  description: "A defensively-minded group built around tanking, healing, and team support — Chainguard and Chieftain hold the front line while Fire Knight and Hierophant keep everyone alive and buffed." },
   explorers:    { name: "Explorers",   icon: "🗺️", tagline: "Mobility, looting, and scenario objectives",    classes: ["brightspark","chainguard","hollowpact","starslinger"], description: "Coming soon — class guides in development." },
   trailblazers: { name: "Trailblazers",icon: "🔥", tagline: "Blazing a path through any obstacle",          classes: ["bombard","brightspark","luminary","starslinger"],    description: "Coming soon — class guides in development." },
 };
@@ -131,7 +131,7 @@ const CLASS_DISPLAY = {
   chainguard: { name: "Inox Chainguard",    symbol: "Chained Helm", icon: "cs-chainguard-icon.svg" },
   hierophant: { name: "Human Hierophant",   symbol: "Leaf",         icon: "cs-hierophant-icon.svg" },
   bombard:    { name: "Quatryl Bombard",    symbol: "Target",       icon: null },
-  fireknight: { name: "Valrath Fire Knight",symbol: "Ladder Axe",   icon: null },
+  fireknight: { name: "Valrath Fire Knight",symbol: "Ladder Axe",   icon: "cs-fireknight-icon.svg" },
   brightspark:{ name: "Human Brightspark",  symbol: "Flask",        icon: null },
   starslinger:{ name: "Aesther Starslinger",symbol: "Galaxy",       icon: null },
 };
@@ -162,10 +162,10 @@ async function createCampaign(name, partyName, startingGroup) {
   return data;
 }
 
-async function addPlayerToCampaign(campaignId, playerName, playerEmail) {
+async function addPlayerToCampaign(campaignId, playerName, playerEmail, isFoundingMember = false) {
   const { data, error } = await sb()
     .from('players')
-    .insert({ campaign_id: campaignId, player_name: playerName, player_email: playerEmail.toLowerCase().trim() })
+    .insert({ campaign_id: campaignId, player_name: playerName, player_email: playerEmail.toLowerCase().trim(), is_founding_member: isFoundingMember })
     .select().single();
   if (error) throw error;
   return data;
@@ -443,10 +443,10 @@ async function submitCampaign() {
   try {
     const campaign = await createCampaign(wizardState.campaignName, wizardState.partyName, wizardState.selectedGroup);
 
-    // Create all players
+    // Create all players — mark as founding members
     const playerRows = [];
     for (const p of wizardState.players) {
-      const row = await addPlayerToCampaign(campaign.id, p.name, p.email);
+      const row = await addPlayerToCampaign(campaign.id, p.name, p.email, true);
       playerRows.push(row);
     }
 
@@ -508,10 +508,11 @@ function renderCampaignCard(campaign) {
   const retiredChars = characters.filter(c => c.status === 'retired');
 
   const activeClassIds = new Set(activeChars.map(c => c.class_id));
-  const setAsideClassIds = new Set(setAsideChars.map(c => c.class_id));
 
-  // Active party tiles
-  const partyTiles = activeChars.map(char => {
+  const foundingPlayerIds = new Set(players.filter(p => p.is_founding_member).map(p => p.id));
+  const extraPlayers = players.filter(p => !p.is_founding_member);
+
+  function makePartyTile(char) {
     const assignedPlayer = players.find(p => p.id === char.assigned_player_id);
     const cls = CLASS_DISPLAY[char.class_id] ?? ALL_CLASSES?.[char.class_id] ?? { name: char.class_id, symbol: '' };
     const isMe = myChar?.id === char.id;
@@ -526,7 +527,12 @@ function renderCampaignCard(campaign) {
       </div>
       ${isMe ? `<button class="campaign-deck-btn" data-char-id="${char.id}" data-player-id="${myPlayer.id}">🃏 Deck</button>` : ''}
     </div>`;
-  }).join('');
+  }
+
+  const foundingChars = activeChars.filter(c => foundingPlayerIds.has(c.assigned_player_id));
+  const extraChars    = activeChars.filter(c => !foundingPlayerIds.has(c.assigned_player_id));
+  const foundingTiles = foundingChars.map(makePartyTile).join('');
+  const extraTiles    = extraChars.map(makePartyTile).join('');
 
   // Players without an active character — need to create one
   const playersWithActiveChar = new Set(activeChars.map(c => c.assigned_player_id));
@@ -616,18 +622,162 @@ function renderCampaignCard(campaign) {
         <div>
           ${campaign.party_name ? `<div class="campaign-card-name">${campaign.party_name}</div><div class="campaign-card-party">${campaign.name}</div>` : `<div class="campaign-card-name">${campaign.name}</div>`}
         </div>
-        <button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="campaign-plus-btn campaign-add-player-btn" data-campaign-id="${campaign.id}" title="Add Player">＋</button>
+          <button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>
+        </div>
       </div>
       ${newCharPrompt}
-      <div class="campaign-players">${partyTiles}</div>
+      <div class="campaign-player-group">
+        <div class="campaign-player-group-label">Founding Players</div>
+        ${foundingTiles || '<div class="campaign-player-group-empty">No active founding members</div>'}
+      </div>
+      ${extraTiles ? `
+        <div class="campaign-player-group campaign-player-group-extra">
+          <div class="campaign-player-group-label">Extra Players</div>
+          ${extraTiles}
+        </div>` : ''}
       ${benchSection}
       ${retiredSection}
       ${availableSection}
+      ${renderPartyProgress(campaign, players, myPlayer)}
       ${devPicker}
       <div class="campaign-card-footer">
-        <button class="campaign-add-player-btn" data-campaign-id="${campaign.id}">＋ Add Player</button>
         <button class="campaign-unlock-btn" data-campaign-id="${campaign.id}">🔓 Unlock Class</button>
       </div>
+    </div>`;
+}
+
+
+// ── PARTY PROGRESS ───────────────────────────────────────────
+function computeGoals(campaign, players) {
+  const founders = players.filter(p => p.is_founding_member);
+  if (!founders.length) return null;
+
+  const allDone = (key) => founders.every(p => p[key]);
+  const allBattleGoals = founders.every(p => (p.battle_goals_completed ?? 0) >= 5);
+
+  return {
+    founders,
+    goal1: allBattleGoals,          // 5 battle goals each
+    goal2: allDone('xp_100_gained'), // 100 XP each
+    goal3: allDone('gold_60_spent'), // 60 gold each
+    goal4: allDone('treasure_looted'),// 1 treasure tile each
+    goal5: !!campaign.party_goal_side_scenario, // side scenario
+  };
+}
+
+function renderPartyProgress(campaign, players, myPlayer) {
+  const show37d = !campaign.read_37d;
+  const goals = computeGoals(campaign, players);
+  const show53a = goals && !campaign.read_53a;
+  if (!show37d && !show53a) return '';
+
+  const completions = campaign.scenario_completions ?? 0;
+
+  // 37D section
+  let section37d = '';
+  if (show37d) {
+    const boxes = Array.from({ length: 5 }, (_, i) => {
+      const checked = i < completions;
+      return `<button class="party-check-box ${checked ? 'party-check-filled' : ''}"
+        data-tracker="37d" data-campaign-id="${campaign.id}" data-index="${i}">
+        ${checked ? '✓' : ''}
+      </button>`;
+    }).join('');
+    const allDone = completions >= 5;
+    section37d = `
+      <div class="party-tracker">
+        <div class="party-tracker-title">📖 Section 37D</div>
+        <div class="party-tracker-desc">Complete 5 scenarios to unlock section 37D</div>
+        <div class="party-tracker-boxes">${boxes}</div>
+        ${allDone ? `
+          <div class="party-tracker-banner">
+            Read <strong>Section 37D</strong> from the section book!
+            <button class="party-mark-read-btn" data-tracker="37d" data-campaign-id="${campaign.id}">
+              ✓ Mark as Read
+            </button>
+          </div>` : ''}
+      </div>`;
+  }
+
+  // 53A section
+  let section53a = '';
+  if (show53a) {
+    const { founders, goal1, goal2, goal3, goal4, goal5 } = goals;
+    const goalsCompleted = [goal1, goal2, goal3, goal4, goal5].filter(Boolean).length;
+    const ready = goalsCompleted >= 4;
+
+    const goalRows = [
+      {
+        label: 'Complete 5 Battle Goals each',
+        done: goal1,
+        players: founders.map(p => ({ name: p.player_name, done: (p.battle_goals_completed ?? 0) >= 5, detail: `${p.battle_goals_completed ?? 0}/5` })),
+      },
+      {
+        label: 'Gain 100 experience each',
+        done: goal2,
+        players: founders.map(p => ({ name: p.player_name, done: !!p.xp_100_gained, key: 'xp_100_gained', playerId: p.id })),
+      },
+      {
+        label: 'Spend 60 gold at the Item Shop each',
+        done: goal3,
+        players: founders.map(p => ({ name: p.player_name, done: !!p.gold_60_spent, key: 'gold_60_spent', playerId: p.id })),
+      },
+      {
+        label: 'Loot 1 treasure tile in a scenario each',
+        done: goal4,
+        players: founders.map(p => ({ name: p.player_name, done: !!p.treasure_looted, key: 'treasure_looted', playerId: p.id })),
+      },
+      {
+        label: 'Complete one Side Scenario (#51-55)',
+        done: goal5,
+        party: true,
+        campaignId: campaign.id,
+      },
+    ].map((g, gi) => {
+      const playerPips = g.party ? '' : g.players.map(p => {
+        const isMe = myPlayer && p.playerId === myPlayer.id;
+        const canToggle = isMe && !g.done && !p.done && p.key;
+        return `<span class="party-goal-pip ${p.done ? 'pip-done' : ''}"
+          ${canToggle ? `data-goal-key="${p.key}" data-player-id="${p.playerId}" style="cursor:pointer" title="Mark complete for ${p.name}"` : `title="${p.name}${p.detail ? ' · ' + p.detail : ''}"`}>
+          ${p.done ? '✓' : p.detail ?? '○'}
+        </span>`;
+      }).join('');
+
+      const sideScenarioBtn = g.party && !g.done
+        ? `<button class="party-side-scenario-btn" data-campaign-id="${campaign.id}">Mark Complete</button>`
+        : '';
+
+      return `<div class="party-goal-row ${g.done ? 'party-goal-done' : ''}">
+        <span class="party-goal-check">${g.done ? '✅' : '⬜'}</span>
+        <span class="party-goal-label">${g.label}</span>
+        <div class="party-goal-pips">${playerPips}${sideScenarioBtn}</div>
+      </div>`;
+    }).join('');
+
+    section53a = `
+      <div class="party-tracker">
+        <div class="party-tracker-title">📖 Section 53A <span class="party-tracker-count">${goalsCompleted}/5 goals</span></div>
+        <div class="party-tracker-desc">Complete 4 of 5 party goals to unlock section 53A</div>
+        <div class="party-goal-list">${goalRows}</div>
+        ${ready ? `
+          <div class="party-tracker-banner">
+            Read <strong>Section 53A</strong> from the section book!
+            <button class="party-mark-read-btn" data-tracker="53a" data-campaign-id="${campaign.id}">
+              ✓ Mark as Read
+            </button>
+          </div>` : ''}
+      </div>`;
+  }
+
+  return `
+    <div class="campaign-available-toggle" data-list-id="progress-${campaign.id}">
+      📋 Party Progress
+      <span class="campaign-inactive-chevron">▼</span>
+    </div>
+    <div class="campaign-collapsible" id="progress-${campaign.id}" style="display:none">
+      ${section37d}${section53a}
     </div>`;
 }
 
@@ -652,6 +802,59 @@ function renderDevPicker(players, characters) {
 }
 
 function bindCampaignListEvents(campaigns) {
+  // Party progress — 37D checkboxes
+  document.querySelectorAll('.party-check-box[data-tracker="37d"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const campaignId = btn.dataset.campaignId;
+      const idx = parseInt(btn.dataset.index);
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (!campaign) return;
+      const current = campaign.scenario_completions ?? 0;
+      // Toggle: click filled = unfill back to idx, click empty = fill to idx+1
+      const newVal = idx < current ? idx : idx + 1;
+      await sb().from('campaigns').update({ scenario_completions: newVal }).eq('id', campaignId);
+      loadCampaigns();
+    });
+  });
+
+  // Party progress — mark as read buttons
+  document.querySelectorAll('.party-mark-read-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const campaignId = btn.dataset.campaignId;
+      const tracker = btn.dataset.tracker;
+      const col = tracker === '37d' ? 'read_37d' : 'read_53a';
+      await sb().from('campaigns').update({ [col]: true }).eq('id', campaignId);
+      loadCampaigns();
+      showToast(`Section ${tracker === '37d' ? '37D' : '53A'} marked as read. Tracker removed.`);
+    });
+  });
+
+  // Party progress — player goal pips (XP, gold, treasure)
+  document.querySelectorAll('.party-goal-pip[data-goal-key]').forEach(pip => {
+    pip.addEventListener('click', async e => {
+      e.stopPropagation();
+      const key = pip.dataset.goalKey;
+      const playerId = pip.dataset.playerId;
+      await sb().from('players').update({ [key]: true }).eq('id', playerId);
+      loadCampaigns();
+      showToast('Goal progress updated!');
+    });
+  });
+
+  // Party progress — side scenario complete
+  document.querySelectorAll('.party-side-scenario-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const campaignId = btn.dataset.campaignId;
+      if (!confirm('Mark Side Scenario #51-55 as completed?')) return;
+      await sb().from('campaigns').update({ party_goal_side_scenario: true }).eq('id', campaignId);
+      loadCampaigns();
+      showToast('Side scenario goal completed!');
+    });
+  });
+
   // Deck buttons
   document.querySelectorAll('.campaign-deck-btn').forEach(btn => {
     btn.addEventListener('click', async e => {

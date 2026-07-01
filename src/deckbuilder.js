@@ -380,31 +380,73 @@ function renderDeckBuilder() {
 function renderCardTabs(milestoneCard) {
   const hasMilestone = !db.state.milestone_earned && milestoneCard;
   const hasPq = !!db.character.pq_card_id;
+  const hasGoals = !!db.player?.is_founding_member &&
+    (!db.player.xp_100_gained || !db.player.gold_60_spent);
 
-  // If neither, show nothing
-  if (!hasMilestone && !hasPq) return '';
+  const tabs = [];
+  if (hasMilestone) tabs.push({ id: 'milestone', label: '🏆 Milestone' });
+  if (hasPq)        tabs.push({ id: 'pq',        label: '📜 Personal Quest' });
+  if (hasGoals)     tabs.push({ id: 'goals',     label: '🎯 Goals' });
 
-  // If only one, show it directly without tabs
-  if (hasMilestone && !hasPq) return renderMilestoneTracker(milestoneCard);
-  if (!hasMilestone && hasPq) return renderPqTracker();
+  // Nothing to show
+  if (!tabs.length) return '';
 
-  // Both — show tabbed
-  const milestoneActive = db.activeCardTab === 'milestone';
+  // Single tab — no tab bar needed
+  if (tabs.length === 1) {
+    if (tabs[0].id === 'milestone') return renderMilestoneTracker(milestoneCard);
+    if (tabs[0].id === 'pq')        return renderPqTracker();
+    if (tabs[0].id === 'goals')     return renderGoalsSection();
+  }
+
+  // Ensure activeCardTab is valid for current tabs
+  if (!tabs.find(t => t.id === db.activeCardTab)) db.activeCardTab = tabs[0].id;
+  const active = db.activeCardTab;
+
   return `
     <div class="db-section db-tabbed-section">
       <div class="db-tab-bar">
-        <button class="db-tab ${milestoneActive ? 'db-tab-active' : ''}" data-tab="milestone">
-          🏆 Milestone
-        </button>
-        <button class="db-tab ${!milestoneActive ? 'db-tab-active' : ''}" data-tab="pq">
-          📜 Personal Quest
-        </button>
+        ${tabs.map(t => `
+          <button class="db-tab ${active === t.id ? 'db-tab-active' : ''}" data-tab="${t.id}">
+            ${t.label}
+          </button>`).join('')}
       </div>
       <div class="db-tab-content">
-        ${milestoneActive ? renderMilestoneInner(milestoneCard) : renderPqInner()}
+        ${active === 'milestone' ? renderMilestoneInner(milestoneCard) : ''}
+        ${active === 'pq'        ? renderPqInner() : ''}
+        ${active === 'goals'     ? renderGoalsInner() : ''}
       </div>
     </div>
   `;
+}
+
+function renderGoalsSection() {
+  return `
+    <div class="db-section db-pq-section">
+      <div class="db-section-header">
+        <div class="db-section-title">🎯 Goals</div>
+        <div class="db-section-hint">Mark when completed in Secretariat</div>
+      </div>
+      ${renderGoalsInner()}
+    </div>`;
+}
+
+function renderGoalsInner() {
+  const xpDone   = !!db.player?.xp_100_gained;
+  const goldDone = !!db.player?.gold_60_spent;
+  if (xpDone && goldDone) return '<div style="padding:16px;font-size:13px;color:var(--color-text-secondary,#888)">All personal goals complete!</div>';
+  return `
+    <div class="db-party-goals-list">
+      ${!xpDone ? `
+        <label class="db-party-goal-row">
+          <input type="checkbox" id="db-goal-xp" class="db-goal-checkbox">
+          <span>Gained 100 XP total</span>
+        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Gained 100 XP total</div>'}
+      ${!goldDone ? `
+        <label class="db-party-goal-row">
+          <input type="checkbox" id="db-goal-gold" class="db-goal-checkbox">
+          <span>Spent 60 gold at the Item Shop</span>
+        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Spent 60 gold at Item Shop</div>'}
+    </div>`;
 }
 
 function renderMilestoneInner(card) {
@@ -627,6 +669,24 @@ function bindDeckBuilderEvents() {
       db.activeCardTab = btn.dataset.tab;
       renderDeckBuilder();
     });
+  });
+
+  // Party goal checkboxes (XP and gold)
+  document.getElementById('db-goal-xp')?.addEventListener('change', async e => {
+    if (!e.target.checked) return;
+    if (!confirm('Mark 100 XP gained? This cannot be undone.')) { e.target.checked = false; return; }
+    await sb().from('players').update({ xp_100_gained: true }).eq('id', db.player.id);
+    db.player.xp_100_gained = true;
+    renderDeckBuilder();
+    showToast('100 XP goal marked complete!');
+  });
+  document.getElementById('db-goal-gold')?.addEventListener('change', async e => {
+    if (!e.target.checked) return;
+    if (!confirm('Mark 60 gold spent? This cannot be undone.')) { e.target.checked = false; return; }
+    await sb().from('players').update({ gold_60_spent: true }).eq('id', db.player.id);
+    db.player.gold_60_spent = true;
+    renderDeckBuilder();
+    showToast('60 gold goal marked complete!');
   });
 
   // Build toggles

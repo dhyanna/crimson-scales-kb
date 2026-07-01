@@ -14,7 +14,7 @@ const ALL_CLASSES = {
   chainguard:  { name: "Inox Chainguard",     symbol: "Chained Helm",  icon: "cs-chainguard-icon.svg",  locked: false, pqCards: ["cs-pq-334", "cs-pq-335"] },
   hierophant:  { name: "Human Hierophant",    symbol: "Leaf",          icon: "cs-hierophant-icon.svg",  locked: false, pqCards: ["cs-pq-340", "cs-pq-341"] },
   bombard:     { name: "Quatryl Bombard",     symbol: "Target",        icon: null, locked: false, pqCards: ["cs-pq-330", "cs-pq-331"] },
-  fireknight:  { name: "Valrath Fire Knight", symbol: "Ladder Axe",    icon: null, locked: false, pqCards: ["cs-pq-338", "cs-pq-339"] },
+  fireknight:  { name: "Valrath Fire Knight", symbol: "Ladder Axe",    icon: "cs-fireknight-icon.svg", locked: false, pqCards: ["cs-pq-338", "cs-pq-339"] },
   brightspark: { name: "Human Brightspark",   symbol: "Flask",         icon: null, locked: false, pqCards: ["cs-pq-332", "cs-pq-333"] },
   starslinger: { name: "Aesther Starslinger", symbol: "Galaxy",        icon: null, locked: false, pqCards: ["cs-pq-350", "cs-pq-351"] },
   // Crimson Scales — always locked
