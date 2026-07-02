@@ -119,7 +119,7 @@ const STARTING_GROUPS = {
   naturalists:  { name: "Naturalists",  icon: '<img src="naturalists.png" class="wizard-group-img-icon" alt="Naturalists">', tagline: "Masters of terrain, conditions, and the wild", classes: ["mirefoot","hollowpact","chieftain","luminary"], description: "The Naturalists excel at controlling the battlefield with terrain and conditions." },
   militants:    { name: "Militants",    icon: "⚔️", tagline: "Front-line fighters built for aggression",      classes: ["bombard","fireknight","hierophant","mirefoot"],     description: "Coming soon — class guides in development." },
   protectors:   { name: "Protectors",  icon: "🛡️", tagline: "Shields and support for the whole party",       classes: ["chainguard","chieftain","fireknight","hierophant"],  description: "A defensively-minded group built around tanking, healing, and team support — Chainguard and Chieftain hold the front line while Fire Knight and Hierophant keep everyone alive and buffed." },
-  explorers:    { name: "Explorers",   icon: "🗺️", tagline: "Mobility, looting, and scenario objectives",    classes: ["brightspark","chainguard","hollowpact","starslinger"], description: "Coming soon — class guides in development." },
+  explorers:    { name: "Explorers",   icon: "🗺️", tagline: "Mobility, looting, and scenario objectives",    classes: ["brightspark","chainguard","hollowpact","starslinger"], description: "A hard-hitting offensive group — Bombard lays down Projectile devastation from range while Hierophant buffs and heals, Mirefoot applies upgraded conditions, and Fire Knight provides adjacency support and AoE." },
   trailblazers: { name: "Trailblazers",icon: "🔥", tagline: "Blazing a path through any obstacle",          classes: ["bombard","brightspark","luminary","starslinger"],    description: "Coming soon — class guides in development." },
 };
 
@@ -132,6 +132,9 @@ const CLASS_DISPLAY = {
   hierophant: { name: "Human Hierophant",   symbol: "Leaf",         icon: "cs-hierophant-icon.svg" },
   bombard:    { name: "Quatryl Bombard",    symbol: "Target",       icon: null },
   fireknight: { name: "Valrath Fire Knight",symbol: "Ladder Axe",   icon: "cs-fireknight-icon.svg" },
+  starslinger: { name: "Aesther Starslinger", symbol: "Galaxy",       icon: "cs-starslinger-icon.svg" },
+  brightspark:{ name: "Human Brightspark",   symbol: "Flask",        icon: "cs-brightspark-icon.svg" },
+  bombard:    { name: "Quatryl Bombard",     symbol: "Target",       icon: "cs-bombard-icon.svg" },
   brightspark:{ name: "Human Brightspark",  symbol: "Flask",        icon: null },
   starslinger:{ name: "Aesther Starslinger",symbol: "Galaxy",       icon: null },
 };

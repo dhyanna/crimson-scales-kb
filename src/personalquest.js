@@ -13,10 +13,10 @@ const ALL_CLASSES = {
   luminary:    { name: "Lurker Luminary",     symbol: "Crescent Sun",  icon: "cs-luminary-icon.svg",    locked: false, pqCards: ["cs-pq-344", "cs-pq-345"] },
   chainguard:  { name: "Inox Chainguard",     symbol: "Chained Helm",  icon: "cs-chainguard-icon.svg",  locked: false, pqCards: ["cs-pq-334", "cs-pq-335"] },
   hierophant:  { name: "Human Hierophant",    symbol: "Leaf",          icon: "cs-hierophant-icon.svg",  locked: false, pqCards: ["cs-pq-340", "cs-pq-341"] },
-  bombard:     { name: "Quatryl Bombard",     symbol: "Target",        icon: null, locked: false, pqCards: ["cs-pq-330", "cs-pq-331"] },
+  bombard:     { name: "Quatryl Bombard",     symbol: "Target",        icon: "cs-bombard-icon.svg", locked: false, pqCards: ["cs-pq-330", "cs-pq-331"] },
   fireknight:  { name: "Valrath Fire Knight", symbol: "Ladder Axe",    icon: "cs-fireknight-icon.svg", locked: false, pqCards: ["cs-pq-338", "cs-pq-339"] },
-  brightspark: { name: "Human Brightspark",   symbol: "Flask",         icon: null, locked: false, pqCards: ["cs-pq-332", "cs-pq-333"] },
-  starslinger: { name: "Aesther Starslinger", symbol: "Galaxy",        icon: null, locked: false, pqCards: ["cs-pq-350", "cs-pq-351"] },
+  brightspark: { name: "Human Brightspark",   symbol: "Flask",         icon: "cs-brightspark-icon.svg", locked: false, pqCards: ["cs-pq-332", "cs-pq-333"] },
+  starslinger: { name: "Aesther Starslinger", symbol: "Galaxy",        icon: "cs-starslinger-icon.svg", locked: false, pqCards: ["cs-pq-350", "cs-pq-351"] },
   // Crimson Scales — always locked
   amberaegis:  { name: "Harrower Amber Aegis",   symbol: "Beetle",        icon: null, locked: true, pqCards: ["cs-pq-aa-001", "cs-pq-aa-002"] },
   artificer:   { name: "Quatryl Artificer",       symbol: "Tools",         icon: null, locked: true, pqCards: ["cs-pq-qa-001", "cs-pq-qa-002"] },

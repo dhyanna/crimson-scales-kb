@@ -1077,6 +1077,218 @@
     .new-char-symbol { font-size: 13px; font-weight: 700; color: var(--color-accent, #c9a84c); }
     .new-char-kb-badge { font-size: 10px; color: #6dc86d; margin-top: 4px; }
 
+    /* ── Page Layout with Sidebar ── */
+    .page-layout {
+      display: flex;
+      min-height: calc(100vh - 56px); /* subtract header height */
+    }
+    .class-sidebar {
+      width: 220px;
+      min-width: 220px;
+      background: var(--color-surface, #1e1e2e);
+      border-right: 1px solid var(--color-border, #333);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 56px;
+      left: 0;
+      height: calc(100vh - 56px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      transition: width 0.2s ease, min-width 0.2s ease;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .class-sidebar.sidebar-collapsed {
+      width: 44px;
+      min-width: 44px;
+    }
+    .main {
+      flex: 1;
+      min-width: 0;
+      margin-left: 220px;
+      transition: margin-left 0.2s ease;
+    }
+    .sidebar-collapsed ~ .main,
+    .page-layout:has(.sidebar-collapsed) .main {
+      margin-left: 44px;
+    }
+    .sidebar-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 8px 0;
+      background: none;
+      border: none;
+      border-bottom: 1px solid var(--color-border, #333);
+      color: var(--color-text-secondary, #888);
+      cursor: pointer;
+      font-size: 11px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .sidebar-toggle:hover { color: var(--color-text, #e0e0e0); }
+    .class-nav {
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0;
+      overflow: hidden;
+    }
+    .sidebar-section {
+      margin-bottom: 8px;
+    }
+    .sidebar-section-toa {
+      border-top: 1px solid var(--color-border, #333);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+    .sidebar-section-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-accent, #c9a84c);
+      padding: 4px 12px 2px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .sidebar-group-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary, #888);
+      padding: 6px 12px 2px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .sidebar-group-label-locked { color: #555; }
+    .class-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 12px;
+      background: none;
+      border: none;
+      border-left: 3px solid transparent;
+      color: var(--color-text, #e0e0e0);
+      font-size: 12px;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+    }
+    .class-btn:hover:not(:disabled) {
+      background: rgba(201,168,76,0.08);
+      color: var(--color-accent, #c9a84c);
+    }
+    .class-btn.active {
+      background: rgba(201,168,76,0.12);
+      border-left-color: var(--color-accent, #c9a84c);
+      color: var(--color-accent, #c9a84c);
+      font-weight: 600;
+    }
+    .sidebar-btn-locked {
+      opacity: 0.4;
+      cursor: not-allowed;
+      font-style: italic;
+    }
+    .sidebar-class-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      filter: brightness(0) invert(0.7);
+    }
+    .class-btn.active .sidebar-class-icon {
+      filter: brightness(0) invert(1) sepia(1) saturate(2) hue-rotate(5deg);
+    }
+    .sidebar-class-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: opacity 0.2s;
+    }
+    .sidebar-lock-icon { font-size: 10px; flex-shrink: 0; }
+    /* Collapsed sidebar hides text */
+    .sidebar-collapsed .sidebar-class-name,
+    .sidebar-collapsed .sidebar-section-title,
+    .sidebar-collapsed .sidebar-group-label {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .sidebar-collapsed .class-btn {
+      padding: 8px;
+      justify-content: center;
+    }
+    .sidebar-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+    /* ── Tabs ── */
+    .tab-pane { display: none !important; }
+    .tab-pane.active { display: block !important; min-height: 200px; }
+
+    /* ── Tips ── */
+    .tips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      padding: 20px;
+    }
+    .tip-card {
+      background: var(--color-card, #252538);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .tip-category {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-accent, #c9a84c);
+      margin-bottom: 8px;
+    }
+    .tip-text {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--color-text, #e0e0e0);
+    }
+
+    /* ── Perks Tab ── */
+    .perks-commentary {
+      font-size: 14px;
+      color: var(--color-text, #e0e0e0);
+      line-height: 1.7;
+      padding: 24px;
+      border-radius: 8px;
+    }
+
+    .sidebar-section-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 6px 12px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--color-accent, #c9a84c);
+    }
+    .sidebar-section-toggle:hover { opacity: 0.8; }
+    .sidebar-section-title-sub {
+      color: var(--color-text-secondary, #888);
+      font-size: 9px;
+    }
+    .sidebar-toggle-chevron {
+      font-size: 10px;
+      color: var(--color-text-secondary, #888);
+      flex-shrink: 0;
+    }
+    .sidebar-section-body { overflow: hidden; }
+    .sidebar-section-body-hidden { display: none; }
+    .sidebar-collapsed .sidebar-section-toggle { justify-content: center; }
+    .sidebar-collapsed .sidebar-toggle-chevron { display: none; }
+
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -1160,15 +1372,7 @@
           <div class="brand-sub">Class Knowledge Base</div>
         </div>
       </div>
-      <nav class="class-nav" id="class-nav">
-        <button class="class-btn active" data-class="chainguard">Inox Chainguard</button>
-        <button class="class-btn" data-class="luminary">Lurker Luminary</button>
-        <button class="class-btn" data-class="chieftain">Orchid Chieftain</button>
-        <button class="class-btn" data-class="hierophant">Human Hierophant</button>
-        <button class="class-btn" data-class="hollowpact">Savvas Hollowpact</button>
-        <button class="class-btn" data-class="mirefoot">Quatryl Mirefoot</button>
-        <button class="class-btn" data-class="fireknight">Valrath Fire Knight</button>
-      </nav>
+
       <div class="nav-campaign-row">
         <button class="campaign-nav-btn" id="open-campaigns-btn">🎲 Campaigns</button>
       </div>
@@ -1212,6 +1416,124 @@
       <div id="wizard-content" class="wizard-content"></div>
     </div>
   </div>
+
+  <div class="page-layout">
+
+    <!-- ── CLASS SIDEBAR ── -->
+    <aside class="class-sidebar" id="class-sidebar">
+      <button class="sidebar-toggle" id="sidebar-toggle" title="Toggle sidebar">
+        <span class="sidebar-toggle-icon">◀</span>
+      </button>
+      <nav class="class-nav" id="class-nav">
+
+        <div class="sidebar-section">
+          <div class="sidebar-section-title">Crimson Scales</div>
+          <button class="sidebar-section-toggle" data-target="guides-list">
+            <span class="sidebar-group-label" style="padding:0;margin:0">Guides Available</span>
+            <span class="sidebar-toggle-chevron">▾</span>
+          </button>
+          <div class="sidebar-section-body" id="guides-list">
+            <button class="class-btn" data-class="starslinger">
+              <img src="cs-starslinger-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Aesther Starslinger</span>
+            </button>
+            <button class="class-btn" data-class="brightspark">
+              <img src="cs-brightspark-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Human Brightspark</span>
+            </button>
+            <button class="class-btn" data-class="hierophant">
+              <img src="cs-hierophant-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Human Hierophant</span>
+            </button>
+            <button class="class-btn active" data-class="chainguard">
+              <img src="cs-chainguard-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Inox Chainguard</span>
+            </button>
+            <button class="class-btn" data-class="luminary">
+              <img src="cs-luminary-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Lurker Luminary</span>
+            </button>
+            <button class="class-btn" data-class="chieftain">
+              <img src="cs-chieftain-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Orchid Chieftain</span>
+            </button>
+            <button class="class-btn" data-class="bombard">
+              <img src="cs-bombard-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Quatryl Bombard</span>
+            </button>
+            <button class="class-btn" data-class="mirefoot">
+              <img src="cs-mirefoot-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Quatryl Mirefoot</span>
+            </button>
+            <button class="class-btn" data-class="hollowpact">
+              <img src="cs-hollowpact-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Savvas Hollowpact</span>
+            </button>
+            <button class="class-btn" data-class="fireknight">
+              <img src="cs-fireknight-icon.svg" class="sidebar-class-icon" alt="">
+              <span class="sidebar-class-name">Valrath Fire Knight</span>
+            </button>
+          </div>
+
+          <button class="sidebar-section-toggle sidebar-section-toggle-collapsed" data-target="locked-list">
+            <span class="sidebar-group-label sidebar-group-label-locked" style="padding:0;margin:0">Locked Classes</span>
+            <span class="sidebar-toggle-chevron">▸</span>
+          </button>
+          <div class="sidebar-section-body sidebar-section-body-hidden" id="locked-list">
+            <button class="class-btn sidebar-btn-locked" disabled data-class="amberaegis">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Harrower Amber Aegis</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="shardrender">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Orchid Shardrender</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="artificer">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Quatryl Artificer</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="vanquisher">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Valrath Vanquisher</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="ruinmaw">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Vermling Ruinmaw</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="spiritcaller">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Vermling Spirit Caller</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="sidebar-section sidebar-section-toa">
+          <button class="sidebar-section-toggle sidebar-section-toggle-collapsed" data-target="toa-list">
+            <span class="sidebar-section-title">Trail of Ashes</span>
+            <span class="sidebar-toggle-chevron">▸</span>
+          </button>
+          <div class="sidebar-section-body sidebar-section-body-hidden" id="toa-list">
+            <button class="class-btn sidebar-btn-locked" disabled data-class="incarnate">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Inox Incarnate</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="tempest">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Orchid Tempest</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="thornreaper">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Orchid Thornreaper</span>
+            </button>
+            <button class="class-btn sidebar-btn-locked" disabled data-class="rimehearth">
+              <span class="sidebar-lock-icon">🔒</span>
+              <span class="sidebar-class-name">Savvas Rimehearth</span>
+            </button>
+          </div>
+        </div>
+
+      </nav>
+    </aside>
 
   <main class="main" id="app">
 
@@ -1346,16 +1668,7 @@
 
         <!-- PERKS -->
         <section class="tab-pane" id="tab-perks">
-          <div class="perks-header">
-            <div class="perks-header-text">
-              <p id="perks-desc">Tap a checkbox to mark a perk as taken. Remove -1 cards first, then prioritize rolling modifiers.</p>
-            </div>
-            <div class="perks-progress">
-              <span id="perks-taken">0</span> / <span id="perks-total">0</span> taken
-              <button class="reset-perks-btn" id="reset-perks">Reset</button>
-            </div>
-          </div>
-          <div class="perks-list" id="perks-list"></div>
+          <div class="perks-commentary" id="perks-desc"></div>
         </section>
 
 
@@ -1407,11 +1720,6 @@
 
           </div>
         </section>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
         <!-- TIPS -->
         <section class="tab-pane" id="tab-tips">
@@ -1421,6 +1729,7 @@
       </div>
     </div>
   </main>
+  </div><!-- /.page-layout -->
 
   <footer class="site-footer">
     <div class="footer-inner">
@@ -1445,6 +1754,9 @@
   <script src="data-hollowpact.js"></script>
   <script src="data-mirefoot.js"></script>
   <script src="data-fireknight.js"></script>
+  <script src="data-bombard.js"></script>
+  <script src="data-brightspark.js"></script>
+  <script src="data-starslinger.js"></script>
   <script src="app.js"></script>
   <script src="campaign.js"></script>
   <script src="personalquest.js"></script>

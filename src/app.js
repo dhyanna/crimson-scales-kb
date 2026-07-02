@@ -13,12 +13,22 @@
     hollowpact: HOLLOWPACT_DATA,
     mirefoot: MIREFOOT_DATA,
     fireknight: FIREKNIGHT_DATA,
+    bombard: BOMBARD_DATA,
+    brightspark: BRIGHTSPARK_DATA,
+    starslinger: STARSLINGER_DATA,
   };
   window.CLASS_REGISTRY = CLASS_REGISTRY;
 
   // Expose switchClass for external use (e.g. campaign panel guide links)
   window.switchClass = function(cls) {
     if (!CLASS_REGISTRY[cls]) return;
+    // Expand sidebar if collapsed
+    const sidebar = document.getElementById('class-sidebar');
+    if (sidebar?.classList.contains('sidebar-collapsed')) {
+      sidebar.classList.remove('sidebar-collapsed');
+      const icon = document.querySelector('.sidebar-toggle-icon');
+      if (icon) icon.textContent = '◀';
+    }
     const btn = document.querySelector(`.class-btn[data-class="${cls}"]`);
     if (btn) btn.click();
   };
@@ -31,7 +41,7 @@
     activeBuild: null,
     cardSearch: "",
     expandedBuild: null,
-    perksChecked: {},
+
   };
 
   function activeClassData() {
@@ -74,7 +84,8 @@
     bindCardSearch();
     bindBuildPanels();
     bindBannerClear();
-    bindPerkReset();
+    bindSidebarSectionToggles();
+
     renderMilestone();
     renderOverview();
     renderBuilds();
@@ -344,70 +355,15 @@
 
   // ===== RENDER PERKS =====
   function renderPerks() {
+    const desc = document.getElementById("perks-desc");
+    if (!desc) return;
+    const bd = CLASS_BUILDS[state.activeClass];
+    desc.textContent = bd?.perksDesc ?? "Perks are tracked and applied in Secretariat. Refer to the Builds tab for perk selection guidance.";
     const list = document.getElementById("perks-list");
-    if (!list) return;
-
-    const data = activeClassData();
-    let totalCount = 0;
-    let html = "";
-
-    data.perks.forEach((perk, perkIdx) => {
-      for (let i = 0; i < perk.count; i++) {
-        const key = `${perkIdx}-${i}`;
-        totalCount++;
-        const countLabel = perk.count > 1 ? `<em>(${i + 1}/${perk.count})</em>` : "";
-        html += `
-          <div class="perk-row" data-key="${key}" role="button" tabindex="0" aria-pressed="${!!state.perksChecked[key]}">
-            <div class="perk-checkbox${state.perksChecked[key] ? " checked" : ""}" aria-hidden="true"></div>
-            <div class="perk-label">${countLabel}${perk.text}</div>
-          </div>
-        `;
-      }
-    });
-
-    list.innerHTML = html;
-
-    const totalEl = document.getElementById("perks-total");
-    if (totalEl) totalEl.textContent = totalCount;
-    updatePerkCount();
-
-    list.addEventListener("click", (e) => {
-      const row = e.target.closest(".perk-row");
-      if (!row) return;
-      const key = row.dataset.key;
-      state.perksChecked[key] = !state.perksChecked[key];
-      const checkbox = row.querySelector(".perk-checkbox");
-      if (checkbox) checkbox.classList.toggle("checked", state.perksChecked[key]);
-      row.setAttribute("aria-pressed", state.perksChecked[key]);
-      updatePerkCount();
-    });
-
-    list.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        const row = e.target.closest(".perk-row");
-        if (row) row.click();
-      }
-    });
+    if (list) list.innerHTML = "";
   }
 
-  function updatePerkCount() {
-    const takenEl = document.getElementById("perks-taken");
-    if (!takenEl) return;
-    const count = Object.values(state.perksChecked).filter(Boolean).length;
-    takenEl.textContent = count;
-  }
-
-  function bindPerkReset() {
-    const btn = document.getElementById("reset-perks");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-      state.perksChecked = {};
-      document.querySelectorAll(".perk-checkbox").forEach((cb) => cb.classList.remove("checked"));
-      document.querySelectorAll(".perk-row").forEach((r) => r.setAttribute("aria-pressed", "false"));
-      updatePerkCount();
-    });
-  }
+  function updatePerkCount() {}
 
   // ===== RENDER BUILDS =====
   function renderBuilds() {
@@ -417,9 +373,7 @@
     const bd = CLASS_BUILDS[state.activeClass];
     if (!bd) { container.innerHTML = ""; return; }
 
-    // Update perks description
-    const perksDesc = document.getElementById("perks-desc");
-    if (perksDesc) perksDesc.textContent = bd.perksDesc;
+    // Update perks description is now handled in renderPerks()
 
     const buildsHTML = bd.builds.map((b) => `
       <div class="build-panel" id="bp-${b.id}" data-build="${b.id}">
@@ -470,17 +424,17 @@
   function renderTips() {
     const grid = document.getElementById("tips-grid");
     if (!grid) return;
-
-    grid.innerHTML = activeClassData().tips
-      .map(
-        (tip) => `
+    const tips = activeClassData().tips;
+    if (!tips || !tips.length) {
+      grid.innerHTML = "<div style='padding:20px;color:#888;font-size:13px'>No tips available for this class yet.</div>";
+      return;
+    }
+    grid.innerHTML = tips.map((tip) => `
       <div class="tip-card">
         <div class="tip-category">${tip.category}</div>
         <div class="tip-text">${tip.text}</div>
       </div>
-    `
-      )
-      .join("");
+    `).join("");
   }
 
 
@@ -530,6 +484,34 @@
   }
 
 
+  // ===== SIDEBAR SECTION TOGGLES =====
+  function bindSidebarSectionToggles() {
+    document.querySelectorAll('.sidebar-section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        const isCollapsed = btn.classList.contains('sidebar-section-toggle-collapsed');
+        btn.classList.toggle('sidebar-section-toggle-collapsed', !isCollapsed);
+        target.classList.toggle('sidebar-section-body-hidden', isCollapsed);
+        btn.querySelector('.sidebar-toggle-chevron').textContent = isCollapsed ? '▾' : '▸';
+      });
+    });
+  }
+
+  // ===== SIDEBAR TOGGLE =====
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('class-sidebar');
+  const mainEl = document.getElementById('app');
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('sidebar-collapsed');
+      const collapsed = sidebar.classList.contains('sidebar-collapsed');
+      const icon = sidebarToggle.querySelector('.sidebar-toggle-icon');
+      if (icon) icon.textContent = collapsed ? '▶' : '◀';
+      if (mainEl) mainEl.style.marginLeft = collapsed ? '44px' : '220px';
+    });
+  }
+
   // ===== CLASS NAV =====
   function bindClassNav() {
     const nav = document.getElementById("class-nav");
@@ -544,7 +526,7 @@
       state.activeBuild = null;
       state.cardSearch = "";
       state.expandedBuild = null;
-      state.perksChecked = {};
+
 
       // Update class buttons
       document.querySelectorAll(".class-btn").forEach((b) => {
@@ -614,6 +596,9 @@
       hollowpact: "A medium-low HP Savvas who accumulates and spends Void Energy, manipulates their attack modifier deck with Voidsight, teleports around the battlefield, and deploys Void Pit obstacles that power up higher-level abilities.",
       mirefoot: "A 10-card, low-health Quatryl DPS/Assassin who leverages upgraded conditions (Wound 2, Poison 3) and Difficult Terrain to dash in and out of combat, dealing devastating burst damage while staying mobile and elusive.",
       fireknight: "A dynamic mid-complexity Valrath Vanguard-Support who buffs adjacent allies with Strengthen and Advantage, deploys a Ladder token to choke enemy pathing, and unlocks a Fire Mastery damage engine at higher levels.",
+      starslinger: "A fragile 10-card Aesther who harnesses stellar energy for simultaneous AoE attacks and ally hex-pattern support, with full-health attack bonuses, pseudo-invisibility modes, and Light/Dark element management.",
+      brightspark: "An 11-card Human scientist-adventurer with fragile 8 HP, wielding charge-based persistent effects, chemical AoEs, and a deep toolkit of conditions (Invisible, Stun, Immobilize, Poison, Muddle) for flexible DPS, support, or hybrid play.",
+      bombard: "A 9-card ranged tank Quatryl from a special force squad, played as a hybrid of three styles: Tanking (high HP and Shield options), DPS with Projectiles (delayed detonation double-turns), and ranged AoE damage. Limited movement is offset by latching onto enemies with a grappling hook and pulling toward them.",
     };
     return descs[cls] || "";
   }
@@ -724,6 +709,69 @@
       role: "The Savvas Hollowpact is a 10-card, medium-low HP (7hp at Level 1) class that blends Melee and Ranged abilities with Teleport actions. Unique Void Energy functions like an element that only powers the Hollowpact's own abilities and generates immediately rather than at end of turn. Void Pit obstacles created by many abilities become increasingly central to the class's power at higher levels. A complex class with significant upsides and downsides built into many effects — one of the most complex of the starter Crimson Scales classes.",
       xp: [0,45,95,150,200,275,345,420,500],
       hp: [7,8,10,11,13,14,16,17,17]
+    },
+    starslinger: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-starslinger.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-starslinger-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Hex Patterns",
+          chipClass: "shackle-chip",
+          text: "The Starslinger's AoE abilities feature dual-color hex patterns. Red hexes target enemies; yellow hexes affect allies — providing free movement, invisibility, or small heals. The milestone requires triggering both simultaneously in a single action 10 times. Executing the full combo requires upfront ally coordination and works best with a front-liner who can reliably occupy yellow support hexes. The class innovated this ally-targeting hex pattern before Frosthaven's Bannerspear."
+        },
+        {
+          label: "Mechanic",
+          chip: "Full Health",
+          chipClass: "swing-chip",
+          text: "Many of the Starslinger's most powerful abilities gain bonus damage and/or Advantage when at maximum HP. With a starting health of only 6, this creates a strong incentive for self-preservation over damage absorption. The class supports this through excellent initiative spread (6–90), two pseudo-invisibility modes ('Invisibility Minus' that prevents enemy focus and 'Invisibility Plus' via Lost in the Stars that removes the class from the board entirely), and Light/Dark element management for attack augmentation."
+        }
+      ],
+      role: "The Aesther Starslinger is a fragile 10-card class that heavily rewards maintaining full health. It focuses on healing allies while performing CC or AoE attacks, combining simultaneous enemy damage and ally support through positional hex patterns. The class can be played almost entirely independently through self-preservation and non-loss pseudo-invisibility, or coordinate deeply with allies for maximum hex-pattern payoffs. Excellent initiative spread gives outstanding turn-order control. A class that suits experienced and inexperienced players alike — simple when played independently, deeply satisfying when the hex combos land.",
+      xp: [0,45,95,150,210,275,345,420,500],
+      hp: [6,7,8,9,10,11,12,13,14]
+    },
+    brightspark: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-brightspark.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-brightspark-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Persistent Tracks",
+          chipClass: "shackle-chip",
+          text: "Several Brightspark cards have persistent ability tracks — charge-based effects that stay in play for multiple activations offering healing, conditions, and attacks with advantage. Completing ALL charges counts toward the milestone (10 times). The 11-card hand is uniquely suited to holding multiple persistent cards in the active area simultaneously while still having stamina to spare. Key: leaving persistent cards active reduces effective hand size for the next rest cycle — balance XP gain against stamina needs."
+        },
+        {
+          label: "Mechanic",
+          chip: "Wild Element",
+          chipClass: "swing-chip",
+          text: "Elemental generation is light early on but grows across all elements at higher levels, with Wind and Light as primary focuses. The class can go Invisible — a rare and powerful survivability tool for the fragile 8-HP frame. Many cards offer dual-use top/bottom options letting you pivot between crowd control (push/pull) and buffing/healing. The wild element perk ('consume wild to add +2 Attack') is the class's signature modifier; the triple-checkbox makes it the highest-priority perk to complete."
+        }
+      ],
+      role: "The Human Brightspark is a versatile scientist who makes use of interesting 'experimental' persistent losses and charge-based persistent trackers to introduce cool combinations that can be played without losing the card. Intensely packed with scientific flavor, players can take the role of high damage output, boost teammates with various support actions, or create a hybrid of DPS/support. With a deep 11-card hand but fragile 8 HP, the Brightspark manipulates the battlefield with powerful chemical concoctions, buffs, and ranged attacks rather than engaging in melee. The toolkit feel — Invisible, Immobilize, Poison, Disarm, Stun, Muddle, Heal, Pierce, elemental generation — makes it superb for new players and scenario-to-scenario hand customization.",
+      xp: [0,45,95,150,210,275,345,420,500],
+      hp: [8,9,11,12,14,15,17,18,20]
+    },
+    bombard: {
+      matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-bombard.png",
+      matBack:  "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-bombard-back.png",
+      mechanics: [
+        {
+          label: "Unique mechanic",
+          chip: "Projectile",
+          chipClass: "shackle-chip",
+          text: "Place a Projectile token on a specific hex during your turn. At the START of your next turn — before normal actions — if an enemy is still standing on that hex, the Projectile detonates. Critical rule: if an enemy's initiative is higher than yours next round, they move before detonation and the hit is lost. This creates a double-turn effect when detonation and a standard attack fire in the same round. The class is played as a hybrid of three styles — Projectile DPS, AoE damage, and Tanking — with the Projectile mechanic being the most distinctive and planning-intensive of the three."
+        },
+        {
+          label: "Mechanic",
+          chip: "Shield & Control",
+          chipClass: "swing-chip",
+          text: "The Bombard has high HP and strong Shield cards for a ranged class, allowing it to sustain hits while deploying Projectiles at close range. Shield options are tailored for melee OR ranged attacks — not both — so read the enemy composition carefully. Movement is limited compared to other ranged classes; the primary movement mechanic involves latching onto enemies with the Grappling Hook and pulling toward them rather than moving freely. Ranged Retaliate is a situational standout for punishing enemies that shoot at you."
+        }
+      ],
+      role: "The Quatryl Bombard belongs to a special force squad tasked with defending Gloomhaven, using military skills and advanced machinery as mercenaries. It is a 9-card ranged tank with high HP, played as a hybrid of three playstyles: Tanking (sustained durability through Shields and Retaliate), DPS with Projectiles (delayed detonation creating devastating double-turns), and ranged AoE damage. Limited movement is a key constraint — the class offsets this by latching onto enemies with a grappling hook and pulling itself toward them rather than moving normally. Players must plan carefully and act strategically to maximize Projectile effectiveness while balancing damage output against damage mitigation.",
+      xp: [0,45,95,150,210,275,345,420,500],
+      hp: [10,12,14,16,18,20,22,24,26]
     },
     mirefoot: {
       matFront: "https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-mirefoot.png",
@@ -1148,6 +1196,206 @@
         { name: "Enervating Strike", desc: "Unconditional Attack + Heal top with Void spends. Reasonable Initiative for a slower-than-average class." },
       ],
     },
+    starslinger: {
+      perksDesc: "Perks are tracked and applied in Secretariat. The Starslinger's perks should reinforce its two core strengths: full-health attack bonuses (add rolling modifiers that trigger when at max health, remove negative cards) and the Light/Dark element engine (add rolling Light and Dark generators). Standard advice: remove -1 and -2 cards first to make the modifier deck more reliable — consistency is especially important for a class where a single bad draw when at full health feels especially costly.",
+      builds: [
+        {
+          id: "dps",
+          icon: "⭐",
+          iconClass: "bruiser-icon",
+          name: "Full Health DPS",
+          tagline: "Self-preservation, full-health attack bonuses, fast initiative",
+          btnClass: "bruiser-btn",
+          desc: "Maximize the full-health attack bonus by staying at maximum HP as much as possible. Use pseudo-invisibility modes to avoid incoming damage, act with fast initiative to strike before dangerous enemies, and unleash the full-health Advantage/bonus damage on each turn. Can be played almost entirely independently of ally positioning.",
+          playstyle: "Open with fast-initiative setup (Lost in the Stars 6, Force Field 9, Plasmatic Power 10) to establish positioning and protection before acting. Use Luminous Blitz (17) and Crashing Flare (26) as reliable fast-initiative non-Loss attacks. Save heavy Loss cards like Starstruck and Aligned Constellations for final rooms when full health can be maintained. Supernova is the core burst card — chain Diamond Rings (Light generation) into Supernova for the recommended opening.",
+          coreCards: [
+            { name: "Supernova", desc: "Level 1 initiative 30 — flagship burst card, chain after Diamond Rings for maximum effect." },
+            { name: "Luminous Blitz", desc: "Level 1 initiative 17 — fastest non-Loss AoE attack, reliable every cycle." },
+            { name: "Plasmatic Power", desc: "Level 5 initiative 10 — powerful Loss with major full-health bonus." },
+            { name: "Absolute Magnitude", desc: "Level 6 initiative 20 — fast non-Loss attack showing true power at full health." },
+            { name: "Pierce the Firmament", desc: "Level 9 initiative 33 — capstone DPS, non-Loss full-health peak damage." },
+            { name: "Lost in the Stars", desc: "Level X initiative 6 — Invisibility Plus for guaranteed full-health setup." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Defying Gravity for mobility and escape to maintain full health" },
+            { lvl: "3", text: "Shooting Stars for non-Loss AoE to add to the damage rotation" },
+            { lvl: "4", text: "Equinox for AoE with Light/Dark balance payoff" },
+            { lvl: "5", text: "Plasmatic Power — powerful full-health Loss for high-value turns" },
+            { lvl: "6", text: "Absolute Magnitude — fast non-Loss true-brightness attack" },
+            { lvl: "7", text: "Stone Meteorite — Loss capstone for maximum full-health damage" },
+            { lvl: "8", text: "Sungaze for Light element consumption into full-health bonus" },
+            { lvl: "9", text: "Pierce the Firmament — non-Loss capstone DPS" },
+          ],
+        },
+        {
+          id: "support",
+          icon: "🌙",
+          iconClass: "trap-icon",
+          name: "Hex Pattern Support",
+          tagline: "Ally positioning in yellow hexes, simultaneous attack/support, Light/Dark",
+          btnClass: "trap-btn",
+          desc: "Maximize the simultaneous ally support and enemy damage potential of the hex pattern cards. Coordinate with allies to occupy yellow support hexes for heals, movement, or invisibility while red hexes damage enemies. Deeply satisfying when it comes together — requires explicit pre-round communication with your party.",
+          playstyle: "Coordinate with your front-liner before each round about which hex positions to occupy. Use Gravitational Flip (13) to reposition enemies into red hex zones. Earthshine (57) and Lucky Stars (74) provide support on turns when hex positioning isn't aligned. Crashing Flare and Shooting Stars are the workhorses of the combo rotation — reliable non-Loss cards that deliver both halves every cycle.",
+          coreCards: [
+            { name: "Crashing Flare", desc: "Level 1 initiative 26 — non-Loss hex pattern combo staple, available every cycle." },
+            { name: "Earthshine", desc: "Level 1 initiative 57 — core support card for ally healing in hex pattern." },
+            { name: "Gravitational Flip", desc: "Level X initiative 13 — repositions enemies into red hexes and allies into yellow." },
+            { name: "Shooting Stars", desc: "Level 3 initiative 54 — reliable mid-game non-Loss hex combo." },
+            { name: "Interplanar Voyager", desc: "Level 9 initiative 24 — non-Loss capstone AoE with full hex pattern support." },
+            { name: "Blue Moon", desc: "Level 6 initiative 79 — powerful late-acting hex combo when positions are committed." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Defying Gravity for mobility to reach optimal hex positions" },
+            { lvl: "3", text: "Shooting Stars — non-Loss hex pattern combo for the mid-game rotation" },
+            { lvl: "4", text: "Wish Upon a Star for reliable ally buff when positioning doesn't align" },
+            { lvl: "5", text: "Shifting Chasma for AoE terrain manipulation to reshape hex patterns" },
+            { lvl: "6", text: "Blue Moon — high-value late-acting hex combo" },
+            { lvl: "7", text: "Eonic Blast for reliable non-Loss AoE damage contribution" },
+            { lvl: "8", text: "Sungaze for AoE hex pattern bottom at fast-medium initiative" },
+            { lvl: "9", text: "Interplanar Voyager — non-Loss capstone combining AoE and full hex support" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Diamond Rings", desc: "Level 1 — essential Light generator and Turn 1 setup card for either build." },
+        { name: "Solar Eclipse", desc: "Level 1 — non-Loss AoE top for consistent damage in any rotation." },
+        { name: "Defying Gravity", desc: "Level 2 — mobility for either self-preservation (DPS) or hex positioning (Support)." },
+        { name: "Deflection", desc: "Milestone reward — AoE top versatile for either build at medium initiative." },
+      ],
+    },
+    brightspark: {
+      perksDesc: "Take all three copies of the triple 'consume wild to add +2 Attack' perk first — this is the class's most powerful modifier and anchors the wild element economy. Follow with the double wild-generation perk (+2 generate wild) for consistent fuel. The double ally-affecting perks (Heal 1 Range 2, Strengthen Range 2) are strong for a support-leaning build with no element setup required.",
+      builds: [
+        {
+          id: "dps",
+          icon: "⚗️",
+          iconClass: "bruiser-icon",
+          name: "Condition DPS",
+          tagline: "Ranged condition damage, AoE, persistent tracks",
+          btnClass: "bruiser-btn",
+          desc: "Apply a rotating arsenal of conditions — Blind, Wound, Immobilize, Poison, Stun, Muddle — to disable and destroy enemies while persistent tracks chip away passively. Exothermic Cocktail and Corrosive Combustion provide AoE condition spreading; Contagious Malady spreads conditions between adjacent enemies for compound efficiency.",
+          playstyle: "Open with fast-initiative condition cards (Contagious Malady 13, Critical Observation 20) to establish conditions before enemies act. Use Exothermic Cocktail as a reliable non-Loss AoE anchor each rest cycle. Save Loss cards like Frozen Explosion and Blinding Lightwaves for high-value rooms where Immobilize or Blind turns the tide. Track persistent card completions for milestone progress.",
+          coreCards: [
+            { name: "Contagious Malady", desc: "Level 1 — initiative 13, spread conditions between adjacent enemies." },
+            { name: "Exothermic Cocktail", desc: "Level 1 — non-Loss AoE, backbone of the rest cycle." },
+            { name: "Critical Observation", desc: "Level 1 — persistent 3-charge condition track, prime milestone contributor." },
+            { name: "Elevated Chemicals", desc: "Level 5 — upgraded conditions for dramatically increased damage." },
+            { name: "Astronomical Strike", desc: "Level 7 — AoE capstone with Loss bottom for critical moments." },
+            { name: "Ultraviolet Rays", desc: "Level 9 — DPS capstone Loss attack." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Transformation Libation for powerful Loss condition application" },
+            { lvl: "3", text: "Electromagnetism — Stun at Level 3 is exceptionally strong" },
+            { lvl: "4", text: "Befuddling Serum for Muddle and a powerful Loss condition bottom" },
+            { lvl: "5", text: "Elevated Chemicals — upgraded conditions multiply damage output" },
+            { lvl: "6", text: "Molecular Hydroblast for strong non-Loss ranged damage" },
+            { lvl: "7", text: "Astronomical Strike — AoE top with Loss bottom flexibility" },
+            { lvl: "8", text: "Critical Hypothesis — fast initiative 16 persistent track" },
+            { lvl: "9", text: "Ultraviolet Rays — capstone DPS Loss" },
+          ],
+        },
+        {
+          id: "support",
+          icon: "💊",
+          iconClass: "trap-icon",
+          name: "Field Medic",
+          tagline: "Heals, Strengthen, condition removal, ally buffs",
+          btnClass: "trap-btn",
+          desc: "Keep the party alive and buffed through strategic healing, Strengthen distribution, and condition removal. The 11-card hand gives room to carry both support and utility cards simultaneously. Preliminary Research's rest benefits compound over a long scenario to give the party a significant stamina advantage.",
+          playstyle: "Prioritize Preliminary Research to optimize every short rest — choose your lost card and refresh a spent item each cycle. Use fast-initiative Strengthen (Strength Elixir 19, Nutrient Overdose 17) before allies act. Antibiotic Boost handles party-wide condition removal mid-scenario. Nourishing Formula and Elixir of Life provide late-game heal throughput for the final rooms.",
+          coreCards: [
+            { name: "Preliminary Research", desc: "Level 1 — initiative 24, choose rest lost card + refresh item. Hold forever." },
+            { name: "Cell Regeneration", desc: "Level 1 — non-Loss heal for consistent throughput." },
+            { name: "Strength Elixir", desc: "Level 4 — fast initiative 19 Strengthen before allies act." },
+            { name: "Antibiotic Boost", desc: "Level 6 — party-wide heal and condition removal." },
+            { name: "Nourishing Formula", desc: "Level 7 — strong non-Loss party heal." },
+            { name: "Elixir of Life", desc: "Level 9 — capstone heal for the support build." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Nutrient Overdose for fast initiative 17 support buff" },
+            { lvl: "3", text: "Weather Forecast for non-Loss persistent utility" },
+            { lvl: "4", text: "Strength Elixir — fast Strengthen for allies" },
+            { lvl: "5", text: "Advanced Research for major recovery utility" },
+            { lvl: "6", text: "Antibiotic Boost — party-wide heal and condition removal" },
+            { lvl: "7", text: "Nourishing Formula — non-Loss party heal" },
+            { lvl: "8", text: "Versatile Concoction for flexible situational support" },
+            { lvl: "9", text: "Elixir of Life — capstone support heal" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Dynamic Balance", desc: "Level 1 — Attack 3, Move 3, or Heal 3 in any order. Exceptional flexibility for either build." },
+        { name: "Magnetic Field", desc: "Level 1 — non-Loss PUSH/PULL repositioning utility for either build." },
+        { name: "Preliminary Research", desc: "Level 1 — hold through the whole campaign regardless of build." },
+        { name: "Creative Sparks", desc: "Milestone reward — flexible medium-initiative card for either build." },
+      ],
+    },
+    bombard: {
+      perksDesc: "The '(+3) if Projectile' double-perk is the class's signature modifier — prioritize both copies early. Pair with Immobilize for controlling problem enemies. Pierce 3 redraw cards complement strength against high-Shield enemies. The Shield 1 Self and Heal 1 Self redraw cards provide passive sustain for the Tank build without burning card slots.",
+      builds: [
+        {
+          id: "projectile",
+          icon: "💣",
+          iconClass: "bruiser-icon",
+          name: "Projectile Artillery",
+          tagline: "Delayed Projectile attacks, Pierce, Immobilize, double-turns",
+          btnClass: "bruiser-btn",
+          desc: "Maximize the Projectile mechanic's delayed detonation for devastating late/early initiative double-turns. Place Projectiles late in each round after enemies have moved, then act early next round to detonate before they respond. Particularly brutal on door-opening rounds.",
+          playstyle: "Open with slow-initiative Projectile placement cards (Consistent Firing 76, Unexpected Bombshell 85, Supercharged Gunpowder 90) paired with fast-initiative detonation cards (Rolling into Position 14, Man the Cannon 21). On door-opening rounds, act late to seed Projectiles in the new room then detonate early next round for maximum impact. The '(+3) if Projectile' perks turn each Projectile trigger into a potential damage spike.",
+          coreCards: [
+            { name: "Consistent Firing", desc: "Level 1 — reliable Projectile setup at slow initiative 76. The backbone of the Projectile engine." },
+            { name: "Rolling into Position", desc: "Level 1 — initiative 14 fast half for late/early pairing strategy." },
+            { name: "Twin Blast", desc: "Level 3 — two Projectile placements in one card, doubling milestone progress per cycle." },
+            { name: "Sharpened Focus", desc: "Level 5 — Pierce cuts through high-Shield problem enemies the class specializes in handling." },
+            { name: "Quadruple Cannons", desc: "Level 8 — four-cannon AoE at initiative 86, the Projectile build's mid-to-late game centerpiece." },
+            { name: "Supercharged Gunpowder", desc: "Level 9 — initiative 90 capstone AoE, the ultimate delayed Projectile payoff." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Rapid Fire for additional Projectile triggers and burst damage" },
+            { lvl: "3", text: "Twin Blast — two Projectile placements per card is exceptional value" },
+            { lvl: "4", text: "Powerful Buckshot for a strong slow-initiative ranged option" },
+            { lvl: "5", text: "Sharpened Focus — Pierce is core for handling problem enemies" },
+            { lvl: "6", text: "Meteoric Blast for a strong mid-game damage card" },
+            { lvl: "7", text: "Ballistic Barrage — multi-hit Loss payoff for boss fights" },
+            { lvl: "8", text: "Quadruple Cannons — AoE evolution of Double Cannons" },
+            { lvl: "9", text: "Supercharged Gunpowder — capstone Projectile AoE nuke" },
+          ],
+        },
+        {
+          id: "tank",
+          icon: "🛡️",
+          iconClass: "trap-icon",
+          name: "Ranged Tank",
+          tagline: "Shield, Retaliate, stationary firing position, self-sustain",
+          btnClass: "trap-btn",
+          desc: "Hold position, absorb damage through carefully chosen Shields, and punish attackers with Ranged Retaliate. The Bombard's ability to tank while dealing consistent ranged damage is a unique and powerful combination — stay still, keep firing, and let enemies hurt themselves on your Retaliate.",
+          playstyle: "Open with fast-initiative defensive setup (Stationary Enhancements 3, Unbreakable Position 15, Distant Retribution 12) to get shields and Retaliate active before enemies act. Then hold your position — Stationary Enhancements rewards not moving with persistent bonuses. Use Hurried Repairs for self-sustain when needed. Ranged Retaliate means enemies taking shots at you from range are actively helping you deal damage.",
+          coreCards: [
+            { name: "Barbed Armor", desc: "Level 1 — fast initiative 13 Shield/Retaliate setup. Remember: Shield works against melee OR ranged, not both." },
+            { name: "Stationary Enhancements", desc: "Level 3 — initiative 3, the fastest card in the deck. Persistent buff for holding position." },
+            { name: "Distant Retribution", desc: "Level 2 — Ranged Retaliate is a situational all-star for punishing enemies that shoot at you." },
+            { name: "Unbreakable Position", desc: "Level 5 — initiative 15, strong persistent Shield for the Tank build's core defense." },
+            { name: "Defense Mechanism", desc: "Level 8 — fast initiative 18, mature defensive toolkit for the late-game Tank build." },
+            { name: "Superior Upgrade", desc: "Level 9 — initiative 9, capstone defensive upgrade for an unbreakable final position." },
+          ],
+          levelups: [
+            { lvl: "2", text: "Distant Retribution for Ranged Retaliate — a situational all-star" },
+            { lvl: "3", text: "Stationary Enhancements — initiative 3 and persistent bonus for holding position" },
+            { lvl: "4", text: "Hurried Repairs for self-sustain while tanking hits" },
+            { lvl: "5", text: "Unbreakable Position — strong persistent Shield for the Tank build" },
+            { lvl: "6", text: "Meteoric Blast for continued ranged damage output while tanking" },
+            { lvl: "7", text: "Airborne Skyrocket for long-range engagement without repositioning" },
+            { lvl: "8", text: "Defense Mechanism — fast initiative mature defensive toolkit" },
+            { lvl: "9", text: "Superior Upgrade — capstone defensive Loss for the ultimate Tank position" },
+          ],
+        },
+      ],
+      bothBuilds: [
+        { name: "Forceful Bolt", desc: "Level 1 — versatile ranged attack with control effect, useful for either build." },
+        { name: "Grappling Hook", desc: "Level 1 — mobility utility for staying at range regardless of build." },
+        { name: "Pummeling Chain", desc: "Milestone reward — fast initiative 17, adds Projectile triggers for either build." },
+      ],
+    },
     mirefoot: {
       perksDesc: "Start with replace -2 with 0 and replace -1 with +1 to improve your baseline deck. The 'X based on Poison value' perks are mid-tier — often end up as +1s. Rolling conditional Invisibility perks are great for the Difficult Terrain build. Replacing +1s with +0 Wound 2s is swingy but potentially very powerful if you reliably go before monsters.",
       builds: [
@@ -1326,6 +1574,18 @@
     fireknight: {
       mechanic1: { filter: "support", label: "Support",   tagClass: "tag-shackle" },
       mechanic2: { filter: "fire",    label: "Fire",      tagClass: "tag-trap" },
+    },
+    starslinger: {
+      mechanic1: { filter: "aoe",     label: "AoE",     tagClass: "tag-shackle" },
+      mechanic2: { filter: "support", label: "Support", tagClass: "tag-trap" },
+    },
+    brightspark: {
+      mechanic1: { filter: "condition", label: "Condition", tagClass: "tag-shackle" },
+      mechanic2: { filter: "support",   label: "Support",   tagClass: "tag-trap" },
+    },
+    bombard: {
+      mechanic1: { filter: "projectile", label: "Projectile", tagClass: "tag-shackle" },
+      mechanic2: { filter: "shield",    label: "Shield",     tagClass: "tag-trap" },
     },
   };
 
