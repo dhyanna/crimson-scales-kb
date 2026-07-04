@@ -945,6 +945,33 @@
       color: var(--color-text-secondary, #888);
       padding: 4px 2px;
     }
+    .campaign-card-active {
+      border-color: var(--color-accent, #c9a84c);
+      box-shadow: 0 0 0 1px var(--color-accent, #c9a84c);
+    }
+    .campaign-active-badge {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-accent, #c9a84c);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    .campaign-set-active-bar {
+      padding: 8px 12px 0;
+    }
+    .campaign-set-active-btn {
+      width: 100%;
+      padding: 7px;
+      background: rgba(201,168,76,0.08);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 6px;
+      color: var(--color-accent, #c9a84c);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .campaign-set-active-btn:hover { background: rgba(201,168,76,0.15); }
     .campaign-inactive-toggle {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 10px; margin-top: 8px;
@@ -1263,6 +1290,15 @@
       border-radius: 8px;
     }
 
+    .sidebar-no-guide-badge {
+      font-size: 9px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-left: 4px;
+      color: #666;
+      vertical-align: middle;
+    }
     .sidebar-section-toggle {
       display: flex;
       align-items: center;

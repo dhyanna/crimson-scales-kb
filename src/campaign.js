@@ -148,24 +148,34 @@ async function getCampaigns() {
   const { data, error } = await sb()
     .from('campaigns')
     .select(`*, players(*), characters(*), campaign_unlocked_classes(*)`)
+    .order('is_active', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
+async function setActiveCampaign(campaignId) {
+  // Clear all active flags first, then set the chosen one
+  await sb().from('campaigns').update({ is_active: false }).neq('id', campaignId);
+  const { error } = await sb().from('campaigns').update({ is_active: true }).eq('id', campaignId);
+  if (error) throw error;
+}
+
 async function createCampaign(name, partyName, startingGroup) {
+  // Deactivate any existing active campaign
+  await sb().from('campaigns').update({ is_active: false }).eq('is_active', true);
   const { data, error } = await sb()
     .from('campaigns')
-    .insert({ name, party_name: partyName, starting_group: startingGroup })
+    .insert({ name, party_name: partyName, starting_group: startingGroup, is_active: true })
     .select().single();
   if (error) throw error;
   return data;
 }
 
-async function addPlayerToCampaign(campaignId, playerName, playerEmail, isFoundingMember = false) {
+async function addPlayerToCampaign(campaignId, playerName, playerEmail, isFoundingMember = false, role = 'player') {
   const { data, error } = await sb()
     .from('players')
-    .insert({ campaign_id: campaignId, player_name: playerName, player_email: playerEmail.toLowerCase().trim(), is_founding_member: isFoundingMember })
+    .insert({ campaign_id: campaignId, player_name: playerName, player_email: playerEmail.toLowerCase().trim(), is_founding_member: isFoundingMember, role })
     .select().single();
   if (error) throw error;
   return data;
@@ -186,6 +196,11 @@ async function assignCharacterToPlayer(characterId, playerId) {
     .update({ assigned_player_id: playerId })
     .eq('id', characterId);
   if (error) throw error;
+}
+
+function isCM(players) {
+  const myPlayer = getEffectivePlayer(players);
+  return myPlayer?.role === 'cm';
 }
 
 async function deleteCampaign(id) {
@@ -443,10 +458,12 @@ async function submitCampaign() {
   try {
     const campaign = await createCampaign(wizardState.campaignName, wizardState.partyName, wizardState.selectedGroup);
 
-    // Create all players — mark as founding members
+    // Create all players — first player gets CM role, all are founding members
     const playerRows = [];
-    for (const p of wizardState.players) {
-      const row = await addPlayerToCampaign(campaign.id, p.name, p.email, true);
+    for (let i = 0; i < wizardState.players.length; i++) {
+      const p = wizardState.players[i];
+      const role = i === 0 ? 'cm' : 'player';
+      const row = await addPlayerToCampaign(campaign.id, p.name, p.email, true, role);
       playerRows.push(row);
     }
 
@@ -489,6 +506,9 @@ async function loadCampaigns() {
     }
     container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('');
     bindCampaignListEvents(campaigns);
+    // Update sidebar class grouping from active campaign
+    const activeCampaign = campaigns.find(c => c.is_active) ?? campaigns[0] ?? null;
+    if (window.updateSidebarFromCampaign) window.updateSidebarFromCampaign(activeCampaign);
   } catch (err) {
     container.innerHTML = `<div class="campaigns-error">Error: ${err.message}</div>`;
   }
@@ -616,17 +636,24 @@ function renderCampaignCard(campaign) {
   // Dev picker — shows Players (stable), not characters
   const devPicker = DEV_MODE ? renderDevPicker(players, characters) : '';
 
+  const isActive = !!campaign.is_active;
+  const amCM = isCM(players);
+
   return `
-    <div class="campaign-card" data-id="${campaign.id}">
+    <div class="campaign-card${isActive ? ' campaign-card-active' : ''}" data-id="${campaign.id}">
       <div class="campaign-card-header">
-        <div>
-          ${campaign.party_name ? `<div class="campaign-card-name">${campaign.party_name}</div><div class="campaign-card-party">${campaign.name}</div>` : `<div class="campaign-card-name">${campaign.name}</div>`}
+        <div style="display:flex;align-items:center;gap:8px">
+          ${isActive ? '<span class="campaign-active-badge">● Active</span>' : ''}
+          <div>
+            ${campaign.party_name ? `<div class="campaign-card-name">${campaign.party_name}</div><div class="campaign-card-party">${campaign.name}</div>` : `<div class="campaign-card-name">${campaign.name}</div>`}
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
-          <button class="campaign-plus-btn campaign-add-player-btn" data-campaign-id="${campaign.id}" title="Add Player">＋</button>
-          <button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>
+          ${amCM ? `<button class="campaign-plus-btn campaign-add-player-btn" data-campaign-id="${campaign.id}" title="Add Player">＋</button>` : ''}
+          ${amCM ? `<button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>` : ''}
         </div>
       </div>
+      ${!isActive && amCM ? `<div class="campaign-set-active-bar"><button class="campaign-set-active-btn" data-campaign-id="${campaign.id}">⭐ Set as Active Campaign</button></div>` : ''}
       ${newCharPrompt}
       <div class="campaign-player-group">
         <div class="campaign-player-group-label">Founding Players</div>
@@ -642,9 +669,9 @@ function renderCampaignCard(campaign) {
       ${availableSection}
       ${renderPartyProgress(campaign, players, myPlayer)}
       ${devPicker}
-      <div class="campaign-card-footer">
+      ${amCM ? `<div class="campaign-card-footer">
         <button class="campaign-unlock-btn" data-campaign-id="${campaign.id}">🔓 Unlock Class</button>
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -942,6 +969,20 @@ function bindCampaignListEvents(campaigns) {
       e.preventDefault(); e.stopPropagation();
       if (window.switchClass) window.switchClass(link.dataset.class);
       closeCampaignPanel();
+    });
+  });
+
+  // Set Active Campaign
+  document.querySelectorAll('.campaign-set-active-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      const campaignId = btn.dataset.campaignId;
+      try {
+        await setActiveCampaign(campaignId);
+        await loadCampaigns();
+        showToast('Campaign set as active!');
+      } catch (err) {
+        showToast('Error: ' + err.message, true);
+      }
     });
   });
 
