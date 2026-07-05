@@ -34,6 +34,15 @@ const ALL_CLASSES = {
 
 // PQ card id → class id mapping
 const PQ_UNLOCKS_CLASS = {};
+
+// PQ tracker data: count = total checkboxes, condition = display text
+// Add entries here as new PQ cards are encountered in the campaign
+const PQ_TRACKER_DATA = {
+  'cs-pq-338':  { count: 15, condition: "Kill an enemy and loot its money token in the same round." },
+  'cs-pq-347':  { count: 20, condition: "Poison 20 different types of monsters. Each monster type only counts once regardless of how many times it is poisoned." },
+  'toa-pq-645': { count: 20, condition: "Kill an enemy whose initiative is at least 20 slower than yours that round." },
+  'toa-pq-647': { count: 4,  condition: "Complete a scenario that uses at least one Bush, Tree, or Thorns overlay tile in its setup. The tile must be part of the scenario setup, not placed during play." },
+};
 for (const [classId, cls] of Object.entries(ALL_CLASSES)) {
   for (const pqId of cls.pqCards) {
     PQ_UNLOCKS_CLASS[pqId] = classId;

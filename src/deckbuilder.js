@@ -90,6 +90,20 @@ async function saveMilestoneChecks(checks) {
   db.state.milestone_checks = checks;
 }
 
+async function savePqChecks(checks) {
+  await sb().from('character_state')
+    .update({ pq_checks: checks, updated_at: new Date().toISOString() })
+    .eq('id', db.state.id);
+  db.state.pq_checks = checks;
+}
+
+async function completePq() {
+  await sb().from('character_state')
+    .update({ pq_completed: true, updated_at: new Date().toISOString() })
+    .eq('id', db.state.id);
+  db.state.pq_completed = true;
+}
+
 async function earnMilestone() {
   const classId = db.character.class_id;
   const rewardId = MILESTONE_REWARD_IDS[classId];
@@ -477,15 +491,47 @@ function renderPqInner() {
   const pqId = db.character.pq_card_id;
   const unlocksClassId = PQ_UNLOCKS_CLASS[pqId];
   const unlocksClass = unlocksClassId ? (ALL_CLASSES[unlocksClassId]?.name ?? unlocksClassId) : 'Unknown';
+  const tracker = PQ_TRACKER_DATA[pqId];
+  const checks = db.state.pq_checks ?? 0;
+  const completed = db.state.pq_completed ?? false;
+
+  let trackerHtml = '';
+  if (tracker) {
+    const boxes = Array.from({ length: tracker.count }, (_, i) =>
+      `<button class="db-check-box ${i < checks ? 'db-check-filled' : ''}" data-pq-check="${i}">
+        ${i < checks ? '✓' : ''}
+      </button>`
+    ).join('');
+    trackerHtml = `
+      <div class="db-checks-label" style="margin-top:12px">${tracker.condition}</div>
+      <div class="db-checks-label" style="margin-top:4px">${checks}/${tracker.count} complete</div>
+      <div class="db-checks-grid" style="margin-top:8px">${boxes}</div>
+      ${completed ? `
+        <div class="db-milestone-earned-banner" style="margin-top:12px">
+          ⚔️ Ready to Retire! Speak with your Campaign Manager between scenarios.
+        </div>` : checks >= tracker.count ? `
+        <button class="db-btn db-btn-primary" id="db-complete-pq" style="margin-top:12px">
+          ⚔️ Mark Quest Complete
+        </button>` : ''}
+    `;
+  } else {
+    trackerHtml = `
+      <p class="db-checks-label" style="margin-top:8px">
+        Complete the quest criteria shown on your PQ card to retire your character
+        and unlock <strong>${unlocksClass}</strong> for the campaign.
+      </p>
+      <p class="db-checks-label" style="margin-top:8px">
+        Use the <strong>Retire / Set Aside</strong> button in the header when ready.
+      </p>
+    `;
+  }
+
   return `
     <div class="db-milestone-inner">
       <img src="${pqCardUrl(pqId)}" class="db-milestone-img db-pq-img" alt="Personal Quest card">
       <div class="db-milestone-checks">
         <div class="db-checks-label">Retirement unlocks: <strong>${unlocksClass}</strong></div>
-        <p class="db-checks-label" style="margin-top:8px">
-          Complete the quest criteria shown on your PQ card. When ready, use
-          <strong>Retire / Set Aside</strong> in the header.
-        </p>
+        ${trackerHtml}
       </div>
     </div>
   `;
@@ -495,24 +541,16 @@ function renderPqTracker() {
   const pqId = db.character.pq_card_id;
   const unlocksClassId = PQ_UNLOCKS_CLASS[pqId];
   const unlocksClass = unlocksClassId ? (ALL_CLASSES[unlocksClassId]?.name ?? unlocksClassId) : 'Unknown';
+  const tracker = PQ_TRACKER_DATA[pqId];
+  const checks = db.state.pq_checks ?? 0;
+  const hint = tracker ? `${checks}/${tracker.count} · Unlocks: ${unlocksClass}` : `Unlocks: ${unlocksClass}`;
   return `
     <div class="db-section db-pq-section">
       <div class="db-section-header">
         <div class="db-section-title">📜 Personal Quest</div>
-        <div class="db-section-hint">Retirement unlocks: ${unlocksClass}</div>
+        <div class="db-section-hint">${hint}</div>
       </div>
-      <div class="db-milestone-inner">
-        <img src="${pqCardUrl(pqId)}" class="db-milestone-img db-pq-img" alt="Personal Quest card">
-        <div class="db-milestone-checks">
-          <p class="db-checks-label">
-            Complete the quest criteria shown on your PQ card to retire your character
-            and unlock <strong>${unlocksClass}</strong> for the campaign.
-          </p>
-          <p class="db-checks-label" style="margin-top:8px">
-            Use the <strong>Retire / Set Aside</strong> button in the header when ready.
-          </p>
-        </div>
-      </div>
+      ${renderPqInner()}
     </div>
   `;
 }
@@ -703,11 +741,35 @@ function bindDeckBuilderEvents() {
     btn.addEventListener('click', async () => {
       const i = parseInt(btn.dataset.check);
       const checks = db.state.milestone_checks;
-      // Toggle: if clicking the last filled box remove it, otherwise fill up to i+1
       const newChecks = (i < checks) ? i : i + 1;
       await saveMilestoneChecks(newChecks);
       renderDeckBuilder();
     });
+  });
+
+  // PQ checkbox handler
+  document.querySelectorAll('[data-pq-check]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const i = parseInt(btn.dataset.pqCheck);
+      const checks = db.state.pq_checks ?? 0;
+      const newChecks = (i < checks) ? i : i + 1;
+      await savePqChecks(newChecks);
+      // Check if all boxes now filled — prompt to mark complete
+      const tracker = PQ_TRACKER_DATA[db.character.pq_card_id];
+      if (tracker && newChecks >= tracker.count && !db.state.pq_completed) {
+        renderDeckBuilder();
+        // Show complete button, handled below
+      } else {
+        renderDeckBuilder();
+      }
+    });
+  });
+
+  // Mark PQ complete button
+  document.getElementById('db-complete-pq')?.addEventListener('click', async () => {
+    await completePq();
+    renderDeckBuilder();
+    showToast('⚔️ Quest complete! Speak with your Campaign Manager to retire between scenarios.');
   });
 
   // Card move buttons
