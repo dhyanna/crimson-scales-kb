@@ -33,15 +33,76 @@ const ALL_CLASSES = {
 };
 
 // PQ card id → class id mapping
+// Milestone tracker data: condition text for each class
+// All milestones require 10 completions
+const MILESTONE_TRACKER_DATA = {
+  // ── Crimson Scales ──────────────────────────────────────────────
+  amberaegis:   "Place a Colony token.",
+  artificer:    "Accumulate and spend Scrap (10 times).",
+  bombard:      "Trigger a Projectile ability.",
+  brightspark:  "Complete all of the persistent tracks of an action on an ability card.",
+  chainguard:   "Kill a Shackled enemy.",
+  chieftain:    "Perform a summon action and mount the summon during the same turn.",
+  fireknight:   "Place your Ladder and end your turn on it during the same turn.",
+  hierophant:   "Give an ally one Prayer ability card and experience them playing it.",
+  hollowpact:   "Perform Voidsight while you have at least one Void Energy token.",
+  luminary:     "Consume an element to perform a Glow action.",
+  mirefoot:     "Apply POISON 2 or WOUND 2 to an enemy.",
+  ruinmaw:      "Become Sated.",
+  spiritcaller: "Experience a Spirit dying in a hex adjacent to you.",
+  starslinger:  "Affect an ally in a yellow hex and target an enemy in a red hex during the same action.",
+  shardrender:  "Move the character token off the last use slot of a Crystallize.",
+  vanquisher:   "Play a Rage card for its top action.",
+  // ── Trail of Ashes ───────────────────────────────────────────────
+  incarnate:    "Experience a turn where you augment two different actions, each with a different spirit.",
+  rimehearth:   "Apply one or more negative conditions to yourself.",
+  tempest:      "Dodge an attack.",
+  thornreaper:  "Consume Earth element.",
+};
+
 const PQ_UNLOCKS_CLASS = {};
 
 // PQ tracker data: count = total checkboxes, condition = display text
-// Add entries here as new PQ cards are encountered in the campaign
+// type: 'counter' = simple count | 'scenario' = unlock+complete a specific scenario after count
 const PQ_TRACKER_DATA = {
-  'cs-pq-338':  { count: 15, condition: "Kill an enemy and loot its money token in the same round." },
-  'cs-pq-347':  { count: 20, condition: "Poison 20 different types of monsters. Each monster type only counts once regardless of how many times it is poisoned." },
-  'toa-pq-645': { count: 20, condition: "Kill an enemy whose initiative is at least 20 slower than yours that round." },
-  'toa-pq-647': { count: 4,  condition: "Complete a scenario that uses at least one Bush, Tree, or Thorns overlay tile in its setup. The tile must be part of the scenario setup, not placed during play." },
+  // ── Crimson Scales ──────────────────────────────────────────────
+  'cs-pq-330': { count: 10, condition: "Kill 10 Inox. Then unlock and complete Scenario 33 'Siege Tower' to retire. Retirement only happens after Scenario 33 is successfully completed.", phase2: "Complete Scenario 33 'Siege Tower'" },
+  'cs-pq-331': { count: 15, condition: "Consume 15 single-handed or double-handed items." },
+  'cs-pq-332': { count: 30, condition: "Play 30 cards for their lost action." },
+  'cs-pq-333': { count: 20, condition: "Reveal a room tile by opening a door 20 times." },
+  'cs-pq-334': { count: 15, condition: "Disarm or cause an enemy to spring a trap during your turn 15 times." },
+  'cs-pq-335': { count: 10, condition: "Kill 10 Guards or Archers. Then unlock and complete Scenario 35 'Prison Riot' to retire. Retirement only happens after Scenario 35 is successfully completed.", phase2: "Complete Scenario 35 'Prison Riot'" },
+  'cs-pq-336': { count: 20, condition: "Kill 20 Oozes, Forest Imps, or Black Imps." },
+  'cs-pq-337': { count: 12, condition: "Complete 12 scenarios in which you gained at least 12 experience points." },
+  'cs-pq-338': { count: 15, condition: "Kill an enemy and loot its money token in the same round." },
+  'cs-pq-339': { count: 30, condition: "Kill 30 enemies that are adjacent to any of your allies." },
+  'cs-pq-340': { count: 12, condition: "Draw a BLESS card 12 times during an attack." },
+  'cs-pq-341': { count: 20, condition: "Spend 200 gold on enhancements. Each check = 10 gold spent on enhancements." },
+  'cs-pq-342': { count: 13, condition: "Experience an ally or enemy dying or becoming exhausted during its own turn 13 times." },
+  'cs-pq-343': { count: 10, condition: "Complete 10 scenarios during which you kill an enemy who has a negative condition." },
+  'cs-pq-344': { count: 8,  condition: "Generate Fire ×2, Ice ×2, Light ×2, and Dark ×2 (2 of each element — first 2 checks = Fire, next 2 = Ice, next 2 = Light, last 2 = Dark). Then unlock and complete Scenario 37 'Burning Stones' to retire.", phase2: "Complete Scenario 37 'Burning Stones'", groups: [{label:'🔥 Fire',count:2},{label:'❄️ Ice',count:2},{label:'☀️ Light',count:2},{label:'🌑 Dark',count:2}] },
+  'cs-pq-345': { count: 15, condition: "Kill 2 or more enemies in the same turn 15 times." },
+  'cs-pq-346': { count: 6,  condition: "Occupy difficult terrain in 6 different scenarios. Then unlock and complete Scenario 39 'Festering Mire' to retire.", phase2: "Complete Scenario 39 'Festering Mire'" },
+  'cs-pq-347': { count: 20, condition: "Poison 20 different types of monsters. Each monster type only counts once regardless of how many times it is poisoned." },
+  'cs-pq-348': { count: 10, condition: "Kill 10 summoned monsters." },
+  'cs-pq-349': { count: 10, condition: "Complete 10 scenarios where you only performed one type of rest (long or short) — not both." },
+  'cs-pq-350': { count: 7,  condition: "Complete 7 scenarios ending at full health." },
+  'cs-pq-351': { count: 30, condition: "Loot 30 money tokens." },
+  'cs-pq-aa-001': { count: 8,  condition: "Experience 8 scenarios where you negate damage by losing a card as normal while adjacent to an ally. Then unlock and complete Scenario AA1 'The Riches of Steelsilk' to retire.", phase2: "Complete Scenario AA1 'The Riches of Steelsilk'" },
+  'cs-pq-aa-002': { count: 8,  condition: "Complete 8 scenarios without exhausting and with 2 or fewer HP remaining. Then unlock and complete Scenario AA2 'Malign Echoes' to retire.", phase2: "Complete Scenario AA2 'Malign Echoes'" },
+  'cs-pq-qa-001': { count: 12, condition: "Use the Power Modulator (Item QA-01) to kill 12 enemies (item granted immediately — cannot be sold). Then unlock and complete Scenario QA1 'Capstone Test' to retire.", phase2: "Complete Scenario QA1 'Capstone Test'" },
+  'cs-pq-qa-002': { count: 10, condition: "Loot 2 or more money tokens with a single action 8 times (end-of-turn looting counts), AND loot 2 treasure tiles (2 checks). Then unlock and complete Scenario QA2 'Mother Lode' to retire.", phase2: "Complete Scenario QA2 'Mother Lode'" },
+  'cs-pq-rm-001': { count: 30, condition: "Apply WOUND or RUPTURE to 30 enemies using the Serrated Edge design (Item RM-01, granted immediately). Then unlock and complete Scenario RM1 'Mind Your Manners' to retire.", phase2: "Complete Scenario RM1 'Mind Your Manners'" },
+  'cs-pq-rm-002': { count: 20, condition: "Experience 20 rounds during or after you perform a LOSS action where an enemy dies. Then unlock and complete Scenario RM2 'Ruined Colony' to retire.", phase2: "Complete Scenario RM2 'Ruined Colony'" },
+  // ── Trail of Ashes ───────────────────────────────────────────────
+  'toa-pq-641': { count: 15, condition: "Loot 15 money tokens in scenarios with Living Bones, Living Corpses, or Living Spirits. Then unlock and complete Scenario 67 'Ternion Tomb' to retire.", phase2: "Complete Scenario 67 'Ternion Tomb'" },
+  'toa-pq-642': { count: 12, condition: "Add the Battle Standard (Item 115) to the city supply. Experience your allies killing 12 enemies with abilities granted by you." },
+  'toa-pq-643': { count: 16, condition: "Choose Option A on an event card 8 times AND choose Option B on an event card 8 times.", groups: [{label:'Option A',count:8},{label:'Option B',count:8}] },
+  'toa-pq-644': { count: 30, condition: "Kill 30 enemies while they are adjacent to one or more of their allies." },
+  'toa-pq-645': { count: 20, condition: "Kill 20 enemies whose initiative is at least 20 slower than yours that round." },
+  'toa-pq-646': { count: 10, condition: "Perform a loot action while adjacent to an enemy at least twice during a scenario in 10 different scenarios." },
+  'toa-pq-647': { count: 4,  condition: "Complete 4 scenarios that use at least one Bush, Tree, or Thorns overlay tile in the setup. The tile must be part of the scenario setup, not placed during play." },
+  'toa-pq-648': { count: 13, condition: "Declare and then perform a long rest while an enemy is in the same room as you 13 times." },
 };
 for (const [classId, cls] of Object.entries(ALL_CLASSES)) {
   for (const pqId of cls.pqCards) {

@@ -465,8 +465,10 @@ function renderGoalsInner() {
 
 function renderMilestoneInner(card) {
   const checks = db.state.milestone_checks;
-  const classData = CLASS_REGISTRY[db.character.class_id];
+  const classId = db.character.class_id;
+  const classData = CLASS_REGISTRY[classId];
   const milestoneImageUrl = classData?.milestone?.imageUrl ?? card?.imageUrl;
+  const condition = MILESTONE_TRACKER_DATA?.[classId] ?? null;
   const boxes = Array.from({ length: 10 }, (_, i) =>
     `<button class="db-check-box ${i < checks ? 'db-check-filled' : ''}" data-check="${i}">
       ${i < checks ? '✓' : ''}
@@ -476,6 +478,7 @@ function renderMilestoneInner(card) {
     <div class="db-milestone-inner">
       <img src="${milestoneImageUrl}" class="db-milestone-img" alt="Milestone card">
       <div class="db-milestone-checks">
+        ${condition ? `<div class="db-checks-label" style="margin-bottom:8px">${condition} — 10 times.</div>` : ''}
         <div class="db-checks-label">Tap to add / remove checks — ${checks}/10</div>
         <div class="db-checks-grid">${boxes}</div>
         ${checks === 10 ? `
@@ -497,23 +500,62 @@ function renderPqInner() {
 
   let trackerHtml = '';
   if (tracker) {
-    const boxes = Array.from({ length: tracker.count }, (_, i) =>
-      `<button class="db-check-box ${i < checks ? 'db-check-filled' : ''}" data-pq-check="${i}">
-        ${i < checks ? '✓' : ''}
-      </button>`
-    ).join('');
+    const countDone = checks >= tracker.count;
+    const hasPhase2 = !!tracker.phase2;
+
+    // Phase 1: checkbox grid — grouped or flat
+    let boxes = '';
+    if (tracker.groups) {
+      let offset = 0;
+      const groupItems = tracker.groups.map(g => {
+        const groupBoxes = Array.from({ length: g.count }, (_, i) => {
+          const idx = offset + i;
+          return `<button class="db-check-box ${idx < checks ? 'db-check-filled' : ''}" data-pq-check="${idx}">
+            ${idx < checks ? '✓' : ''}
+          </button>`;
+        }).join('');
+        offset += g.count;
+        return `<div class="db-pq-group">
+          <div class="db-pq-group-label">${g.label}</div>
+          <div class="db-checks-grid">${groupBoxes}</div>
+        </div>`;
+      }).join('');
+      boxes = `<div class="db-pq-groups">${groupItems}</div>`;
+    } else {
+      boxes = `<div class="db-checks-grid">${Array.from({ length: tracker.count }, (_, i) =>
+        `<button class="db-check-box ${i < checks ? 'db-check-filled' : ''}" data-pq-check="${i}">
+          ${i < checks ? '✓' : ''}
+        </button>`
+      ).join('')}</div>`;
+    }
+
     trackerHtml = `
       <div class="db-checks-label" style="margin-top:12px">${tracker.condition}</div>
-      <div class="db-checks-label" style="margin-top:4px">${checks}/${tracker.count} complete</div>
-      <div class="db-checks-grid" style="margin-top:8px">${boxes}</div>
-      ${completed ? `
+      <div class="db-checks-label" style="margin-top:4px">${Math.min(checks, tracker.count)}/${tracker.count} complete</div>
+      <div style="margin-top:8px">${boxes}</div>`;
+
+    if (completed) {
+      // Fully done
+      trackerHtml += `
         <div class="db-milestone-earned-banner" style="margin-top:12px">
           ⚔️ Ready to Retire! Speak with your Campaign Manager between scenarios.
-        </div>` : checks >= tracker.count ? `
+        </div>`;
+    } else if (hasPhase2 && countDone) {
+      // Phase 1 done, awaiting scenario completion
+      trackerHtml += `
+        <div class="db-checks-label" style="margin-top:12px;color:var(--color-accent,#c9a84c)">
+          ✅ Phase 1 complete! Now: ${tracker.phase2}
+        </div>
+        <button class="db-btn db-btn-primary" id="db-complete-pq" style="margin-top:8px">
+          ⚔️ Mark Scenario Complete — Ready to Retire
+        </button>`;
+    } else if (!hasPhase2 && countDone) {
+      // Simple PQ fully counted — mark complete
+      trackerHtml += `
         <button class="db-btn db-btn-primary" id="db-complete-pq" style="margin-top:12px">
           ⚔️ Mark Quest Complete
-        </button>` : ''}
-    `;
+        </button>`;
+    }
   } else {
     trackerHtml = `
       <p class="db-checks-label" style="margin-top:8px">
@@ -522,8 +564,7 @@ function renderPqInner() {
       </p>
       <p class="db-checks-label" style="margin-top:8px">
         Use the <strong>Retire / Set Aside</strong> button in the header when ready.
-      </p>
-    `;
+      </p>`;
   }
 
   return `
@@ -556,11 +597,13 @@ function renderPqTracker() {
 }
 
 function renderMilestoneTracker(milestoneCard) {
+  const condition = MILESTONE_TRACKER_DATA?.[db.character.class_id];
+  const hint = condition ? `${db.state.milestone_checks}/10 · ${condition}` : `${db.state.milestone_checks}/10 checks`;
   return `
     <div class="db-section db-milestone-section">
       <div class="db-section-header">
         <div class="db-section-title">🏆 Milestone</div>
-        <div class="db-section-hint">${db.state.milestone_checks}/10 checks</div>
+        <div class="db-section-hint">${hint}</div>
       </div>
       ${renderMilestoneInner(milestoneCard)}
     </div>
