@@ -1,8 +1,15 @@
 // campaign.js — Campaign management (schema v2)
 // Players = real people. Characters = class instances belonging to a campaign.
 
-const SUPABASE_URL  = 'https://djssjkjcckqkgwzkjnif.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqc3Nqa2pjY2txa2d3emtqbmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMjcwNzgsImV4cCI6MjA5NzkwMzA3OH0.mKpyxNhSAW7zFhX2A71CoC1WbGMYOr4rJ8hHnLw1jJs';
+const PROD_URL  = 'https://djssjkjcckqkgwzkjnif.supabase.co';
+const PROD_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqc3Nqa2pjY2txa2d3emtqbmlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzMjcwNzgsImV4cCI6MjA5NzkwMzA3OH0.mKpyxNhSAW7zFhX2A71CoC1WbGMYOr4rJ8hHnLw1jJs';
+
+const DEV_URL   = 'https://ldxpmodmajcjowkkyzrc.supabase.co';
+const DEV_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeHBtb2RtYWpjam93a2t5enJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTkyMTEsImV4cCI6MjA5ODc5NTIxMX0.3jqLci2ayxbBYkna0oXncg1BlAOYl_5OagkuzXycroY';
+
+const IS_DEV = new URLSearchParams(window.location.search).has('dev');
+const SUPABASE_URL  = IS_DEV ? DEV_URL  : PROD_URL;
+const SUPABASE_ANON = IS_DEV ? DEV_ANON : PROD_ANON;
 
 // DEV MODE: add ?dev to URL to bypass auth and use player picker
 const DEV_MODE = new URLSearchParams(window.location.search).has('dev');
@@ -508,7 +515,18 @@ async function loadCampaigns() {
     bindCampaignListEvents(campaigns);
     // Update sidebar class grouping from active campaign
     const activeCampaign = campaigns.find(c => c.is_active) ?? campaigns[0] ?? null;
-    if (window.updateSidebarFromCampaign) window.updateSidebarFromCampaign(activeCampaign);
+    if (window.updateSidebarFromCampaign) {
+      // Find the current player's active character class for auto-selection
+      let myPlayerClassId = null;
+      if (activeCampaign) {
+        const myPlayer = getEffectivePlayer(activeCampaign.players ?? []);
+        if (myPlayer) {
+          const myChar = getActiveCharacter(activeCampaign.characters ?? [], myPlayer.id);
+          myPlayerClassId = myChar?.class_id ?? null;
+        }
+      }
+      window.updateSidebarFromCampaign(activeCampaign, myPlayerClassId);
+    }
   } catch (err) {
     container.innerHTML = `<div class="campaigns-error">Error: ${err.message}</div>`;
   }

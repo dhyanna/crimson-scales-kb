@@ -85,6 +85,8 @@
     bindBuildPanels();
     bindBannerClear();
     bindSidebarSectionToggles();
+    // Render sidebar immediately with no campaign (fallback) — campaign load will update it
+    if (window.updateSidebarFromCampaign) window.updateSidebarFromCampaign(null, null);
 
     renderMilestone();
     renderOverview();
@@ -485,15 +487,13 @@
 
 
   // ===== SIDEBAR CLASS GROUPING FROM ACTIVE CAMPAIGN =====
-  window.updateSidebarFromCampaign = function(activeCampaign) {
+  window.updateSidebarFromCampaign = function(activeCampaign, myPlayerClassId) {
     const guidesBody = document.getElementById('guides-list');
     if (!guidesBody) return;
 
-    // Classes in the active campaign (starting group classes)
     const group = activeCampaign?.starting_group;
     const unlockedIds = new Set((activeCampaign?.campaign_unlocked_classes ?? []).map(r => r.class_id));
 
-    // All starting group classes for this campaign
     const startingGroupClasses = {
       naturalists:  ['mirefoot','hollowpact','chieftain','luminary'],
       militants:    ['bombard','fireknight','hierophant','mirefoot'],
@@ -503,90 +503,133 @@
     };
     const activeClassIds = new Set(group ? (startingGroupClasses[group] ?? []) : []);
 
-    // All known CS classes in alpha order
     const ALL_CS = [
-      { id: 'starslinger',  name: 'Aesther Starslinger',  icon: 'cs-starslinger-icon.svg',  hasGuide: true },
-      { id: 'amberaegis',   name: 'Harrower Amber Aegis', icon: null,                        hasGuide: false },
-      { id: 'brightspark',  name: 'Human Brightspark',    icon: 'cs-brightspark-icon.svg',  hasGuide: true },
-      { id: 'hierophant',   name: 'Human Hierophant',     icon: 'cs-hierophant-icon.svg',   hasGuide: true },
-      { id: 'chainguard',   name: 'Inox Chainguard',      icon: 'cs-chainguard-icon.svg',   hasGuide: true },
-      { id: 'luminary',     name: 'Lurker Luminary',      icon: 'cs-luminary-icon.svg',     hasGuide: true },
-      { id: 'chieftain',    name: 'Orchid Chieftain',     icon: 'cs-chieftain-icon.svg',    hasGuide: true },
-      { id: 'shardrender',  name: 'Orchid Shardrender',   icon: null,                        hasGuide: false },
-      { id: 'artificer',    name: 'Quatryl Artificer',    icon: null,                        hasGuide: false },
-      { id: 'bombard',      name: 'Quatryl Bombard',      icon: 'cs-bombard-icon.svg',      hasGuide: true },
-      { id: 'mirefoot',     name: 'Quatryl Mirefoot',     icon: 'cs-mirefoot-icon.svg',     hasGuide: true },
-      { id: 'hollowpact',   name: 'Savvas Hollowpact',    icon: 'cs-hollowpact-icon.svg',   hasGuide: true },
-      { id: 'fireknight',   name: 'Valrath Fire Knight',  icon: 'cs-fireknight-icon.svg',   hasGuide: true },
-      { id: 'vanquisher',   name: 'Valrath Vanquisher',   icon: null,                        hasGuide: false },
-      { id: 'ruinmaw',      name: 'Vermling Ruinmaw',     icon: null,                        hasGuide: false },
-      { id: 'spiritcaller', name: 'Vermling Spirit Caller',icon: null,                       hasGuide: false },
+      { id: 'starslinger',  name: 'Aesther Starslinger',   icon: 'cs-starslinger-icon.svg',  hasGuide: true },
+      { id: 'amberaegis',   name: 'Harrower Amber Aegis',  icon: null,                        hasGuide: false },
+      { id: 'brightspark',  name: 'Human Brightspark',     icon: 'cs-brightspark-icon.svg',   hasGuide: true },
+      { id: 'hierophant',   name: 'Human Hierophant',      icon: 'cs-hierophant-icon.svg',    hasGuide: true },
+      { id: 'chainguard',   name: 'Inox Chainguard',       icon: 'cs-chainguard-icon.svg',    hasGuide: true },
+      { id: 'luminary',     name: 'Lurker Luminary',       icon: 'cs-luminary-icon.svg',      hasGuide: true },
+      { id: 'chieftain',    name: 'Orchid Chieftain',      icon: 'cs-chieftain-icon.svg',     hasGuide: true },
+      { id: 'shardrender',  name: 'Orchid Shardrender',    icon: null,                        hasGuide: false },
+      { id: 'artificer',    name: 'Quatryl Artificer',     icon: null,                        hasGuide: false },
+      { id: 'bombard',      name: 'Quatryl Bombard',       icon: 'cs-bombard-icon.svg',       hasGuide: true },
+      { id: 'mirefoot',     name: 'Quatryl Mirefoot',      icon: 'cs-mirefoot-icon.svg',      hasGuide: true },
+      { id: 'hollowpact',   name: 'Savvas Hollowpact',     icon: 'cs-hollowpact-icon.svg',    hasGuide: true },
+      { id: 'fireknight',   name: 'Valrath Fire Knight',   icon: 'cs-fireknight-icon.svg',    hasGuide: true },
+      { id: 'vanquisher',   name: 'Valrath Vanquisher',    icon: null,                        hasGuide: false },
+      { id: 'ruinmaw',      name: 'Vermling Ruinmaw',      icon: null,                        hasGuide: false },
+      { id: 'spiritcaller', name: 'Vermling Spirit Caller', icon: null,                       hasGuide: false },
     ];
     const ALL_TOA = [
-      { id: 'incarnate',   name: 'Inox Incarnate',    icon: null, hasGuide: false },
-      { id: 'tempest',     name: 'Orchid Tempest',    icon: null, hasGuide: false },
-      { id: 'thornreaper', name: 'Orchid Thornreaper',icon: null, hasGuide: false },
-      { id: 'rimehearth',  name: 'Savvas Rimehearth', icon: null, hasGuide: false },
+      { id: 'incarnate',   name: 'Inox Incarnate',     icon: null, hasGuide: false },
+      { id: 'tempest',     name: 'Orchid Tempest',     icon: null, hasGuide: false },
+      { id: 'thornreaper', name: 'Orchid Thornreaper', icon: null, hasGuide: false },
+      { id: 'rimehearth',  name: 'Savvas Rimehearth',  icon: null, hasGuide: false },
     ];
 
-    function classBtn(cls, groupType) {
-      const hasGuide = cls.hasGuide && CLASS_REGISTRY[cls.id];
-      const isLocked = groupType === 'locked';
-      const noGuide = !hasGuide;
-      if (isLocked || noGuide) {
-        const lockIcon = isLocked ? '🔒' : '📋';
-        const badge = noGuide && !isLocked ? '<span class="sidebar-no-guide-badge">No Guide</span>' : '';
+    const activeGroup   = ALL_CS.filter(c => activeClassIds.has(c.id));
+    const unlockedGroup = ALL_CS.filter(c => !activeClassIds.has(c.id) && unlockedIds.has(c.id));
+    const lockedGroup   = [...ALL_CS.filter(c => !activeClassIds.has(c.id) && !unlockedIds.has(c.id)), ...ALL_TOA];
+
+    function classBtn(cls, dimmed) {
+      const hasGuide = !!(cls.hasGuide && CLASS_REGISTRY[cls.id]);
+      const isCurrentClass = state.activeClass === cls.id;
+      if (!hasGuide) {
         return `<button class="class-btn sidebar-btn-locked" disabled data-class="${cls.id}">
-          <span class="sidebar-lock-icon">${lockIcon}</span>
-          <span class="sidebar-class-name">${cls.name}${badge}</span>
+          <span class="sidebar-lock-icon">🔒</span>
+          <span class="sidebar-class-name">${cls.name}<span class="sidebar-no-guide-badge">No Guide</span></span>
         </button>`;
       }
-      const isActiveClass = state.activeClass === cls.id;
-      return `<button class="class-btn${isActiveClass ? ' active' : ''}" data-class="${cls.id}">
+      return `<button class="class-btn${dimmed ? ' sidebar-btn-guide-locked' : ''}${isCurrentClass ? ' active' : ''}" data-class="${cls.id}">
         <img src="${cls.icon}" class="sidebar-class-icon" alt="">
         <span class="sidebar-class-name">${cls.name}</span>
       </button>`;
     }
 
-    const active   = ALL_CS.filter(c => activeClassIds.has(c.id));
-    const unlocked = ALL_CS.filter(c => !activeClassIds.has(c.id) && unlockedIds.has(c.id));
-    const locked   = [...ALL_CS.filter(c => !activeClassIds.has(c.id) && !unlockedIds.has(c.id)), ...ALL_TOA];
-
-    let html = '';
-
-    if (active.length) {
-      html += `<div class="sidebar-group-label">Active Campaign</div>`;
-      html += active.map(c => classBtn(c, 'active')).join('');
+    function collapsibleGroup(id, label, classes, dimmed, startCollapsed) {
+      if (!classes.length && id !== 'unlocked') return '';
+      const chevron = startCollapsed ? '▸' : '▾';
+      const hiddenClass = startCollapsed ? 'sidebar-section-body-hidden' : '';
+      const items = classes.map(c => classBtn(c, dimmed)).join('');
+      const emptyMsg = !classes.length ? '<div style="padding:6px 12px;font-size:11px;color:#555;font-style:italic">None yet</div>' : '';
+      return `
+        <button class="sidebar-section-toggle${startCollapsed ? ' sidebar-section-toggle-collapsed' : ''}" data-target="${id}-group">
+          <span class="sidebar-group-label" style="padding:0;margin:0">${label}</span>
+          <span class="sidebar-toggle-chevron">${chevron}</span>
+        </button>
+        <div class="sidebar-section-body ${hiddenClass}" id="${id}-group">
+          ${items}${emptyMsg}
+        </div>`;
     }
-    if (unlocked.length) {
-      html += `<div class="sidebar-group-label">Unlocked</div>`;
-      html += unlocked.map(c => classBtn(c, 'unlocked')).join('');
-    }
-    html += `<div class="sidebar-group-label sidebar-group-label-locked">Locked</div>`;
-    html += locked.map(c => classBtn(c, 'locked')).join('');
 
-    guidesBody.innerHTML = html;
+    guidesBody.innerHTML =
+      collapsibleGroup('active',   'Active Classes',   activeGroup,   false, false) +
+      collapsibleGroup('unlocked', 'Unlocked Classes', unlockedGroup, false, false) +
+      collapsibleGroup('locked',   'Locked Classes',   lockedGroup,   true,  false);
 
-    // Rebind class nav clicks for newly rendered buttons
+    // Rebind section toggles for dynamically rendered groups
+    guidesBody.querySelectorAll('.sidebar-section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        const isCollapsed = btn.classList.contains('sidebar-section-toggle-collapsed');
+        btn.classList.toggle('sidebar-section-toggle-collapsed', !isCollapsed);
+        target.classList.toggle('sidebar-section-body-hidden', isCollapsed);
+        btn.querySelector('.sidebar-toggle-chevron').textContent = isCollapsed ? '▾' : '▸';
+      });
+    });
+
+    // Rebind class nav clicks — delegate to switchClass so hero header updates too
     guidesBody.querySelectorAll('.class-btn:not(:disabled)').forEach(btn => {
       btn.addEventListener('click', () => {
         const cls = btn.dataset.class;
         if (!CLASS_REGISTRY[cls]) return;
-        document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.activeClass = cls;
-        renderOverview();
-        const grid = document.getElementById('cards-grid');
-        if (grid) grid.innerHTML = '';
-        renderCards();
-        renderBuilds();
-        renderPerks();
-        renderTips();
-        renderMilestone();
-        updateMechanicChipLabels();
-        switchTab('overview');
+        // Find the matching button in the static nav (if any) or trigger full class switch
+        const staticBtn = document.querySelector(`#class-nav .class-btn[data-class="${cls}"]`);
+        if (staticBtn && staticBtn !== btn) {
+          staticBtn.click();
+        } else {
+          // Directly trigger the full class switch sequence
+          state.activeClass = cls;
+          document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll(`.class-btn[data-class="${cls}"]`).forEach(b => b.classList.add('active'));
+          const data = activeClassData();
+          const heroTitle = document.querySelector('.hero-title');
+          const heroDesc = document.querySelector('.hero-desc');
+          const heroEyebrow = document.querySelector('.hero-eyebrow');
+          if (heroTitle) heroTitle.textContent = data.name;
+          if (heroDesc) heroDesc.textContent = getClassDesc(cls);
+          if (heroEyebrow) heroEyebrow.textContent = data.game + ' · ' + (data.symbol ? data.symbol + ' class' : data.name + ' class');
+          const statNums = document.querySelectorAll('.stat-num');
+          if (statNums.length >= 2) { statNums[0].textContent = data.startingHP; statNums[1].textContent = data.handSize; }
+          const searchInput = document.getElementById('card-search');
+          if (searchInput) searchInput.value = '';
+          hideBuildBanner();
+          document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+          state.cardFilter = 'all';
+          state.cardSearch = '';
+          state.activeBuild = null;
+          state.expandedBuild = null;
+          renderOverview();
+          const grid = document.getElementById('cards-grid');
+          if (grid) grid.innerHTML = '';
+          renderCards();
+          renderBuilds();
+          renderPerks();
+          renderTips();
+          renderMilestone();
+          updateMechanicChipLabels();
+          switchTab('overview');
+        }
       });
     });
+
+    // Auto-select active player's class if provided
+    if (myPlayerClassId && CLASS_REGISTRY[myPlayerClassId]) {
+      const btn = guidesBody.querySelector(`.class-btn[data-class="${myPlayerClassId}"]`);
+      if (btn && !btn.disabled) btn.click();
+    }
   };
 
   // ===== SIDEBAR SECTION TOGGLES =====

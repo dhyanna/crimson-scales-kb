@@ -1104,6 +1104,15 @@
     .new-char-symbol { font-size: 13px; font-weight: 700; color: var(--color-accent, #c9a84c); }
     .new-char-kb-badge { font-size: 10px; color: #6dc86d; margin-top: 4px; }
 
+    .dev-mode-badge {
+      background: #c0392b;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+    }
     /* ── Page Layout with Sidebar ── */
     .page-layout {
       display: flex;
@@ -1160,7 +1169,7 @@
       display: flex;
       flex-direction: column;
       padding: 8px 0;
-      overflow: hidden;
+      overflow: visible;
     }
     .sidebar-section {
       margin-bottom: 8px;
@@ -1290,6 +1299,12 @@
       border-radius: 8px;
     }
 
+    .sidebar-btn-guide-locked {
+      opacity: 0.6;
+    }
+    .sidebar-btn-guide-locked:hover {
+      opacity: 1;
+    }
     .sidebar-no-guide-badge {
       font-size: 9px;
       background: rgba(255,255,255,0.08);
@@ -1408,6 +1423,7 @@
           <div class="brand-sub">Class Knowledge Base</div>
         </div>
       </div>
+      <script>if(new URLSearchParams(location.search).has('dev')){document.write('<div class="dev-mode-badge">⚠️ DEV DB</div>')}</script>
 
       <div class="nav-campaign-row">
         <button class="campaign-nav-btn" id="open-campaigns-btn">🎲 Campaigns</button>
@@ -1463,109 +1479,8 @@
       <nav class="class-nav" id="class-nav">
 
         <div class="sidebar-section">
-          <div class="sidebar-section-title">Crimson Scales</div>
-          <button class="sidebar-section-toggle" data-target="guides-list">
-            <span class="sidebar-group-label" style="padding:0;margin:0">Guides Available</span>
-            <span class="sidebar-toggle-chevron">▾</span>
-          </button>
-          <div class="sidebar-section-body" id="guides-list">
-            <button class="class-btn" data-class="starslinger">
-              <img src="cs-starslinger-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Aesther Starslinger</span>
-            </button>
-            <button class="class-btn" data-class="brightspark">
-              <img src="cs-brightspark-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Human Brightspark</span>
-            </button>
-            <button class="class-btn" data-class="hierophant">
-              <img src="cs-hierophant-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Human Hierophant</span>
-            </button>
-            <button class="class-btn active" data-class="chainguard">
-              <img src="cs-chainguard-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Inox Chainguard</span>
-            </button>
-            <button class="class-btn" data-class="luminary">
-              <img src="cs-luminary-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Lurker Luminary</span>
-            </button>
-            <button class="class-btn" data-class="chieftain">
-              <img src="cs-chieftain-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Orchid Chieftain</span>
-            </button>
-            <button class="class-btn" data-class="bombard">
-              <img src="cs-bombard-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Quatryl Bombard</span>
-            </button>
-            <button class="class-btn" data-class="mirefoot">
-              <img src="cs-mirefoot-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Quatryl Mirefoot</span>
-            </button>
-            <button class="class-btn" data-class="hollowpact">
-              <img src="cs-hollowpact-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Savvas Hollowpact</span>
-            </button>
-            <button class="class-btn" data-class="fireknight">
-              <img src="cs-fireknight-icon.svg" class="sidebar-class-icon" alt="">
-              <span class="sidebar-class-name">Valrath Fire Knight</span>
-            </button>
-          </div>
-
-          <button class="sidebar-section-toggle sidebar-section-toggle-collapsed" data-target="locked-list">
-            <span class="sidebar-group-label sidebar-group-label-locked" style="padding:0;margin:0">Locked Classes</span>
-            <span class="sidebar-toggle-chevron">▸</span>
-          </button>
-          <div class="sidebar-section-body sidebar-section-body-hidden" id="locked-list">
-            <button class="class-btn sidebar-btn-locked" disabled data-class="amberaegis">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Harrower Amber Aegis</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="shardrender">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Orchid Shardrender</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="artificer">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Quatryl Artificer</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="vanquisher">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Valrath Vanquisher</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="ruinmaw">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Vermling Ruinmaw</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="spiritcaller">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Vermling Spirit Caller</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="sidebar-section sidebar-section-toa">
-          <button class="sidebar-section-toggle sidebar-section-toggle-collapsed" data-target="toa-list">
-            <span class="sidebar-section-title">Trail of Ashes</span>
-            <span class="sidebar-toggle-chevron">▸</span>
-          </button>
-          <div class="sidebar-section-body sidebar-section-body-hidden" id="toa-list">
-            <button class="class-btn sidebar-btn-locked" disabled data-class="incarnate">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Inox Incarnate</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="tempest">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Orchid Tempest</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="thornreaper">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Orchid Thornreaper</span>
-            </button>
-            <button class="class-btn sidebar-btn-locked" disabled data-class="rimehearth">
-              <span class="sidebar-lock-icon">🔒</span>
-              <span class="sidebar-class-name">Savvas Rimehearth</span>
-            </button>
-          </div>
+          <div class="sidebar-section-title">Active Campaign</div>
+          <div id="guides-list"></div>
         </div>
 
       </nav>
