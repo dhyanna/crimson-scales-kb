@@ -665,6 +665,15 @@
     .db-earn-milestone-btn { margin-top: 4px; }
 
     /* Level up modal */
+    .db-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .db-modal-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.7);
@@ -989,6 +998,38 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
+    .campaign-phase-bar {
+      padding: 8px 14px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--color-border, #333);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .campaign-phase-city { background: rgba(100,130,200,0.08); color: #7090d0; }
+    .campaign-phase-scenario { background: rgba(201,168,76,0.08); color: var(--color-accent, #c9a84c); }
+    .campaign-resume-scenario-btn {
+      background: none;
+      border: 1px solid var(--color-accent, #c9a84c);
+      border-radius: 4px;
+      color: var(--color-accent, #c9a84c);
+      font-size: 11px;
+      padding: 2px 8px;
+      cursor: pointer;
+    }
+    .campaign-resume-scenario-btn:hover { background: rgba(201,168,76,0.1); }
+    .campaign-start-scenario-btn {
+      flex: 1;
+      padding: 7px;
+      background: rgba(201,168,76,0.08);
+      border: 1px solid rgba(201,168,76,0.3);
+      border-radius: 6px;
+      color: var(--color-accent, #c9a84c);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .campaign-start-scenario-btn:hover { background: rgba(201,168,76,0.15); }
     .campaign-inactive-toggle {
       display: flex; align-items: center; justify-content: space-between;
       padding: 8px 10px; margin-top: 8px;
@@ -1357,6 +1398,350 @@
     .sidebar-collapsed .sidebar-section-toggle { justify-content: center; }
     .sidebar-collapsed .sidebar-toggle-chevron { display: none; }
 
+    /* ── Scenario View ── */
+    .sv-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0d0d1a;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sv-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Banner */
+    .sv-banner {
+      background: rgba(201,168,76,0.1);
+      border-bottom: 1px solid var(--color-accent, #c9a84c);
+      padding: 8px 16px;
+      flex-shrink: 0;
+    }
+    .sv-banner-main {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    .sv-scenario-num {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-accent, #c9a84c);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .sv-scenario-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-text, #e0e0e0);
+    }
+    .sv-scenario-goal {
+      font-size: 11px;
+      font-style: italic;
+      color: var(--color-text-secondary, #888);
+      margin-top: 2px;
+    }
+    /* Initiative Tracker */
+    .sv-initiative-tracker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(0,0,0,0.3);
+      border-bottom: 1px solid var(--color-border, #333);
+      flex-shrink: 0;
+    }
+    .sv-init-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary, #888);
+      min-width: 56px;
+    }
+    .sv-init-items {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .sv-init-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 2px solid #c0392b;
+      background: rgba(192,57,43,0.08);
+      cursor: default;
+      min-width: 56px;
+    }
+    .sv-init-item.sv-init-revealed {
+      border-color: var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.08);
+    }
+    .sv-init-item[draggable="true"] { cursor: grab; }
+    .sv-init-item.sv-drag-over { opacity: 0.5; }
+    .sv-init-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .sv-init-token-img { width: 100%; height: 100%; object-fit: cover; }
+    .sv-init-name { font-size: 10px; color: var(--color-text-secondary, #888); text-align: center; }
+    .sv-init-number { font-size: 14px; font-weight: 700; color: var(--color-accent, #c9a84c); }
+    /* Player Tabs */
+    .sv-player-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 6px 12px 0;
+      background: var(--color-surface, #1e1e2e);
+      border-bottom: 1px solid var(--color-border, #333);
+      flex-shrink: 0;
+    }
+    .sv-player-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--color-text-secondary, #888);
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+    }
+    .sv-player-tab:hover { color: var(--color-text, #e0e0e0); }
+    .sv-player-tab-active {
+      color: var(--color-accent, #c9a84c);
+      border-bottom-color: var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.06);
+    }
+    .sv-tab-token { width: 22px; height: 22px; }
+    .sv-tab-peek { font-size: 11px; opacity: 0.6; }
+    /* Play Area */
+    .sv-play-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .sv-peek-banner {
+      background: rgba(100,100,200,0.1);
+      border: 1px solid rgba(100,100,200,0.3);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      color: #7090d0;
+    }
+    /* Zones */
+    .sv-zone { display: flex; flex-direction: column; gap: 6px; }
+    .sv-zone-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-secondary, #888);
+    }
+    .sv-zone-empty {
+      font-size: 12px;
+      color: #444;
+      font-style: italic;
+      padding: 8px 0;
+    }
+    .sv-zone-cards { display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; }
+    /* Center row */
+    .sv-center-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .sv-zone-discard, .sv-zone-lost {
+      min-width: 80px;
+      max-width: 100px;
+    }
+    .sv-mat-area { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .sv-mat-wrapper { position: relative; display: inline-block; }
+    .sv-mat-img { max-width: 100%; max-height: 280px; border-radius: 6px; display: block; }
+    .sv-mat-flip-btn {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid var(--color-border, #333);
+      border-radius: 4px;
+      color: var(--color-text, #e0e0e0);
+      font-size: 11px;
+      padding: 3px 8px;
+      cursor: pointer;
+    }
+    .sv-pile-stack { position: relative; }
+    .sv-pile-card { width: 80px; border-radius: 4px; display: block; }
+    /* Hand cards */
+    .sv-zone-hand { flex-shrink: 0; }
+    .sv-hand-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 8px 0;
+    }
+    .sv-hand-card {
+      position: relative;
+      cursor: pointer;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 2px solid transparent;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .sv-hand-card:hover { border-color: var(--color-accent, #c9a84c); transform: translateY(-4px); }
+    .sv-hand-card-facedown { opacity: 0.8; }
+    .sv-card-img { width: 90px; display: block; border-radius: 4px; }
+    .sv-card-name {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(0,0,0,0.8);
+      font-size: 9px;
+      padding: 2px 4px;
+      color: #ccc;
+      text-align: center;
+      display: none;
+    }
+    .sv-hand-card:hover .sv-card-name { display: block; }
+    .sv-play-card-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: rgba(201,168,76,0.9);
+      border: none;
+      border-radius: 3px;
+      color: #000;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      cursor: pointer;
+      display: none;
+    }
+    .sv-hand-card:hover .sv-play-card-btn { display: block; }
+    /* Active cards */
+    .sv-active-card {
+      position: relative;
+      border: 2px solid var(--color-accent, #c9a84c);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .sv-active-card-actions {
+      display: flex;
+      gap: 3px;
+      padding: 4px;
+      background: rgba(0,0,0,0.8);
+    }
+    .sv-move-card-btn {
+      flex: 1;
+      font-size: 9px;
+      padding: 3px 4px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 3px;
+      color: #ccc;
+      cursor: pointer;
+    }
+    .sv-move-card-btn:hover { background: rgba(255,255,255,0.2); }
+    /* Tracker row */
+    .sv-tracker-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .sv-tracker-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .sv-tracker-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--color-text-secondary, #888);
+    }
+    .sv-tracker-img { width: 80px; border-radius: 4px; }
+    /* Token area */
+    .sv-token-area {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 4px 0;
+    }
+    .sv-char-token { width: 40px; height: 40px; }
+    /* Play Tips */
+    .sv-tips-area {
+      background: rgba(201,168,76,0.05);
+      border: 1px solid rgba(201,168,76,0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .sv-tips-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-accent, #c9a84c);
+      margin-bottom: 8px;
+    }
+    .sv-tips-list { display: flex; flex-direction: column; gap: 6px; }
+    .sv-tip {
+      display: flex;
+      gap: 6px;
+      font-size: 12px;
+      line-height: 1.5;
+      align-items: flex-start;
+    }
+    .sv-tip-icon { flex-shrink: 0; }
+    .sv-tip-label {
+      flex-shrink: 0;
+      font-weight: 700;
+      color: var(--color-accent, #c9a84c);
+      min-width: 90px;
+    }
+    .sv-tip-text { color: var(--color-text-secondary, #aaa); }
+
+    /* GM controls */
+    .sv-gm-controls {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      display: flex;
+      gap: 8px;
+      z-index: 2100;
+    }
+    .sv-gm-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--color-border, #333);
+      background: var(--color-surface, #1e1e2e);
+      color: var(--color-text, #e0e0e0);
+    }
+    .sv-gm-btn:hover { background: rgba(255,255,255,0.08); }
+    .sv-gm-btn-danger { border-color: #c0392b; color: #e74c3c; }
+    .sv-gm-btn-danger:hover { background: rgba(192,57,43,0.15); }
+
     /* ── Milestone flip card ── */
     .milestone-flip-scene {
       width: 260px;
@@ -1699,7 +2084,42 @@
   </main>
   </div><!-- /.page-layout -->
 
-  <footer class="site-footer">
+  <!-- ── START SCENARIO WIZARD ── -->
+  <div class="db-modal-overlay" id="scenario-wizard-overlay" style="display:none">
+    <div class="db-modal">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">⚔️ Start Scenario</h3>
+        <button class="db-modal-close" id="scenario-wizard-close">✕</button>
+      </div>
+      <div class="db-modal-body">
+        <div class="wizard-field">
+          <label class="wizard-label">Scenario Number</label>
+          <input type="number" id="scenario-number" class="wizard-input" placeholder="e.g. 1" min="1" max="999">
+        </div>
+        <div class="wizard-field">
+          <label class="wizard-label">Scenario Name</label>
+          <input type="text" id="scenario-name" class="wizard-input" placeholder="e.g. Black Barrow">
+        </div>
+        <div class="wizard-field">
+          <label class="wizard-label">Scenario Goal</label>
+          <textarea id="scenario-goal" class="wizard-input" rows="3" maxlength="256" placeholder="Describe the scenario goal..."></textarea>
+        </div>
+        <div class="wizard-field">
+          <label class="wizard-label">Party (select participating characters)</label>
+          <div id="scenario-party-list" class="wizard-group-classes"></div>
+        </div>
+        <div class="wizard-field" id="scenario-bg-fields"></div>
+      </div>
+      <div class="db-modal-footer">
+        <button class="wizard-btn" id="scenario-wizard-cancel">Cancel</button>
+        <button class="wizard-btn wizard-btn-primary" id="scenario-wizard-confirm" disabled>⚔️ Open Scenario View</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCENARIO VIEW ── -->
+  <div class="sv-overlay" id="scenario-view-overlay" style="display:none"></div>
+
     <div class="footer-inner">
       <span>Crimson Scales Class Knowledge Base</span>
       <span class="footer-sep">·</span>
@@ -1725,6 +2145,7 @@
   <script src="data-bombard.js"></script>
   <script src="data-brightspark.js"></script>
   <script src="data-starslinger.js"></script>
+  <script src="scenario.js"></script>
   <script src="app.js"></script>
   <script src="campaign.js"></script>
   <script src="personalquest.js"></script>

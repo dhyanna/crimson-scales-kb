@@ -207,11 +207,60 @@ async function assignCharacterToPlayer(characterId, playerId) {
 
 function isCM(players) {
   const myPlayer = getEffectivePlayer(players);
-  return myPlayer?.role === 'cm';
+  if (myPlayer) return myPlayer.role === 'cm';
+  // In dev mode with no player selected, allow CM actions for testing
+  if (IS_DEV) return true;
+  return false;
 }
 
 async function deleteCampaign(id) {
   const { error } = await sb().from('campaigns').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ── Scenario functions ────────────────────────────────────────────
+async function createScenario(campaignId, gmPlayerId, number, name, goal) {
+  // Deactivate any previous active/paused scenario for this campaign
+  await sb().from('scenarios')
+    .update({ status: 'abandoned', updated_at: new Date().toISOString() })
+    .eq('campaign_id', campaignId)
+    .in('status', ['active', 'paused']);
+  // Set campaign phase to scenario
+  const { error: phaseError } = await sb().from('campaigns')
+    .update({ phase: 'scenario' })
+    .eq('id', campaignId);
+  if (phaseError) console.error('Phase update error:', phaseError);
+  const { data, error } = await sb().from('scenarios')
+    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'active', scenario_step: 'beginning' })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function addScenarioPartyMember(scenarioId, characterId, playerId, battleGoalCard) {
+  const { data, error } = await sb().from('scenario_party')
+    .insert({ scenario_id: scenarioId, character_id: characterId, player_id: playerId, battle_goal_card: battleGoalCard })
+    .select().single();
+  if (error) throw error;
+  return data;
+}
+
+async function getActiveScenario(campaignId) {
+  const { data, error } = await sb().from('scenarios')
+    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(*))`)
+    .eq('campaign_id', campaignId)
+    .in('status', ['active', 'paused'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function updateCampaignPhase(campaignId, phase, cityStep = 'downtime') {
+  const update = { phase };
+  if (phase === 'city') update.city_step = cityStep;
+  const { error } = await sb().from('campaigns').update(update).eq('id', campaignId);
   if (error) throw error;
 }
 
@@ -687,7 +736,15 @@ function renderCampaignCard(campaign) {
       ${availableSection}
       ${renderPartyProgress(campaign, players, myPlayer)}
       ${devPicker}
+      ${isActive ? `
+        <div class="campaign-phase-bar campaign-phase-${campaign.phase ?? 'city'}">
+          ${campaign.phase === 'scenario'
+            ? `⚔️ <strong>Scenario Phase</strong> — <button class="campaign-resume-scenario-btn" data-campaign-id="${campaign.id}">Resume Active Scenario</button>`
+            : `🏛️ <strong>City Phase</strong> — ${campaign.city_step === 'city_event' ? 'City Event' : 'Downtime'}`
+          }
+        </div>` : ''}
       ${amCM ? `<div class="campaign-card-footer">
+        ${isActive && campaign.phase !== 'scenario' ? `<button class="campaign-start-scenario-btn" data-campaign-id="${campaign.id}">⚔️ Start Scenario</button>` : ''}
         <button class="campaign-unlock-btn" data-campaign-id="${campaign.id}">🔓 Unlock Class</button>
       </div>` : ''}
     </div>`;
@@ -1004,6 +1061,33 @@ function bindCampaignListEvents(campaigns) {
     });
   });
 
+  // ── Start Scenario button ────────────────────────────────────────
+  document.querySelectorAll('.campaign-start-scenario-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      console.log('Start Scenario clicked', btn.dataset.campaignId);
+      const campaign = campaigns.find(c => c.id === btn.dataset.campaignId);
+      console.log('Campaign found:', !!campaign);
+      if (!campaign) return;
+      openScenarioWizard(campaign);
+    });
+  });
+
+  // ── Resume Scenario button ───────────────────────────────────────
+  document.querySelectorAll('.campaign-resume-scenario-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const campaign = campaigns.find(c => c.id === btn.dataset.campaignId);
+      if (!campaign) return;
+      try {
+        const scenario = await getActiveScenario(campaign.id);
+        if (scenario) await openScenarioView(scenario, campaign);
+        else showToast('No active scenario found.', true);
+      } catch (err) {
+        console.error('Resume scenario error:', err);
+        showToast('Error: ' + err.message, true);
+      }
+    });
+  });
+
   // Delete campaign
   document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
@@ -1128,6 +1212,100 @@ function showToast(msg, isError = false) {
   toast.classList.add('cs-toast-show');
   setTimeout(() => toast.classList.remove('cs-toast-show'), 3500);
 }
+
+// ── Scenario Wizard ──────────────────────────────────────────────
+let scenarioWizardState = { campaignId: null };
+
+function openScenarioWizard(campaign) {
+  scenarioWizardState = { campaignId: campaign.id };
+  const overlay = document.getElementById('scenario-wizard-overlay');
+  if (!overlay) { console.error('scenario-wizard-overlay not found'); return; }
+  const partyList = document.getElementById('scenario-party-list');
+  const bgFields = document.getElementById('scenario-bg-fields');
+  const confirmBtn = document.getElementById('scenario-wizard-confirm');
+  if (!confirmBtn) { console.error('scenario-wizard-confirm not found'); return; }
+
+  document.getElementById('scenario-number').value = '';
+  document.getElementById('scenario-name').value = '';
+  document.getElementById('scenario-goal').value = '';
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = '⚔️ Open Scenario View';
+
+  const activeChars = (campaign.characters ?? []).filter(c => c.status === 'active' && c.assigned_player_id);
+  partyList.innerHTML = activeChars.length ? activeChars.map(char => {
+    const player = (campaign.players ?? []).find(p => p.id === char.assigned_player_id);
+    const cls = CLASS_DISPLAY[char.class_id] ?? { name: char.class_id };
+    return `
+      <label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--color-border,#333);border-radius:6px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" class="scenario-party-check" data-char-id="${char.id}" data-player-id="${char.assigned_player_id}">
+        ${classIcon(char.class_id, 24)}
+        <span style="font-size:13px">${player?.player_name ?? '?'} — ${char.character_name ? char.character_name + ' · ' : ''}${cls.name}</span>
+      </label>`;
+  }).join('') : '<div style="font-size:13px;color:#888;padding:8px">No active characters found. Create characters first.</div>';
+
+  function updateBGFields() {
+    const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
+    bgFields.innerHTML = checked.length ? `
+      <div class="wizard-label" style="margin-bottom:6px">Battle Goal Card Numbers</div>
+      ${checked.map(cb => {
+        const char = activeChars.find(c => c.id === cb.dataset.charId);
+        const player = (campaign.players ?? []).find(p => p.id === char?.assigned_player_id);
+        const cls = CLASS_DISPLAY[char?.class_id] ?? { name: char?.class_id };
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:12px;min-width:140px;color:var(--color-text-secondary,#888)">${player?.player_name ?? '?'} (${cls.name})</span>
+          <input type="text" class="wizard-input scenario-bg-input" data-char-id="${cb.dataset.charId}" placeholder="e.g. bg-001" style="flex:1;padding:6px 8px;font-size:13px">
+        </div>`;
+      }).join('')}` : '';
+  }
+
+  function validateWizard() {
+    const num = document.getElementById('scenario-number').value.trim();
+    const name = document.getElementById('scenario-name').value.trim();
+    const checked = document.querySelectorAll('.scenario-party-check:checked').length;
+    confirmBtn.disabled = !(num && name && checked >= 1);
+    updateBGFields();
+  }
+
+  partyList.addEventListener('change', validateWizard);
+  document.getElementById('scenario-number').addEventListener('input', validateWizard);
+  document.getElementById('scenario-name').addEventListener('input', validateWizard);
+
+  overlay.style.display = 'flex';
+
+  ['scenario-wizard-close', 'scenario-wizard-cancel'].forEach(id => {
+    document.getElementById(id).onclick = () => { overlay.style.display = 'none'; };
+  });
+
+  confirmBtn.onclick = async () => {
+    const number = parseInt(document.getElementById('scenario-number').value.trim());
+    const name = document.getElementById('scenario-name').value.trim();
+    const goal = document.getElementById('scenario-goal').value.trim();
+    const myPlayer = getEffectivePlayer(campaign.players ?? []) ?? (campaign.players ?? [])[0] ?? null;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Starting...';
+    try {
+      const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal);
+      const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
+      for (const cb of checked) {
+        const bgInput = document.querySelector(`.scenario-bg-input[data-char-id="${cb.dataset.charId}"]`);
+        await addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgInput?.value.trim() || null);
+      }
+      overlay.style.display = 'none';
+      await loadCampaigns();
+      const fullScenario = await getActiveScenario(campaign.id);
+      if (fullScenario) await openScenarioView(fullScenario, campaign);
+    } catch (err) {
+      console.error('Scenario creation error:', err);
+      showToast('Error: ' + err.message, true);
+      // Also show in modal for visibility
+      confirmBtn.textContent = '❌ Error — see console';
+      confirmBtn.disabled = false;
+      setTimeout(() => { confirmBtn.textContent = '⚔️ Open Scenario View'; }, 4000);
+    }
+  };
+}
+
+// openScenarioView is defined in scenario.js
 
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
