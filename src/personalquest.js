@@ -60,6 +60,49 @@ const MILESTONE_TRACKER_DATA = {
   thornreaper:  "Consume Earth element.",
 };
 
+// Battle Goal data: all Gloomhaven battle goal cards
+// checks: 1 = single perk check, 2 = double perk check
+const BATTLE_GOAL_DATA = {
+  'gh-aggressor':  { id: 474, title: 'Aggressor',  checks: 2, condition: "Have one or more monsters on the map at the beginning of every round during the scenario." },
+  'gh-diehard':    { id: 478, title: 'Diehard',    checks: 1, condition: "Never allow your current HP value to drop below half your maximum HP value (rounded up) during the scenario." },
+  'gh-dynamo':     { id: 475, title: 'Dynamo',     checks: 1, condition: "Kill a monster during the scenario by causing at least 4 more points of damage to it than necessary." },
+  'gh-executioner':{ id: 479, title: 'Executioner',checks: 1, condition: "Kill an undamaged monster with a single attack during the scenario." },
+  'gh-explorer':   { id: 467, title: 'Explorer',   checks: 1, condition: "Reveal a room tile by opening a door on your turn during the scenario." },
+  'gh-fast-healer':{ id: 463, title: 'Fast Healer',checks: 1, condition: "Your current HP value must equal your maximum HP value at the end of the scenario." },
+  'gh-hoarder':    { id: 468, title: 'Hoarder',    checks: 1, condition: "Loot five or more money tokens during the scenario." },
+  'gh-hunter':     { id: 472, title: 'Hunter',     checks: 1, condition: "Kill one or more elite monsters during the scenario." },
+  'gh-indigent':   { id: 469, title: 'Indigent',   checks: 2, condition: "Loot no money tokens or treasure overlay tiles during the scenario." },
+  'gh-layabout':   { id: 459, title: 'Layabout',   checks: 2, condition: "Gain 7 or fewer experience points during the scenario." },
+  'gh-masochist':  { id: 462, title: 'Masochist',  checks: 1, condition: "Your current HP value must be equal to or less than 2 at the end of the scenario." },
+  'gh-neutralizer':{ id: 464, title: 'Neutralizer',checks: 1, condition: "Cause a trap to be sprung or disarmed on your turn or the turn of your summons during the scenario." },
+  'gh-opener':     { id: 477, title: 'Opener',     checks: 1, condition: "Be the first to kill a monster during the scenario." },
+  'gh-pacifist':   { id: 470, title: 'Pacifist',   checks: 1, condition: "Kill three or fewer monsters during the scenario." },
+  'gh-plunderer':  { id: 465, title: 'Plunderer',  checks: 1, condition: "Loot a treasure overlay tile during the scenario." },
+  'gh-professional':{ id: 473, title: 'Professional',checks: 1, condition: "Use your equipped items a number of times equal to or greater than your level plus 2 during the scenario." },
+  'gh-protector':  { id: 466, title: 'Protector',  checks: 1, condition: "Allow none of your character allies to become exhausted during the scenario." },
+  'gh-purist':     { id: 476, title: 'Purist',     checks: 2, condition: "Use no items during the scenario." },
+  'gh-sadist':     { id: 471, title: 'Sadist',     checks: 1, condition: "Kill 5 or more monsters during the scenario." },
+  'gh-scrambler':  { id: 481, title: 'Scrambler',  checks: 1, condition: "Take only short rests during the scenario." },
+  'gh-straggler':  { id: 480, title: 'Straggler',  checks: 1, condition: "Take only long rests during the scenario." },
+  'gh-streamliner':{ id: 458, title: 'Streamliner',checks: 1, condition: "Have 5 or more total cards in your hand and discard at the end of the scenario." },
+  'gh-workhorse':  { id: 460, title: 'Workhorse',  checks: 1, condition: "Gain 13 or more experience points during the scenario." },
+  'gh-zealot':     { id: 461, title: 'Zealot',     checks: 1, condition: "Have 3 or fewer total cards in your hand and discard at the end of the scenario." },
+};
+
+// Reverse lookup: card number → slug key
+const BATTLE_GOAL_BY_NUM = Object.fromEntries(
+  Object.entries(BATTLE_GOAL_DATA).map(([slug, data]) => [data.id, slug])
+);
+
+// Resolve a battle goal input — accepts card number (e.g. "474") or slug (e.g. "gh-aggressor")
+function resolveBattleGoalKey(input) {
+  if (!input) return null;
+  const trimmed = input.toString().trim();
+  if (BATTLE_GOAL_DATA[trimmed]) return trimmed; // already a slug
+  const num = parseInt(trimmed);
+  return BATTLE_GOAL_BY_NUM[num] ?? trimmed; // convert number to slug, fall back to raw input
+}
+
 const PQ_UNLOCKS_CLASS = {};
 
 // PQ tracker data: count = total checkboxes, condition = display text

@@ -1253,7 +1253,7 @@ function openScenarioWizard(campaign) {
         const cls = CLASS_DISPLAY[char?.class_id] ?? { name: char?.class_id };
         return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <span style="font-size:12px;min-width:140px;color:var(--color-text-secondary,#888)">${player?.player_name ?? '?'} (${cls.name})</span>
-          <input type="text" class="wizard-input scenario-bg-input" data-char-id="${cb.dataset.charId}" placeholder="e.g. bg-001" style="flex:1;padding:6px 8px;font-size:13px">
+          <input type="text" class="wizard-input scenario-bg-input" data-char-id="${cb.dataset.charId}" placeholder="e.g. 474" style="flex:1;padding:6px 8px;font-size:13px">
         </div>`;
       }).join('')}` : '';
   }
@@ -1288,7 +1288,10 @@ function openScenarioWizard(campaign) {
       const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
       for (const cb of checked) {
         const bgInput = document.querySelector(`.scenario-bg-input[data-char-id="${cb.dataset.charId}"]`);
-        await addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgInput?.value.trim() || null);
+        const bgKey = typeof resolveBattleGoalKey !== 'undefined'
+          ? resolveBattleGoalKey(bgInput?.value.trim())
+          : (bgInput?.value.trim() || null);
+        await addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgKey);
       }
       overlay.style.display = 'none';
       await loadCampaigns();
