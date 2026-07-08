@@ -12,11 +12,8 @@ const CARD_BACK_ASSETS = {
 };
 const PQ_BACK        = 'cs-pq-back.png';
 const BG_BACK        = 'gh-battle-goals-back.png';
-const GENERIC_BACK   = 'cs-pq-back.png'; // fallback for unknown classes
-
-function getCardBack(classId)   { return CARD_BACK_ASSETS[classId]?.ability ?? GENERIC_BACK; }
-function getMsBack(classId)     { return CARD_BACK_ASSETS[classId]?.msBack   ?? GENERIC_BACK; }
-function getMsaBack(classId)    { return CARD_BACK_ASSETS[classId]?.msaBack  ?? GENERIC_BACK; }
+function getCardBack(classId)   { return CARD_BACK_ASSETS[classId]?.ability ?? PQ_BACK; }
+function getMsBack(classId)     { return CARD_BACK_ASSETS[classId]?.msBack   ?? PQ_BACK; }
 function getTokenImg(classId)   { return CARD_BACK_ASSETS[classId]?.token    ?? ''; }
 
 // ── Absent player DB update ──────────────────────────────────────
@@ -50,30 +47,34 @@ let sv = {
 
 // ── Load hand cards from DB ───────────────────────────────────────
 async function loadPartyHandCards(party) {
+  if (!party.length) return;
+  const charIds = party.map(m => m.character_id);
+
+  // Batch fetch — 2 parallel calls instead of 2N sequential
+  const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
+    sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
+    sb().from('character_state').select('*').in('character_id', charIds),
+    sb().from('scenario_party').select('battle_goal_completed, character_id').in('character_id', charIds),
+  ]);
+
   for (const member of party) {
     const charId = member.character_id;
+    const cards    = (allCards   ?? []).filter(c => c.character_id === charId);
+    const stateRow = (allStates  ?? []).find(s => s.character_id === charId);
+    const partyRow = (allPartyRows ?? []).find(p => p.character_id === charId);
 
-    // Fetch hand cards
-    const { data: cards } = await sb()
-      .from('character_cards')
-      .select('*')
-      .eq('character_id', charId)
-      .eq('in_hand', true);
-
-    // Fetch character_state for tracker data
-    const { data: stateRow } = await sb()
-      .from('character_state')
-      .select('*')
-      .eq('character_id', charId)
-      .maybeSingle();
-
-    if (!sv.playState[charId]) sv.playState[charId] = { hand: [], active: [], discard: [], lost: [], handCards: [], chargeMap: {}, dotCount: {} };
-    sv.playState[charId].handCards = cards ?? [];
-    sv.playState[charId].stateId = stateRow?.id ?? null;
-    sv.playState[charId].milestoneChecks = stateRow?.milestone_checks ?? 0;
-    sv.playState[charId].milestoneEarned = stateRow?.milestone_earned ?? false;
-    sv.playState[charId].pqChecks = stateRow?.pq_checks ?? 0;
-    sv.playState[charId].pqCompleted = stateRow?.pq_completed ?? false;
+    sv.playState[charId] = {
+      hand: [], active: [], discard: [], lost: [],
+      handCards:      cards,
+      chargeMap:      {},
+      dotCount:       {},
+      stateId:        stateRow?.id ?? null,
+      milestoneChecks: stateRow?.milestone_checks ?? 0,
+      milestoneEarned: stateRow?.milestone_earned ?? false,
+      pqChecks:        stateRow?.pq_checks ?? 0,
+      pqCompleted:     stateRow?.pq_completed ?? false,
+      bgCompleted:     partyRow?.battle_goal_completed ?? false,
+    };
   }
 }
 
@@ -85,18 +86,21 @@ async function saveMilestoneChecksForChar(charId, checks) {
   ps.milestoneChecks = checks;
 }
 
-async function earnMilestoneForChar(charId) {
-  const ps = sv.playState[charId];
-  if (!ps?.stateId) return;
-  await sb().from('character_state').update({ milestone_earned: true }).eq('id', ps.stateId);
-  ps.milestoneEarned = true;
-}
-
 async function savePqChecksForChar(charId, checks) {
   const ps = sv.playState[charId];
   if (!ps?.stateId) return;
   await sb().from('character_state').update({ pq_checks: checks }).eq('id', ps.stateId);
   ps.pqChecks = checks;
+}
+
+async function saveBgCompletedForChar(charId, completed) {
+  // Persist to scenario_party.battle_goal_completed
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
+  if (!member) return;
+  await sb().from('scenario_party').update({ battle_goal_completed: completed }).eq('id', member.id);
+  member.battle_goal_completed = completed;
+  const ps = sv.playState[charId];
+  if (ps) ps.bgCompleted = completed;
 }
 
 async function completePqForChar(charId) {
@@ -115,15 +119,8 @@ async function openScenarioView(scenario, campaign) {
   const myPlayer = getEffectivePlayer(campaign.players ?? []);
   sv.isGM = myPlayer?.id === scenario.gm_player_id || IS_DEV;
 
-  // Build initial play state for each party member
+  // Fetch hand cards and state for each party member
   sv.playState = {};
-  (scenario.scenario_party ?? []).forEach(member => {
-    if (!sv.playState[member.character_id]) {
-      sv.playState[member.character_id] = { hand: [], active: [], discard: [], lost: [], handCards: [] };
-    }
-  });
-
-  // Fetch hand cards for each party member from character_cards table
   await loadPartyHandCards(scenario.scenario_party ?? []);
 
   // Set active party index to current player's character if possible
@@ -132,6 +129,8 @@ async function openScenarioView(scenario, campaign) {
     if (myMemberIdx >= 0) sv.activePartyIdx = myMemberIdx;
   }
 
+  const overlayEl = document.getElementById('scenario-view-overlay');
+  initSpacebarZoom(overlayEl);
   renderScenarioView();
 }
 
@@ -296,7 +295,7 @@ function buildPlayArea(party) {
 
       <!-- Hand cards -->
       <div class="sv-zone sv-zone-hand">
-        <div class="sv-zone-label">Hand (${handCards.length - ps.active.length - ps.discard.length - ps.lost.length} remaining)</div>
+        <div class="sv-zone-label">Hand (${Math.max(0, handCards.length - ps.active.length - ps.discard.length - ps.lost.length)} remaining)</div>
         <div class="sv-hand-cards" id="sv-hand-cards">
           ${buildHandCards(handCards, classId, charId, ps, isPeeking)}
         </div>
@@ -508,15 +507,14 @@ function buildTrackerRow(member, classId, classData, isPeeking = false) {
     const bgDisplayImg = isPeeking ? BG_BACK : bgImgUrl;
     const bgTitle = bgData ? bgData.title : bgCard;
     const bgCompleted = ps.bgCompleted ?? false;
-    const bgChecked = ps.bgChecked ?? false;
     return `
       <div class="sv-tracker-card sv-tracker-bg">
         <div class="sv-tracker-label">🎯 Battle Goal${bgData ? ` — ${bgData.checks === 2 ? '★★' : '★'}` : ''}</div>
         <img src="${bgDisplayImg}" class="sv-tracker-img sv-zoomable" alt="${bgTitle}" onerror="this.src='${BG_BACK}'">
         ${!isPeeking ? `<div class="sv-tracker-checks" style="margin-top:4px">
-          <button class="sv-check-box ${bgChecked ? 'sv-check-filled' : ''}"
-            data-tracker="bg" data-char-id="${charId}">${bgChecked ? '✓' : ''}</button>
-          <span style="font-size:11px;color:#888;margin-left:6px">${bgChecked ? 'Goal achieved!' : 'Mark if achieved'}</span>
+          <button class="sv-check-box ${bgCompleted ? 'sv-check-filled' : ''}"
+            data-tracker="bg" data-char-id="${charId}">${bgCompleted ? '✓' : ''}</button>
+          <span style="font-size:11px;color:#888;margin-left:6px">${bgCompleted ? 'Goal achieved!' : 'Mark if achieved'}</span>
         </div>` : ''}
       </div>`;
   }
@@ -609,9 +607,10 @@ function bindTipsCarousel() {
   document.getElementById('sv-tip-prev')?.addEventListener('click', () => showTip(sv.tipIndex - 1));
   document.getElementById('sv-tip-next')?.addEventListener('click', () => showTip(sv.tipIndex + 1));
 
-  // Auto-rotate every 10 seconds
-  if (sv.tipTimer) clearInterval(sv.tipTimer);
-  sv.tipTimer = setInterval(() => showTip(sv.tipIndex + 1), 10000);
+  // Auto-rotate every 10 seconds — only start fresh if not already running
+  if (!sv.tipTimer) {
+    sv.tipTimer = setInterval(() => showTip(sv.tipIndex + 1), 10000);
+  }
 }
 
 // ── Absent Player Modal ───────────────────────────────────────────
@@ -807,7 +806,8 @@ function bindScenarioViewEvents() {
         await savePqChecksForChar(charId, newVal);
         renderScenarioView();
       } else if (tracker === 'bg') {
-        ps.bgChecked = !(ps.bgChecked ?? false);
+        const newVal = !(ps.bgCompleted ?? false);
+        await saveBgCompletedForChar(charId, newVal);
         renderScenarioView();
       }
     });
@@ -929,34 +929,12 @@ function bindScenarioViewEvents() {
   // Tips carousel
   bindTipsCarousel();
 
-  // Spacebar zoom — hover over any card and hold spacebar to zoom
-  let hoveredCardImg = null;
+  // Spacebar zoom — rebind mouseenter/leave on current cards
+  // (keydown/keyup listeners are set up once in initSpacebarZoom)
   document.querySelectorAll('.sv-card-img, .sv-tracker-img, .sv-pile-card').forEach(img => {
-    img.addEventListener('mouseenter', () => { hoveredCardImg = img.src; });
-    img.addEventListener('mouseleave', () => { hoveredCardImg = null; });
+    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
+    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
   });
-
-  const zoomOverlay = document.createElement('div');
-  zoomOverlay.id = 'sv-zoom-overlay';
-  zoomOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;';
-  const zoomImg = document.createElement('img');
-  zoomImg.style.cssText = 'max-height:90vh;max-width:90vw;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.8);';
-  zoomOverlay.appendChild(zoomImg);
-  document.getElementById('scenario-view-overlay').appendChild(zoomOverlay);
-
-  document.addEventListener('keydown', e => {
-    if (e.code === 'Space' && hoveredCardImg) {
-      e.preventDefault();
-      zoomImg.src = hoveredCardImg;
-      zoomOverlay.style.display = 'flex';
-    }
-  });
-  document.addEventListener('keyup', e => {
-    if (e.code === 'Space') {
-      zoomOverlay.style.display = 'none';
-    }
-  });
-  zoomOverlay.addEventListener('click', () => { zoomOverlay.style.display = 'none'; });
 
   // Drag-to-reorder initiative (GM only)
   if (sv.isGM) {
@@ -989,8 +967,40 @@ function bindInitiativeDragDrop() {
 }
 
 // ── Close scenario view ───────────────────────────────────────────
+// ── One-time spacebar zoom setup ─────────────────────────────────
+function initSpacebarZoom(overlayEl) {
+  // Remove any previous zoom overlay
+  const existing = document.getElementById('sv-zoom-overlay');
+  if (existing) existing.remove();
+
+  const zoomOverlay = document.createElement('div');
+  zoomOverlay.id = 'sv-zoom-overlay';
+  zoomOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;';
+  const zoomImg = document.createElement('img');
+  zoomImg.style.cssText = 'max-height:90vh;max-width:90vw;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.8);';
+  zoomOverlay.appendChild(zoomImg);
+  overlayEl.appendChild(zoomOverlay);
+  zoomOverlay.addEventListener('click', () => { zoomOverlay.style.display = 'none'; });
+
+  // Use named handlers so they can be removed on close
+  sv._zoomKeydown = e => {
+    if (e.code === 'Space' && sv._hoveredCardImg) {
+      e.preventDefault();
+      zoomImg.src = sv._hoveredCardImg;
+      zoomOverlay.style.display = 'flex';
+    }
+  };
+  sv._zoomKeyup = e => {
+    if (e.code === 'Space') zoomOverlay.style.display = 'none';
+  };
+  document.addEventListener('keydown', sv._zoomKeydown);
+  document.addEventListener('keyup', sv._zoomKeyup);
+}
+
 function closeScenarioView() {
   if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
+  if (sv._zoomKeydown) { document.removeEventListener('keydown', sv._zoomKeydown); sv._zoomKeydown = null; }
+  if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
   const overlay = document.getElementById('scenario-view-overlay');
   if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
 }

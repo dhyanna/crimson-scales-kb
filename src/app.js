@@ -487,6 +487,32 @@
 
 
   // ===== SIDEBAR CLASS GROUPING FROM ACTIVE CAMPAIGN =====
+  // Module-level class lists — defined once, not on every sidebar update
+  const ALL_CS = [
+    { id: 'starslinger',  name: 'Aesther Starslinger',   icon: 'cs-starslinger-icon.svg',  hasGuide: true },
+    { id: 'amberaegis',   name: 'Harrower Amber Aegis',  icon: null,                        hasGuide: false },
+    { id: 'brightspark',  name: 'Human Brightspark',     icon: 'cs-brightspark-icon.svg',   hasGuide: true },
+    { id: 'hierophant',   name: 'Human Hierophant',      icon: 'cs-hierophant-icon.svg',    hasGuide: true },
+    { id: 'chainguard',   name: 'Inox Chainguard',       icon: 'cs-chainguard-icon.svg',    hasGuide: true },
+    { id: 'luminary',     name: 'Lurker Luminary',       icon: 'cs-luminary-icon.svg',      hasGuide: true },
+    { id: 'chieftain',    name: 'Orchid Chieftain',      icon: 'cs-chieftain-icon.svg',     hasGuide: true },
+    { id: 'shardrender',  name: 'Orchid Shardrender',    icon: null,                        hasGuide: false },
+    { id: 'artificer',    name: 'Quatryl Artificer',     icon: null,                        hasGuide: false },
+    { id: 'bombard',      name: 'Quatryl Bombard',       icon: 'cs-bombard-icon.svg',       hasGuide: true },
+    { id: 'mirefoot',     name: 'Quatryl Mirefoot',      icon: 'cs-mirefoot-icon.svg',      hasGuide: true },
+    { id: 'hollowpact',   name: 'Savvas Hollowpact',     icon: 'cs-hollowpact-icon.svg',    hasGuide: true },
+    { id: 'fireknight',   name: 'Valrath Fire Knight',   icon: 'cs-fireknight-icon.svg',    hasGuide: true },
+    { id: 'vanquisher',   name: 'Valrath Vanquisher',    icon: null,                        hasGuide: false },
+    { id: 'ruinmaw',      name: 'Vermling Ruinmaw',      icon: null,                        hasGuide: false },
+    { id: 'spiritcaller', name: 'Vermling Spirit Caller', icon: null,                       hasGuide: false },
+  ];
+  const ALL_TOA = [
+    { id: 'incarnate',   name: 'Inox Incarnate',     icon: null, hasGuide: false },
+    { id: 'tempest',     name: 'Orchid Tempest',     icon: null, hasGuide: false },
+    { id: 'thornreaper', name: 'Orchid Thornreaper', icon: null, hasGuide: false },
+    { id: 'rimehearth',  name: 'Savvas Rimehearth',  icon: null, hasGuide: false },
+  ];
+
   window.updateSidebarFromCampaign = function(activeCampaign, myPlayerClassId) {
     const guidesBody = document.getElementById('guides-list');
     if (!guidesBody) return;
@@ -503,30 +529,6 @@
     };
     const activeClassIds = new Set(group ? (startingGroupClasses[group] ?? []) : []);
 
-    const ALL_CS = [
-      { id: 'starslinger',  name: 'Aesther Starslinger',   icon: 'cs-starslinger-icon.svg',  hasGuide: true },
-      { id: 'amberaegis',   name: 'Harrower Amber Aegis',  icon: null,                        hasGuide: false },
-      { id: 'brightspark',  name: 'Human Brightspark',     icon: 'cs-brightspark-icon.svg',   hasGuide: true },
-      { id: 'hierophant',   name: 'Human Hierophant',      icon: 'cs-hierophant-icon.svg',    hasGuide: true },
-      { id: 'chainguard',   name: 'Inox Chainguard',       icon: 'cs-chainguard-icon.svg',    hasGuide: true },
-      { id: 'luminary',     name: 'Lurker Luminary',       icon: 'cs-luminary-icon.svg',      hasGuide: true },
-      { id: 'chieftain',    name: 'Orchid Chieftain',      icon: 'cs-chieftain-icon.svg',     hasGuide: true },
-      { id: 'shardrender',  name: 'Orchid Shardrender',    icon: null,                        hasGuide: false },
-      { id: 'artificer',    name: 'Quatryl Artificer',     icon: null,                        hasGuide: false },
-      { id: 'bombard',      name: 'Quatryl Bombard',       icon: 'cs-bombard-icon.svg',       hasGuide: true },
-      { id: 'mirefoot',     name: 'Quatryl Mirefoot',      icon: 'cs-mirefoot-icon.svg',      hasGuide: true },
-      { id: 'hollowpact',   name: 'Savvas Hollowpact',     icon: 'cs-hollowpact-icon.svg',    hasGuide: true },
-      { id: 'fireknight',   name: 'Valrath Fire Knight',   icon: 'cs-fireknight-icon.svg',    hasGuide: true },
-      { id: 'vanquisher',   name: 'Valrath Vanquisher',    icon: null,                        hasGuide: false },
-      { id: 'ruinmaw',      name: 'Vermling Ruinmaw',      icon: null,                        hasGuide: false },
-      { id: 'spiritcaller', name: 'Vermling Spirit Caller', icon: null,                       hasGuide: false },
-    ];
-    const ALL_TOA = [
-      { id: 'incarnate',   name: 'Inox Incarnate',     icon: null, hasGuide: false },
-      { id: 'tempest',     name: 'Orchid Tempest',     icon: null, hasGuide: false },
-      { id: 'thornreaper', name: 'Orchid Thornreaper', icon: null, hasGuide: false },
-      { id: 'rimehearth',  name: 'Savvas Rimehearth',  icon: null, hasGuide: false },
-    ];
 
     const activeGroup   = ALL_CS.filter(c => activeClassIds.has(c.id));
     const unlockedGroup = ALL_CS.filter(c => !activeClassIds.has(c.id) && unlockedIds.has(c.id));

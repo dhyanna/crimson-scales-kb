@@ -7,12 +7,11 @@ const PROD_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
 const DEV_URL   = 'https://ldxpmodmajcjowkkyzrc.supabase.co';
 const DEV_ANON  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkeHBtb2RtYWpjam93a2t5enJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMTkyMTEsImV4cCI6MjA5ODc5NTIxMX0.3jqLci2ayxbBYkna0oXncg1BlAOYl_5OagkuzXycroY';
 
-const IS_DEV = new URLSearchParams(window.location.search).has('dev');
+const IS_DEV  = new URLSearchParams(window.location.search).has('dev');
 const SUPABASE_URL  = IS_DEV ? DEV_URL  : PROD_URL;
 const SUPABASE_ANON = IS_DEV ? DEV_ANON : PROD_ANON;
 
 // DEV MODE: add ?dev to URL to bypass auth and use player picker
-const DEV_MODE = new URLSearchParams(window.location.search).has('dev');
 
 // ── SUPABASE ─────────────────────────────────────────────────
 let _sb = null;
@@ -81,7 +80,7 @@ async function signOut() {
 function updateAuthUI() {
   const area = document.getElementById('campaign-auth-area');
   if (!area) return;
-  if (DEV_MODE) {
+  if (IS_DEV) {
     area.innerHTML = '<div class="auth-dev-badge">🛠 Dev Mode</div>';
     return;
   }
@@ -112,7 +111,7 @@ function updateAuthUI() {
 let devPlayerOverride = null; // players.id
 
 function getEffectivePlayer(players) {
-  if (DEV_MODE && devPlayerOverride) return players.find(p => p.id === devPlayerOverride) ?? null;
+  if (IS_DEV && devPlayerOverride) return players.find(p => p.id === devPlayerOverride) ?? null;
   if (currentUser) return players.find(p => p.user_id === currentUser.id) ?? null;
   return null;
 }
@@ -533,7 +532,7 @@ async function submitCampaign() {
     await onCampaignCreated(campaign.id, wizardState.selectedGroup);
 
     // Send magic links (skip in dev mode)
-    if (!DEV_MODE) {
+    if (!IS_DEV) {
       for (const p of wizardState.players) {
         if (p.email) { try { await sendMagicLink(p.email); } catch (_) {} }
       }
@@ -542,7 +541,7 @@ async function submitCampaign() {
     resetWizard();
     closeCampaignWizard();
     loadCampaigns();
-    showToast(DEV_MODE ? 'Campaign created!' : 'Campaign created! Magic links sent to all players.');
+    showToast(IS_DEV ? 'Campaign created!' : 'Campaign created! Magic links sent to all players.');
   } catch (err) {
     showToast('Error: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = '🎲 Create Campaign'; }
@@ -651,7 +650,7 @@ function renderCampaignCard(campaign) {
             <div class="campaign-player-name">${char.character_name || cls.name} <span class="player-status-badge player-set-aside">Set Aside</span></div>
             <div class="campaign-player-class">${cls.name}</div>
           </div>
-          ${myNeedsChar || DEV_MODE ? `<button class="avail-resume-btn" data-char-id="${char.id}" data-player-id="${myPlayer?.id ?? ''}">▶ Resume</button>` : ''}
+          ${myNeedsChar || IS_DEV ? `<button class="avail-resume-btn" data-char-id="${char.id}" data-player-id="${myPlayer?.id ?? ''}">▶ Resume</button>` : ''}
         </div>`;
       }).join('')}
     </div>` : '';
@@ -701,7 +700,7 @@ function renderCampaignCard(campaign) {
     </div>` : '';
 
   // Dev picker — shows Players (stable), not characters
-  const devPicker = DEV_MODE ? renderDevPicker(players, characters) : '';
+  const devPicker = IS_DEV ? renderDevPicker(players, characters) : '';
 
   const isActive = !!campaign.is_active;
   const amCM = isCM(players);
@@ -884,7 +883,7 @@ function renderPartyProgress(campaign, players, myPlayer) {
 }
 
 function renderDevPicker(players, characters) {
-  if (!DEV_MODE || !players.length) return '';
+  if (!IS_DEV || !players.length) return '';
   const opts = players.map(p => {
     const activeChar = getActiveCharacter(characters, p.id);
     const cls = activeChar ? (CLASS_DISPLAY[activeChar.class_id] ?? ALL_CLASSES?.[activeChar.class_id]) : null;
@@ -1064,9 +1063,7 @@ function bindCampaignListEvents(campaigns) {
   // ── Start Scenario button ────────────────────────────────────────
   document.querySelectorAll('.campaign-start-scenario-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      console.log('Start Scenario clicked', btn.dataset.campaignId);
       const campaign = campaigns.find(c => c.id === btn.dataset.campaignId);
-      console.log('Campaign found:', !!campaign);
       if (!campaign) return;
       openScenarioWizard(campaign);
     });
@@ -1163,7 +1160,7 @@ function openAddPlayerDialog(campaignId) {
     confirmBtn.disabled = true; confirmBtn.textContent = 'Adding…';
     try {
       const player = await addPlayerToCampaign(campaignId, name, email);
-      if (!DEV_MODE) { try { await sendMagicLink(email); } catch (_) {} }
+      if (!IS_DEV) { try { await sendMagicLink(email); } catch (_) {} }
       modal.remove();
       // Immediately open character creation for the new player
       await openNewCharacterWizard(campaignId, player.id, async (newChar) => {
