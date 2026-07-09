@@ -54,7 +54,7 @@ async function loadPartyHandCards(party) {
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
     sb().from('character_state').select('*').in('character_id', charIds),
-    sb().from('scenario_party').select('battle_goal_completed, character_id').in('character_id', charIds),
+    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id').in('character_id', charIds),
   ]);
 
   for (const member of party) {
@@ -63,17 +63,28 @@ async function loadPartyHandCards(party) {
     const stateRow = (allStates  ?? []).find(s => s.character_id === charId);
     const partyRow = (allPartyRows ?? []).find(p => p.character_id === charId);
 
+    // Restore persisted play state if available
+    const savedState = partyRow?.play_state ?? {};
     sv.playState[charId] = {
-      hand: [], active: [], discard: [], lost: [],
-      handCards:      cards,
-      chargeMap:      {},
-      dotCount:       {},
-      stateId:        stateRow?.id ?? null,
+      hand:            savedState.hand       ?? [],
+      active:          savedState.active     ?? [],
+      discard:         savedState.discard    ?? [],
+      lost:            savedState.lost       ?? [],
+      handCards:       cards,
+      chargeMap:       savedState.chargeMap  ?? {},
+      dotCount:        savedState.dotCount   ?? {},
+      stateId:         stateRow?.id ?? null,
+      partyRowId:      partyRow?.id ?? null,
       milestoneChecks: stateRow?.milestone_checks ?? 0,
       milestoneEarned: stateRow?.milestone_earned ?? false,
       pqChecks:        stateRow?.pq_checks ?? 0,
       pqCompleted:     stateRow?.pq_completed ?? false,
       bgCompleted:     partyRow?.battle_goal_completed ?? false,
+      isExhausted:     partyRow?.is_exhausted ?? false,
+      isLongResting:   savedState.isLongResting ?? false,
+      hasOverrideAbility: savedState.hasOverrideAbility ?? false,
+      restPhase:       savedState.restPhase ?? null,
+      restCandidate:   savedState.restCandidate ?? null,
     };
   }
 }
@@ -91,6 +102,55 @@ async function savePqChecksForChar(charId, checks) {
   if (!ps?.stateId) return;
   await sb().from('character_state').update({ pq_checks: checks }).eq('id', ps.stateId);
   ps.pqChecks = checks;
+}
+
+async function saveExhaustedForChar(charId, exhausted) {
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
+  if (!member) return;
+  await sb().from('scenario_party').update({ is_exhausted: exhausted }).eq('id', member.id);
+  member.is_exhausted = exhausted;
+  const ps = sv.playState[charId];
+  if (ps) ps.isExhausted = exhausted;
+}
+
+// Save play state for a character to scenario_party
+async function savePlayStateForChar(charId) {
+  const ps = sv.playState[charId];
+  if (!ps?.partyRowId) return;
+  const stateToSave = {
+    active:            ps.active,
+    discard:           ps.discard,
+    lost:              ps.lost,
+    chargeMap:         ps.chargeMap,
+    dotCount:          ps.dotCount,
+    isLongResting:     ps.isLongResting,
+    hasOverrideAbility: ps.hasOverrideAbility,
+    restPhase:         ps.restPhase,
+    restCandidate:     ps.restCandidate,
+  };
+  await sb().from('scenario_party')
+    .update({ play_state: stateToSave })
+    .eq('id', ps.partyRowId);
+}
+
+// Save all party members' play states
+async function saveAllPlayStates() {
+  const party = sv.scenario?.scenario_party ?? [];
+  await Promise.all(party.map(m => savePlayStateForChar(m.character_id)));
+}
+
+// Also save round-level state (selected cards, ready players, round phase)
+async function saveRoundState() {
+  await sb().from('scenarios')
+    .update({
+      round_number: sv.scenario.round_number,
+    })
+    .eq('id', sv.scenario.id);
+}
+
+async function saveRoundNumber(roundNum) {
+  await sb().from('scenarios').update({ round_number: roundNum }).eq('id', sv.scenario.id);
+  sv.scenario.round_number = roundNum;
 }
 
 async function saveBgCompletedForChar(charId, completed) {
@@ -130,16 +190,19 @@ async function openScenarioView(scenario, campaign) {
   }
 
   const overlayEl = document.getElementById('scenario-view-overlay');
-  initSpacebarZoom(overlayEl);
   renderScenarioView();
+  initSpacebarZoom(overlayEl);
 }
 
 // ── Main renderer ─────────────────────────────────────────────────
 function renderScenarioView() {
   const overlay = document.getElementById('scenario-view-overlay');
   if (!overlay) return;
+  // Preserve zoom overlay across re-renders
+  const zoomOverlay = document.getElementById('sv-zoom-overlay');
   overlay.innerHTML = buildScenarioViewHTML();
   overlay.style.display = 'flex';
+  if (zoomOverlay) overlay.appendChild(zoomOverlay);
   bindScenarioViewEvents();
 }
 
@@ -159,13 +222,27 @@ function buildScenarioViewHTML() {
 
 // ── Scenario Banner ───────────────────────────────────────────────
 function buildScenarioBanner(s) {
+  const currentRound = s.round_number ?? 0;
+  const roundBoxes = currentRound > 0 ? Array.from({length: currentRound}, (_, i) => {
+    const r = i + 1;
+    const isCurrent = r === currentRound;
+    return `<div class="sv-round-box${isCurrent ? ' sv-round-current' : ''}">${r}</div>`;
+  }).join('') : '';
+
   return `
     <div class="sv-banner">
-      <div class="sv-banner-main">
-        <span class="sv-scenario-num">Scenario ${s.scenario_number}</span>
-        <span class="sv-scenario-name">${s.scenario_name}</span>
+      <div class="sv-banner-inner">
+        <div class="sv-banner-left">
+          <div class="sv-banner-main">
+            <span class="sv-scenario-num">Scenario ${s.scenario_number}</span>
+            <span class="sv-scenario-name">${s.scenario_name}</span>
+          </div>
+          ${s.scenario_goal ? `<div class="sv-scenario-goal">${s.scenario_goal}</div>` : ''}
+        </div>
+        <div class="sv-round-track" id="sv-round-track">
+          ${roundBoxes}
+        </div>
       </div>
-      ${s.scenario_goal ? `<div class="sv-scenario-goal">${s.scenario_goal}</div>` : ''}
     </div>`;
 }
 
@@ -178,8 +255,9 @@ function buildInitiativeTracker(party) {
     const playerName = member.player?.player_name ?? '?';
     const initiative = member.initiative;
     const isReady = sv.readyPlayers[member.player_id] ?? false;
+    const isExhausted = sv.playState[member.character_id]?.isExhausted ?? false;
     return `
-      <div class="sv-init-item${initiative ? ' sv-init-revealed' : ' sv-init-unrevealed'}${isReady ? ' sv-init-ready' : ''}"
+      <div class="sv-init-item${initiative ? ' sv-init-revealed' : ' sv-init-unrevealed'}${isReady ? ' sv-init-ready' : ''}${isExhausted ? ' sv-init-exhausted' : ''}"
            data-party-idx="${i}"
            data-player-id="${member.player_id}"
            draggable="${sv.isGM ? 'true' : 'false'}">
@@ -256,7 +334,7 @@ function buildPlayArea(party) {
   const handCards = ps.handCards ?? [];
 
   return `
-    <div class="sv-play-area" id="sv-play-area">
+    <div class="sv-play-area${ps.isExhausted ? ' sv-play-area-exhausted' : ''}" id="sv-play-area">
       ${isPeeking ? `<div class="sv-peek-banner">👁 Viewing ${member.player?.player_name ?? '?'}'s play area</div>` : ''}
 
       <!-- Above mat: Active/Persistent zone -->
@@ -304,9 +382,120 @@ function buildPlayArea(party) {
       <!-- Trackers row -->
       ${buildTrackerRow(member, classId, classData, isPeeking)}
 
+      <!-- Rest action UI -->
+      ${!isPeeking && !ps.isExhausted ? buildRestUI(charId, ps) : ''}
+
       <!-- Play Tips -->
-      ${!isPeeking ? buildPlayTips(classId, member) : ''}
+      ${!isPeeking && !ps.isExhausted ? buildPlayTips(classId, member) : ''}
+
+      <!-- Declare exhaustion button -->
+      ${!isPeeking && !ps.isExhausted ? `
+        <div class="sv-exhaust-trigger">
+          <button class="sv-exhaust-btn" data-char-id="${charId}">💀 Declare Exhaustion</button>
+        </div>` : ''}
+
+      <!-- Exhausted overlay message -->
+      ${ps.isExhausted ? `<div class="sv-exhausted-banner">💀 Exhausted — no longer participating in scenario play</div>` : ''}
     </div>`;
+}
+
+// ── Rest UI ──────────────────────────────────────────────────────
+function buildRestUI(charId, ps) {
+  const discardCount = ps.discard.length;
+  const handCount = (ps.handCards ?? []).length - ps.active.length - ps.discard.length - ps.lost.length;
+  const canRest = discardCount >= 2;
+  const mustRest = handCount < 2 && canRest;
+  const isLongResting = ps.isLongResting ?? false;
+  const restPhase = ps.restPhase ?? null;
+
+  // Don't show rest UI if already in play phase
+  if (sv.roundPhase === 'play') return '';
+
+  // Show exhaustion warning if no options available
+  if (!canRest && handCount < 2) return ''; // handled by exhaustion check elsewhere
+
+  // If long resting, show status
+  if (isLongResting) return `
+    <div class="sv-rest-area">
+      <div class="sv-rest-status">🌙 Long Rest selected — no cards to play this round</div>
+      <button class="sv-rest-cancel-btn" data-char-id="${charId}">✕ Cancel Rest</button>
+    </div>`;
+
+  // Short rest candidate phase
+  if (restPhase === 'short-candidate' && ps.restCandidate) {
+    const cardData = getCardDataById(charId, ps.restCandidate);
+    const cardImg = cardData?.imageUrl ?? getCardBack(getClassIdForChar(charId));
+    return `
+      <div class="sv-rest-area sv-rest-candidate">
+        <div class="sv-rest-title">🎲 Short Rest — Candidate Card</div>
+        <div class="sv-rest-card-preview">
+          <img src="${cardImg}" class="sv-rest-card-img" alt="${ps.restCandidate}">
+          <div class="sv-rest-card-name">${cardData?.name ?? ps.restCandidate}</div>
+        </div>
+        <div class="sv-rest-actions">
+          <button class="sv-rest-btn sv-rest-lose" data-char-id="${charId}" data-action="lose-candidate">✓ Lose this card</button>
+          <button class="sv-rest-btn sv-rest-keep" data-char-id="${charId}" data-action="keep-candidate">↩ Keep it (−1 HP)</button>
+        </div>
+      </div>`;
+  }
+
+  // Short rest override phase — show all discard cards for selection
+  if (restPhase === 'short-override') {
+    const discardCards = ps.discard.map(cardId => {
+      const cardData = getCardDataById(charId, cardId);
+      const cardImg = cardData?.imageUrl ?? getCardBack(getClassIdForChar(charId));
+      return `<div class="sv-rest-override-card" data-char-id="${charId}" data-card-id="${cardId}" data-action="override-select">
+        <img src="${cardImg}" class="sv-rest-card-img" alt="${cardId}">
+        <div class="sv-rest-card-name">${cardData?.name ?? cardId}</div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="sv-rest-area sv-rest-override">
+        <div class="sv-rest-title">⚡ Short Rest Override — Choose card to lose</div>
+        <div class="sv-rest-override-grid">${discardCards}</div>
+        <button class="sv-rest-cancel-btn" data-char-id="${charId}">✕ Cancel</button>
+      </div>`;
+  }
+
+  // Normal rest prompt
+  if (!canRest) return '';
+  const overrideOption = ps.hasOverrideAbility
+    ? `<button class="sv-rest-btn sv-rest-override-btn" data-char-id="${charId}" data-action="start-override">⚡ Short Rest (Override)</button>`
+    : '';
+  const overrideCheck = !ps.hasOverrideAbility
+    ? `<label class="sv-override-check-label">
+        <input type="checkbox" class="sv-override-ability-check" data-char-id="${charId}">
+        I have Short Rest Override ability
+      </label>`
+    : `<label class="sv-override-check-label">
+        <input type="checkbox" class="sv-override-ability-check" data-char-id="${charId}" checked>
+        I have Short Rest Override ability
+      </label>`;
+
+  return `
+    <div class="sv-rest-area${mustRest ? ' sv-rest-required' : ''}">
+      <div class="sv-rest-title">${mustRest ? '⚠️ Must Rest — not enough cards to play' : '💤 Rest available'}</div>
+      ${overrideCheck}
+      <div class="sv-rest-actions">
+        <button class="sv-rest-btn sv-rest-short" data-char-id="${charId}" data-action="start-short">🎲 Short Rest</button>
+        ${overrideOption}
+        <button class="sv-rest-btn sv-rest-long" data-char-id="${charId}" data-action="start-long">🌙 Long Rest</button>
+      </div>
+    </div>`;
+}
+
+function getClassIdForChar(charId) {
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
+  return member?.characters?.class_id ?? '';
+}
+
+function getCardDataById(charId, cardId) {
+  const classId = getClassIdForChar(charId);
+  const classData = CLASS_REGISTRY?.[classId];
+  return classData?.cards?.find(c =>
+    c.name === cardId ||
+    c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === cardId
+  ) ?? null;
 }
 
 // ── Character Mat ─────────────────────────────────────────────────
@@ -725,28 +914,45 @@ function bindScenarioViewEvents() {
     });
   });
 
-  // Initiative icon click — toggle ready state
+  // Initiative icon click — toggle ready state (select phase) OR end turn (play phase)
   const myPlayer = getEffectivePlayer(sv.campaign.players ?? []);
   document.querySelectorAll('.sv-init-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', async () => {
       const playerId = item.dataset.playerId;
-      // Only current player can toggle their own ready (or GM in dev)
       if (!myPlayer && !IS_DEV) return;
       if (myPlayer && myPlayer.id !== playerId && !IS_DEV) return;
 
-      // Cannot toggle if GM has already started the round
-      if (sv.roundPhase === 'play') return;
+      const isExhausted = (sv.scenario.scenario_party ?? [])
+        .find(m => m.player_id === playerId)?.character_id
+        ? sv.playState[(sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId)?.character_id]?.isExhausted
+        : false;
+      if (isExhausted) return;
 
+      if (sv.roundPhase === 'play') {
+        // Play phase — green icon click ends the player's turn (turns red)
+        const currentlyReady = sv.readyPlayers[playerId] ?? false;
+        if (currentlyReady) {
+          sv.readyPlayers[playerId] = false;
+          // Save play state at end of turn
+          const memberForPlayer = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
+          if (memberForPlayer) await savePlayStateForChar(memberForPlayer.character_id);
+          showToast('Turn ended.');
+          renderScenarioView();
+        }
+        return;
+      }
+
+      // Select phase — toggle ready state
       const currentlyReady = sv.readyPlayers[playerId] ?? false;
-
       if (!currentlyReady) {
-        // Going green — must have 2 cards selected
-        // Find the party member for this player
+        // Going green — must have 2 cards selected OR be long resting
         const member = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
         if (!member) return;
         const charId = member.character_id;
+        const ps = sv.playState[charId];
+        const isLongResting = ps?.isLongResting ?? false;
         const selected = sv.selectedCards[charId] ?? [];
-        if (selected.length < 2) {
+        if (!isLongResting && selected.length < 2) {
           showToast('Select two cards before marking ready.', true);
           return;
         }
@@ -884,20 +1090,206 @@ function bindScenarioViewEvents() {
     });
   });
 
+  // Rest action handlers
+  document.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const { action, charId, cardId } = btn.dataset;
+      const ps = sv.playState[charId];
+      if (!ps) return;
+
+      if (action === 'start-long') {
+        ps.isLongResting = true;
+        ps.restPhase = 'done';
+        // Auto-ready the player
+        const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+        if (member) sv.readyPlayers[member.player_id] = true;
+        showToast('🌙 Long Rest selected — you are ready for the round.');
+        renderScenarioView();
+      }
+
+      else if (action === 'start-short') {
+        // Pick random candidate from discard
+        if (!ps.discard.length) return;
+        const idx = Math.floor(Math.random() * ps.discard.length);
+        ps.restCandidate = ps.discard[idx];
+        ps.restPhase = 'short-candidate';
+        renderScenarioView();
+      }
+
+      else if (action === 'lose-candidate') {
+        // Move candidate to lost, rest of discard → hand
+        const candidate = ps.restCandidate;
+        ps.lost.push(candidate);
+        ps.discard = ps.discard.filter(id => id !== candidate);
+        // Move remaining discard to hand (they're already in handCards, just clear discard)
+        ps.discard = [];
+        ps.restCandidate = null;
+        ps.restPhase = 'done';
+        showToast('Card lost. Discard moved to hand — select your two cards.');
+        renderScenarioView();
+      }
+
+      else if (action === 'keep-candidate') {
+        // Keep candidate → hand, draw second random, auto-lose after 5s
+        const kept = ps.restCandidate;
+        ps.discard = ps.discard.filter(id => id !== kept);
+        // kept card stays in hand (already in handCards)
+        showToast(`Kept ${kept}. −1 HP (update in Secretariat). Drawing second candidate...`, false);
+        ps.restCandidate = null;
+        ps.restPhase = 'short-candidate-2';
+        renderScenarioView();
+        // Pick second random from remaining discard
+        if (ps.discard.length > 0) {
+          const idx2 = Math.floor(Math.random() * ps.discard.length);
+          const candidate2 = ps.discard[idx2];
+          ps.restCandidate = candidate2;
+          renderScenarioView();
+          // Auto-lose after 5 seconds
+          setTimeout(() => {
+            ps.lost.push(candidate2);
+            ps.discard = ps.discard.filter(id => id !== candidate2);
+            ps.discard = []; // rest → hand
+            ps.restCandidate = null;
+            ps.restPhase = 'done';
+            showToast('Second candidate lost. Discard moved to hand — select your two cards.');
+            renderScenarioView();
+          }, 5000);
+        } else {
+          ps.restPhase = 'done';
+          renderScenarioView();
+        }
+      }
+
+      else if (action === 'start-override') {
+        ps.restPhase = 'short-override';
+        renderScenarioView();
+      }
+
+      else if (action === 'override-select') {
+        // Player chose which card to lose
+        ps.lost.push(cardId);
+        ps.discard = ps.discard.filter(id => id !== cardId);
+        ps.discard = []; // rest → hand
+        ps.restPhase = 'done';
+        showToast('Card lost. Discard moved to hand — select your two cards.');
+        renderScenarioView();
+      }
+
+      else if (action === 'cancel-rest') {
+        ps.isLongResting = false;
+        ps.restPhase = null;
+        ps.restCandidate = null;
+        // Un-ready the player if they were auto-readied by long rest
+        const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+        if (member) sv.readyPlayers[member.player_id] = false;
+        renderScenarioView();
+      }
+    });
+  });
+
+  // Rest cancel button
+  document.querySelectorAll('.sv-rest-cancel-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const { charId } = btn.dataset;
+      const ps = sv.playState[charId];
+      if (!ps) return;
+      ps.isLongResting = false;
+      ps.restPhase = null;
+      ps.restCandidate = null;
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      if (member) sv.readyPlayers[member.player_id] = false;
+      renderScenarioView();
+    });
+  });
+
+  // Short Rest Override ability checkbox
+  document.querySelectorAll('.sv-override-ability-check').forEach(chk => {
+    chk.addEventListener('change', e => {
+      const { charId } = chk.dataset;
+      const ps = sv.playState[charId];
+      if (ps) ps.hasOverrideAbility = chk.checked;
+      renderScenarioView();
+    });
+  });
+
+  // Declare Exhaustion button
+  document.querySelectorAll('.sv-exhaust-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const { charId } = btn.dataset;
+      if (!confirm('Declare exhaustion? All your hand, active, and discard cards will move to Lost.')) return;
+      const ps = sv.playState[charId];
+      if (!ps) return;
+      // Move all active, discard, hand cards to lost
+      ps.lost.push(...ps.active, ...ps.discard);
+      ps.active = [];
+      ps.discard = [];
+      // handCards stay in handCards array but are all "lost" now
+      // Track which handCards are lost by adding all to lost pile
+      const playedOrLost = new Set([...ps.lost]);
+      (ps.handCards ?? []).forEach(dc => {
+        if (!playedOrLost.has(dc.card_id)) ps.lost.push(dc.card_id);
+      });
+      await saveExhaustedForChar(charId, true);
+      // Un-ready player
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      if (member) sv.readyPlayers[member.player_id] = false;
+      showToast('💀 Exhausted. All cards moved to Lost.');
+      renderScenarioView();
+    });
+  });
+
+  // Check for forced exhaustion at start of select phase
+  if (sv.roundPhase === 'select') {
+    (sv.scenario.scenario_party ?? []).forEach(member => {
+      const charId = member.character_id;
+      const ps = sv.playState[charId];
+      if (!ps || ps.isExhausted) return;
+      const handCount = Math.max(0, (ps.handCards ?? []).length - ps.active.length - ps.discard.length - ps.lost.length);
+      const discardCount = ps.discard.length;
+      if (handCount < 2 && discardCount < 2) {
+        // Force exhaustion
+        (async () => {
+          ps.lost.push(...ps.active, ...ps.discard);
+          ps.active = [];
+          ps.discard = [];
+          (ps.handCards ?? []).forEach(dc => {
+            if (!ps.lost.includes(dc.card_id)) ps.lost.push(dc.card_id);
+          });
+          await saveExhaustedForChar(charId, true);
+          showToast(`💀 ${member.player?.player_name ?? 'A player'} is exhausted — not enough cards to continue.`);
+          renderScenarioView();
+        })();
+      }
+    });
+  }
+
   // GM Begin Round button
-  document.getElementById('sv-begin-round')?.addEventListener('click', () => {
+  document.getElementById('sv-begin-round')?.addEventListener('click', async () => {
     sv.roundPhase = 'play';
+    const newRound = (sv.scenario.round_number ?? 0) + 1;
+    await saveRoundNumber(newRound);
     renderScenarioView();
-    showToast('⚔️ Round begun! Cards are locked in.');
+    showToast(`⚔️ Round ${newRound} begun! Cards are locked in.`);
   });
 
   // GM New Round button — reset ready states and selection for next round
-  document.getElementById('sv-new-round')?.addEventListener('click', () => {
+  document.getElementById('sv-new-round')?.addEventListener('click', async () => {
     sv.roundPhase = 'select';
     sv.readyPlayers = {};
     sv.selectedCards = {};
+    // Clear long rest flags for next round
+    Object.values(sv.playState).forEach(ps => {
+      ps.isLongResting = false;
+      ps.restPhase = null;
+      ps.restCandidate = null;
+    });
+    // Save all play states at end of round
+    await saveAllPlayStates();
     renderScenarioView();
-    showToast('🔄 New round started — select your cards.');
+    showToast(`🔄 Round ${sv.scenario.round_number} — select your cards.`);
   });
 
   // GM cancel
@@ -917,6 +1309,8 @@ function bindScenarioViewEvents() {
   // GM pause
   document.getElementById('sv-pause-scenario')?.addEventListener('click', async () => {
     try {
+      // Save all play states before pausing
+      await saveAllPlayStates();
       await sb().from('scenarios').update({ status: 'paused' }).eq('id', sv.scenario.id);
       closeScenarioView();
       await loadCampaigns();
@@ -929,9 +1323,8 @@ function bindScenarioViewEvents() {
   // Tips carousel
   bindTipsCarousel();
 
-  // Spacebar zoom — rebind mouseenter/leave on current cards
-  // (keydown/keyup listeners are set up once in initSpacebarZoom)
-  document.querySelectorAll('.sv-card-img, .sv-tracker-img, .sv-pile-card').forEach(img => {
+  // Spacebar zoom — rebind mouseenter/leave on ALL card images in the view
+  document.querySelectorAll('.sv-card-img, .sv-tracker-img, .sv-pile-card, .sv-rest-card-img, .sv-rest-override-card img, .sv-active-card img, .sv-mat-img').forEach(img => {
     img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
     img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
   });
@@ -980,18 +1373,24 @@ function initSpacebarZoom(overlayEl) {
   zoomImg.style.cssText = 'max-height:90vh;max-width:90vw;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.8);';
   zoomOverlay.appendChild(zoomImg);
   overlayEl.appendChild(zoomOverlay);
-  zoomOverlay.addEventListener('click', () => { zoomOverlay.style.display = 'none'; });
+  zoomOverlay.addEventListener('click', () => {
+    document.getElementById('sv-zoom-overlay').style.display = 'none';
+  });
 
   // Use named handlers so they can be removed on close
   sv._zoomKeydown = e => {
     if (e.code === 'Space' && sv._hoveredCardImg) {
       e.preventDefault();
-      zoomImg.src = sv._hoveredCardImg;
-      zoomOverlay.style.display = 'flex';
+      const zo = document.getElementById('sv-zoom-overlay');
+      const zi = zo?.querySelector('img');
+      if (zi) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
     }
   };
   sv._zoomKeyup = e => {
-    if (e.code === 'Space') zoomOverlay.style.display = 'none';
+    if (e.code === 'Space') {
+      const zo = document.getElementById('sv-zoom-overlay');
+      if (zo) zo.style.display = 'none';
+    }
   };
   document.addEventListener('keydown', sv._zoomKeydown);
   document.addEventListener('keyup', sv._zoomKeyup);

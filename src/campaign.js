@@ -230,7 +230,7 @@ async function createScenario(campaignId, gmPlayerId, number, name, goal) {
     .eq('id', campaignId);
   if (phaseError) console.error('Phase update error:', phaseError);
   const { data, error } = await sb().from('scenarios')
-    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'active', scenario_step: 'beginning' })
+    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'active', scenario_step: 'beginning', round_number: 0 })
     .select().single();
   if (error) throw error;
   return data;

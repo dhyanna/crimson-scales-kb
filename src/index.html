@@ -1970,6 +1970,95 @@
     }
     .sv-gm-btn-primary:hover { background: rgba(201,168,76,0.2); }
 
+    /* Round counter */
+    .sv-banner-inner {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .sv-banner-left { flex: 1; min-width: 0; }
+    .sv-round-track {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      flex-shrink: 0;
+      padding-top: 2px;
+    }
+    .sv-round-box {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #c0392b;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.5;
+    }
+    .sv-round-current { opacity: 1; box-shadow: 0 0 6px rgba(192,57,43,0.6); transform: scale(1.1); }
+    /* Rest UI */
+    .sv-rest-area {
+      border: 1px solid var(--color-border, #333);
+      border-radius: 8px;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+    }
+    .sv-rest-required { border-color: #e67e22; background: rgba(230,126,34,0.06); }
+    .sv-rest-title { font-size: 12px; font-weight: 700; color: var(--color-text, #e0e0e0); margin-bottom: 8px; }
+    .sv-rest-status { font-size: 12px; color: #7090d0; margin-bottom: 8px; }
+    .sv-rest-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .sv-rest-btn {
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--color-border, #333);
+      background: rgba(255,255,255,0.06);
+      color: var(--color-text, #e0e0e0);
+    }
+    .sv-rest-btn:hover { background: rgba(255,255,255,0.12); }
+    .sv-rest-long { border-color: #7090d0; color: #7090d0; }
+    .sv-rest-short { border-color: var(--color-accent, #c9a84c); color: var(--color-accent, #c9a84c); }
+    .sv-rest-override-btn { border-color: #9b59b6; color: #9b59b6; }
+    .sv-rest-lose { border-color: #c0392b; color: #e74c3c; }
+    .sv-rest-keep { border-color: #27ae60; color: #2ecc71; }
+    .sv-rest-cancel-btn {
+      margin-top: 6px; padding: 4px 10px; background: none;
+      border: 1px solid #555; border-radius: 4px; color: #888; font-size: 11px; cursor: pointer;
+    }
+    .sv-override-check-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--color-text-secondary, #888); margin-bottom: 6px; cursor: pointer;
+    }
+    .sv-rest-candidate { border-color: var(--color-accent, #c9a84c); }
+    .sv-rest-card-preview { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 8px; }
+    .sv-rest-card-img { width: 80px; border-radius: 4px; }
+    .sv-rest-card-name { font-size: 11px; color: #888; text-align: center; }
+    .sv-rest-override-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .sv-rest-override-card { cursor: pointer; border: 2px solid transparent; border-radius: 5px; padding: 2px; text-align: center; }
+    .sv-rest-override-card:hover { border-color: #c0392b; }
+    /* Exhaustion */
+    .sv-play-area-exhausted { opacity: 0.5; pointer-events: none; }
+    .sv-play-area-exhausted .sv-tracker-card.sv-tracker-bg { pointer-events: all; opacity: 1; }
+    .sv-exhausted-banner {
+      background: rgba(192,57,43,0.15); border: 1px solid #c0392b;
+      border-radius: 6px; padding: 10px 14px; font-size: 13px;
+      font-weight: 600; color: #e74c3c; text-align: center;
+    }
+    .sv-exhaust-trigger { display: flex; justify-content: flex-end; padding-top: 4px; }
+    .sv-exhaust-btn {
+      padding: 4px 10px; background: none; border: 1px solid #c0392b;
+      border-radius: 4px; color: #c0392b; font-size: 11px; cursor: pointer; opacity: 0.6;
+    }
+    .sv-exhaust-btn:hover { opacity: 1; background: rgba(192,57,43,0.1); }
+    .sv-init-exhausted { opacity: 0.35; filter: grayscale(1); pointer-events: none; }
+
     /* GM controls */
     .sv-gm-controls {
       position: fixed;
