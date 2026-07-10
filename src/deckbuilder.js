@@ -14,12 +14,16 @@ let db = {
 
 // ── HAND SIZES PER CLASS ─────────────────────────────────────
 const BASE_HAND_SIZES = {
-  chainguard: 10,
-  luminary:   10,
-  chieftain:  10,
-  hierophant: 11,
-  hollowpact: 10,
-  mirefoot:   10,
+  chainguard:  10,
+  luminary:    11,
+  chieftain:   10,
+  hierophant:  11,
+  hollowpact:  10,
+  mirefoot:    10,
+  fireknight:  10,
+  bombard:      9,
+  brightspark: 11,
+  starslinger: 10,
 };
 
 function getHandSize() {

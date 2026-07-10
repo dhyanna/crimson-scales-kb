@@ -83,6 +83,7 @@ async function loadPartyHandCards(party) {
       isExhausted:     partyRow?.is_exhausted ?? false,
       isLongResting:   savedState.isLongResting ?? false,
       hasOverrideAbility: savedState.hasOverrideAbility ?? false,
+      hasActiveNonLoss: savedState.hasActiveNonLoss ?? false,
       restPhase:       savedState.restPhase ?? null,
       restCandidate:   savedState.restCandidate ?? null,
     };
@@ -125,6 +126,7 @@ async function savePlayStateForChar(charId) {
     dotCount:          ps.dotCount,
     isLongResting:     ps.isLongResting,
     hasOverrideAbility: ps.hasOverrideAbility,
+    hasActiveNonLoss:  ps.hasActiveNonLoss,
     restPhase:         ps.restPhase,
     restCandidate:     ps.restCandidate,
   };
@@ -323,9 +325,10 @@ function buildPlayArea(party) {
   const myPlayerId = myPlayer?.id ?? null;
 
   // isMyArea: true if this is my own character, OR I am the assigned substitute for an absent player
-  const isMyChar = member.player_id === myPlayerId;
+  // In dev mode with no player selected, treat the active tab as own area
+  const isMyChar = myPlayerId ? member.player_id === myPlayerId : (sv.activePartyIdx === (sv.scenario.scenario_party ?? []).indexOf(member));
   const isSubstitute = member.is_absent && member.substitute_player_id === myPlayerId;
-  const isMyArea = isMyChar || isSubstitute;
+  const isMyArea = isMyChar || isSubstitute || (IS_DEV && !myPlayerId);
   const isPeeking = !isMyArea;
   const ps = sv.playState[charId] ?? { hand: [], active: [], discard: [], lost: [] };
 
@@ -336,6 +339,14 @@ function buildPlayArea(party) {
   return `
     <div class="sv-play-area${ps.isExhausted ? ' sv-play-area-exhausted' : ''}" id="sv-play-area">
       ${isPeeking ? `<div class="sv-peek-banner">👁 Viewing ${member.player?.player_name ?? '?'}'s play area</div>` : ''}
+
+      <!-- Top action bar: Negate Damage + Declare Exhaustion -->
+      ${!ps.isExhausted ? `
+        <div class="sv-action-bar">
+          ${!isPeeking ? buildNegateDamageCompact(charId, ps) : ''}
+          <button class="sv-exhaust-btn" data-char-id="${charId}">💀 Declare Exhaustion</button>
+        </div>` : ''}
+      ${ps.isExhausted ? `<div class="sv-exhausted-banner">💀 Exhausted — no longer participating in scenario play</div>` : ''}
 
       <!-- Above mat: Active/Persistent zone -->
       <div class="sv-zone sv-zone-active">
@@ -352,7 +363,10 @@ function buildPlayArea(party) {
           <div class="sv-zone-label">Discard (${ps.discard.length})</div>
           <div class="sv-pile-stack">
             ${ps.discard.length > 0
-              ? `<img src="${getCardBack(classId)}" class="sv-pile-card" alt="Discard pile">`
+              ? `<div class="sv-pile-clickable" data-pile="discard" data-char-id="${charId}">
+                  <img src="${getCardBack(classId)}" class="sv-pile-card" alt="Discard pile">
+                  <div class="sv-pile-view-hint">👁 View</div>
+                </div>`
               : '<div class="sv-zone-empty">—</div>'}
           </div>
         </div>
@@ -365,7 +379,10 @@ function buildPlayArea(party) {
           <div class="sv-zone-label">Lost (${ps.lost.length})</div>
           <div class="sv-pile-stack">
             ${ps.lost.length > 0
-              ? `<img src="${getCardBack(classId)}" class="sv-pile-card" alt="Lost pile">`
+              ? `<div class="sv-pile-clickable" data-pile="lost" data-char-id="${charId}">
+                  <img src="${getCardBack(classId)}" class="sv-pile-card" alt="Lost pile">
+                  <div class="sv-pile-view-hint">👁 View</div>
+                </div>`
               : '<div class="sv-zone-empty">—</div>'}
           </div>
         </div>
@@ -379,31 +396,21 @@ function buildPlayArea(party) {
         </div>
       </div>
 
-      <!-- Trackers row -->
-      ${buildTrackerRow(member, classId, classData, isPeeking)}
-
       <!-- Rest action UI -->
       ${!isPeeking && !ps.isExhausted ? buildRestUI(charId, ps) : ''}
+    </div>
 
-      <!-- Play Tips -->
-      ${!isPeeking && !ps.isExhausted ? buildPlayTips(classId, member) : ''}
-
-      <!-- Declare exhaustion button -->
-      ${!isPeeking && !ps.isExhausted ? `
-        <div class="sv-exhaust-trigger">
-          <button class="sv-exhaust-btn" data-char-id="${charId}">💀 Declare Exhaustion</button>
-        </div>` : ''}
-
-      <!-- Exhausted overlay message -->
-      ${ps.isExhausted ? `<div class="sv-exhausted-banner">💀 Exhausted — no longer participating in scenario play</div>` : ''}
-    </div>`;
+    <!-- Bottom drawer: trackers + tips -->
+    ${buildBottomDrawer(member, classId, classData, charId, ps, isPeeking)}`;
 }
 
 // ── Rest UI ──────────────────────────────────────────────────────
 function buildRestUI(charId, ps) {
   const discardCount = ps.discard.length;
   const handCount = (ps.handCards ?? []).length - ps.active.length - ps.discard.length - ps.lost.length;
-  const canRest = discardCount >= 2;
+  const hasActiveNonLoss = ps.hasActiveNonLoss ?? false;
+  const effectiveDiscardCount = discardCount + (hasActiveNonLoss ? ps.active.length : 0);
+  const canRest = effectiveDiscardCount >= 2;
   const mustRest = handCount < 2 && canRest;
   const isLongResting = ps.isLongResting ?? false;
   const restPhase = ps.restPhase ?? null;
@@ -457,30 +464,37 @@ function buildRestUI(charId, ps) {
       </div>`;
   }
 
-  // Normal rest prompt
-  if (!canRest) return '';
+  // Player state checkboxes — always visible regardless of rest availability
+  const overrideCheck = `
+    <label class="sv-override-check-label">
+      <input type="checkbox" class="sv-override-ability-check" data-char-id="${charId}" ${ps.hasOverrideAbility ? 'checked' : ''}>
+      I have Short Rest Override ability
+    </label>`;
+
+  const activeNonLossCheck = ps.active.length > 0 ? `
+    <label class="sv-override-check-label">
+      <input type="checkbox" class="sv-active-nonloss-check" data-char-id="${charId}" ${ps.hasActiveNonLoss ? 'checked' : ''}>
+      I have non-loss persistent cards in my active area (count toward discard for Long Rest)
+    </label>` : '';
+
   const overrideOption = ps.hasOverrideAbility
     ? `<button class="sv-rest-btn sv-rest-override-btn" data-char-id="${charId}" data-action="start-override">⚡ Short Rest (Override)</button>`
     : '';
-  const overrideCheck = !ps.hasOverrideAbility
-    ? `<label class="sv-override-check-label">
-        <input type="checkbox" class="sv-override-ability-check" data-char-id="${charId}">
-        I have Short Rest Override ability
-      </label>`
-    : `<label class="sv-override-check-label">
-        <input type="checkbox" class="sv-override-ability-check" data-char-id="${charId}" checked>
-        I have Short Rest Override ability
-      </label>`;
+
+  // Show rest buttons only when canRest
+  const restButtons = canRest ? `
+    <div class="sv-rest-actions">
+      <button class="sv-rest-btn sv-rest-short" data-char-id="${charId}" data-action="start-short">🎲 Short Rest</button>
+      ${overrideOption}
+      <button class="sv-rest-btn sv-rest-long" data-char-id="${charId}" data-action="start-long">🌙 Long Rest</button>
+    </div>` : '';
 
   return `
     <div class="sv-rest-area${mustRest ? ' sv-rest-required' : ''}">
-      <div class="sv-rest-title">${mustRest ? '⚠️ Must Rest — not enough cards to play' : '💤 Rest available'}</div>
+      <div class="sv-rest-title">${mustRest ? '⚠️ Must Rest — not enough cards to play' : canRest ? '💤 Rest available' : '💤 Rest options'}</div>
       ${overrideCheck}
-      <div class="sv-rest-actions">
-        <button class="sv-rest-btn sv-rest-short" data-char-id="${charId}" data-action="start-short">🎲 Short Rest</button>
-        ${overrideOption}
-        <button class="sv-rest-btn sv-rest-long" data-char-id="${charId}" data-action="start-long">🌙 Long Rest</button>
-      </div>
+      ${activeNonLossCheck}
+      ${restButtons}
     </div>`;
 }
 
@@ -496,6 +510,351 @@ function getCardDataById(charId, cardId) {
     c.name === cardId ||
     c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === cardId
   ) ?? null;
+}
+
+// ── Compact negate damage (for action bar) ───────────────────────
+function buildNegateDamageCompact(charId, ps) {
+  const selectedCards = sv.selectedCards[charId] ?? [];
+  const playedOrLostOrSelected = new Set([...ps.active, ...ps.discard, ...ps.lost, ...selectedCards]);
+  const handCount = Math.max(0, (ps.handCards ?? []).filter(dc => !playedOrLostOrSelected.has(dc.card_id)).length);
+  const discardCount = ps.discard.length;
+  const canNegateHand = handCount >= 1;
+  const canNegateDiscard = discardCount >= 2;
+  if (!canNegateHand && !canNegateDiscard) return '';
+  return `
+    <div class="sv-negate-compact">
+      <span class="sv-negate-compact-label">🛡️</span>
+      ${canNegateHand ? `<button class="sv-negate-compact-btn" data-char-id="${charId}" data-action="negate-hand" title="Negate: lose 1 hand card">Hand ×1</button>` : ''}
+      ${canNegateDiscard ? `<button class="sv-negate-compact-btn" data-char-id="${charId}" data-action="negate-discard" title="Negate: lose 2 discard cards">Discard ×2</button>` : ''}
+    </div>`;
+}
+
+// ── Bottom drawer: trackers + tips ───────────────────────────────
+function buildBottomDrawer(member, classId, classData, charId, ps, isPeeking) {
+  const isOpen = sv.drawerOpen ?? false;
+  const trackerHtml = buildTrackerRow(member, classId, classData, isPeeking);
+  const tipsHtml = !isPeeking && !ps.isExhausted ? buildPlayTips(classId, member) : '';
+
+  return `
+    <div class="sv-bottom-drawer${isOpen ? ' sv-drawer-open' : ''}" id="sv-bottom-drawer">
+      <button class="sv-drawer-toggle" id="sv-drawer-toggle" tabindex="-1">
+        ${isOpen ? '▼ Hide Goals & Tips' : '▲ Goals & Tips'}
+      </button>
+      <div class="sv-drawer-content">
+        ${trackerHtml}
+        ${tipsHtml}
+      </div>
+    </div>`;
+}
+
+// ── Pile viewer modal ─────────────────────────────────────────────
+function openPileModal(charId, pile, classId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+  const cards = pile === 'discard' ? ps.discard : ps.lost;
+  const classData = CLASS_REGISTRY?.[classId];
+  const pileLabel = pile === 'discard' ? 'Discard Pile' : 'Lost Pile';
+
+  const cardItems = cards.map(cardId => {
+    const cardData = getCardDataById(charId, cardId);
+    const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+    const cardName = cardData?.name ?? cardId;
+    return `
+      <div class="sv-pile-modal-card" data-card-id="${cardId}" data-pile="${pile}" data-char-id="${charId}">
+        <img src="${cardImg}" class="sv-pile-modal-img sv-zoomable" alt="${cardName}">
+        <div class="sv-pile-modal-card-name">${cardName}</div>
+        <div class="sv-pile-modal-actions">
+          <button class="sv-pile-return-btn" data-card-id="${cardId}" data-pile="${pile}" data-char-id="${charId}">
+            ↩ Return to Hand
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-pile-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="db-modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">${pileLabel} (${cards.length} cards)</h3>
+        <button class="db-modal-close" id="sv-pile-modal-close">✕</button>
+      </div>
+      <div class="db-modal-body" style="overflow-y:auto;flex:1">
+        ${cards.length ? `<div class="sv-pile-modal-grid">${cardItems}</div>`
+          : '<p style="color:#888;text-align:center;padding:20px">Pile is empty</p>'}
+      </div>
+    </div>`;
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+
+  // Rebind zoom for new images
+  modal.querySelectorAll('.sv-zoomable').forEach(img => {
+    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
+    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
+  });
+
+  document.getElementById('sv-pile-modal-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // Return to hand buttons
+  modal.querySelectorAll('.sv-pile-return-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { cardId, pile: p, charId: cid } = btn.dataset;
+      const ps = sv.playState[cid];
+      if (!ps) return;
+      if (p === 'discard') ps.discard = ps.discard.filter(id => id !== cardId);
+      else ps.lost = ps.lost.filter(id => id !== cardId);
+      // Card returns to hand — it's already in handCards so just removing from pile is enough
+      modal.remove();
+      showToast(`↩ Card returned to hand.`);
+      renderScenarioView();
+    });
+  });
+}
+
+// ── Negate: Move hand card to lost ────────────────────────────────
+function openHandToLostModal(charId, classId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+  const playedSet = new Set([...ps.active, ...ps.discard, ...ps.lost, ...(sv.selectedCards[charId] ?? [])]);
+  const availableHand = (ps.handCards ?? []).filter(dc => !playedSet.has(dc.card_id));
+
+  const cardItems = availableHand.map(dc => {
+    const cardData = getCardDataById(charId, dc.card_id);
+    const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+    const cardName = cardData?.name ?? dc.card_id;
+    return `
+      <div class="sv-pile-modal-card">
+        <img src="${cardImg}" class="sv-pile-modal-img sv-zoomable" alt="${cardName}">
+        <div class="sv-pile-modal-card-name">${cardName}</div>
+        <button class="sv-negate-select-btn" data-card-id="${dc.card_id}" data-char-id="${charId}" data-mode="hand-lost">
+          → Lose this card
+        </button>
+      </div>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-negate-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="db-modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">🛡️ Negate Damage — Choose 1 Hand Card to Lose</h3>
+        <button class="db-modal-close" id="sv-negate-modal-close">✕</button>
+      </div>
+      <div class="db-modal-body" style="overflow-y:auto;flex:1">
+        <div class="sv-pile-modal-grid">${cardItems}</div>
+      </div>
+    </div>`;
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+  document.getElementById('sv-negate-modal-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  modal.querySelectorAll('.sv-negate-select-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { cardId, charId: cid } = btn.dataset;
+      const ps = sv.playState[cid];
+      if (!ps) return;
+      ps.lost.push(cardId);
+      modal.remove();
+      showToast('🛡️ Damage negated — 1 hand card lost.');
+      renderScenarioView();
+    });
+  });
+}
+
+// ── Negate: Move 2 discard cards to lost ──────────────────────────
+function openNegateDiscardModal(charId, classId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+  let selected = [];
+
+  function buildGrid() {
+    return ps.discard.map(cardId => {
+      const cardData = getCardDataById(charId, cardId);
+      const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+      const cardName = cardData?.name ?? cardId;
+      const isSelected = selected.includes(cardId);
+      return `
+        <div class="sv-pile-modal-card${isSelected ? ' sv-negate-selected' : ''}"
+            data-card-id="${cardId}">
+          <img src="${cardImg}" class="sv-pile-modal-img sv-zoomable" alt="${cardName}">
+          <div class="sv-pile-modal-card-name">${cardName}</div>
+          ${isSelected ? '<div class="sv-negate-sel-badge">✓ Selected</div>' : ''}
+        </div>`;
+    }).join('');
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-negate-modal';
+  modal.style.display = 'flex';
+
+  function render() {
+    modal.innerHTML = `
+      <div class="db-modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+        <div class="db-modal-header">
+          <h3 class="db-modal-title">🛡️ Negate Damage — Choose 2 Discard Cards to Lose (${selected.length}/2)</h3>
+          <button class="db-modal-close" id="sv-negate-modal-close">✕</button>
+        </div>
+        <div class="db-modal-body" style="overflow-y:auto;flex:1">
+          <div class="sv-pile-modal-grid">${buildGrid()}</div>
+        </div>
+        <div class="db-modal-footer">
+          <button class="wizard-btn" id="sv-negate-modal-close2">Cancel</button>
+          <button class="wizard-btn wizard-btn-primary" id="sv-negate-confirm" ${selected.length < 2 ? 'disabled' : ''}>
+            🛡️ Confirm — Lose 2 Cards
+          </button>
+        </div>
+      </div>`;
+
+    document.getElementById('sv-negate-modal-close')?.addEventListener('click', () => modal.remove());
+    document.getElementById('sv-negate-modal-close2')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelectorAll('.sv-pile-modal-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const cardId = card.dataset.cardId;
+        const idx = selected.indexOf(cardId);
+        if (idx >= 0) selected.splice(idx, 1);
+        else if (selected.length < 2) selected.push(cardId);
+        render();
+      });
+    });
+
+    document.getElementById('sv-negate-confirm')?.addEventListener('click', () => {
+      const ps = sv.playState[charId];
+      if (!ps) return;
+      selected.forEach(cardId => {
+        ps.discard = ps.discard.filter(id => id !== cardId);
+        ps.lost.push(cardId);
+      });
+      modal.remove();
+      showToast('🛡️ Damage negated — 2 discard cards lost.');
+      renderScenarioView();
+    });
+  }
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+  render();
+}
+
+// ── Long Rest Modal ──────────────────────────────────────────────
+function openLongRestModal(charId, classId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+
+  const hasActiveNonLoss = ps.hasActiveNonLoss ?? false;
+
+  const discardCards = ps.discard.map(cardId => {
+    const cardData = getCardDataById(charId, cardId);
+    const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+    const cardName = cardData?.name ?? cardId;
+    return `
+      <div class="sv-pile-modal-card" data-card-id="${cardId}" data-char-id="${charId}">
+        <img src="${cardImg}" class="sv-pile-modal-img sv-zoomable" alt="${cardName}">
+        <div class="sv-pile-modal-card-name">${cardName}</div>
+        <button class="sv-long-rest-lose-btn" data-card-id="${cardId}" data-char-id="${charId}">
+          → Lose this card
+        </button>
+      </div>`;
+  }).join('');
+
+  const activeNonLossSection = hasActiveNonLoss ? `
+    <div class="sv-long-rest-active-note">
+      <div class="sv-long-rest-active-title">📌 Non-loss persistent card option</div>
+      <p>You declared having non-loss persistent card(s) in your active area. Use the <strong>→ Lost</strong> button on those cards in your play area to move them to your Lost pile manually, then click confirm below to return all remaining discard cards to your hand.</p>
+      <button class="sv-long-rest-active-confirm" data-char-id="${charId}">
+        ✓ I've lost my active card — return discard to hand
+      </button>
+    </div>
+    <div class="sv-long-rest-divider">— or lose a discard card instead —</div>` : '';
+
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-long-rest-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="db-modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">🌙 Long Rest — Choose 1 Card to Lose</h3>
+      </div>
+      <div class="db-modal-body" style="overflow-y:auto;flex:1">
+        <p style="font-size:12px;color:#888;padding:0 4px 12px">
+          All remaining discard cards will return to your hand after one card is lost.
+        </p>
+        ${activeNonLossSection}
+        <div class="sv-pile-modal-grid">${discardCards}</div>
+      </div>
+    </div>`;
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+
+  // Rebind zoom
+  modal.querySelectorAll('.sv-zoomable').forEach(img => {
+    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
+    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
+  });
+
+  async function completeLongRest(charId, lostCardId, source) {
+    const ps = sv.playState[charId];
+    if (!ps) return;
+    if (lostCardId && source === 'discard') {
+      ps.discard = ps.discard.filter(id => id !== lostCardId);
+      ps.lost.push(lostCardId);
+    }
+    // Return all remaining discard to hand
+    ps.discard = [];
+    ps.isLongResting = false;
+    ps.hasActiveNonLoss = false;
+    ps.restPhase = 'done';
+    modal.remove();
+    await savePlayStateForChar(charId);
+    showToast('🌙 Long Rest complete — discard returned to hand.');
+    renderScenarioView();
+  }
+
+  // Lose a discard card
+  modal.querySelectorAll('.sv-long-rest-lose-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await completeLongRest(btn.dataset.charId, btn.dataset.cardId, 'discard');
+    });
+  });
+
+  // Confirm active card already manually lost
+  modal.querySelector('.sv-long-rest-active-confirm')?.addEventListener('click', async () => {
+    await completeLongRest(charId, null, 'active');
+  });
+}
+
+// ── Negate Damage UI ──────────────────────────────────────────────
+function buildNegateDamageUI(charId, ps, classId) {
+  const selectedCards = sv.selectedCards[charId] ?? [];
+  const playedOrLostOrSelected = new Set([...ps.active, ...ps.discard, ...ps.lost, ...selectedCards]);
+  const handCount = Math.max(0, (ps.handCards ?? []).filter(dc => !playedOrLostOrSelected.has(dc.card_id)).length);
+  const discardCount = ps.discard.length;
+  const canNegateHand = handCount >= 1;
+  const canNegateDiscard = discardCount >= 2;
+  const canNegate = canNegateHand || canNegateDiscard;
+
+  if (!canNegate) return '';
+
+  return `
+    <div class="sv-negate-area">
+      <div class="sv-negate-title">🛡️ Negate Damage</div>
+      <div class="sv-negate-actions">
+        ${canNegateHand ? `<button class="sv-negate-btn sv-negate-hand" data-char-id="${charId}" data-action="negate-hand">
+          Hand card → Lost (×1)
+        </button>` : ''}
+        ${canNegateDiscard ? `<button class="sv-negate-btn sv-negate-discard" data-char-id="${charId}" data-action="negate-discard">
+          Discard → Lost (×2)
+        </button>` : ''}
+      </div>
+    </div>`;
 }
 
 // ── Character Mat ─────────────────────────────────────────────────
@@ -854,14 +1213,18 @@ function buildAbsentModal(party) {
 // ── GM Controls ───────────────────────────────────────────────────
 function buildGMControls() {
   if (!sv.isGM) return '';
-  const party = sv.scenario?.scenario_party ?? [];
+  const party = (sv.scenario?.scenario_party ?? []).filter(m =>
+    !(sv.playState[m.character_id]?.isExhausted ?? false)
+  );
   const allReady = party.length > 0 && party.every(m => sv.readyPlayers[m.player_id]);
+  const allEndedTurns = sv.roundPhase === 'play' && party.length > 0 &&
+    party.every(m => !(sv.readyPlayers[m.player_id] ?? false));
   const inPlayPhase = sv.roundPhase === 'play';
 
   return `
     <div class="sv-gm-controls" id="sv-gm-controls">
       ${allReady && !inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-begin-round">⚔️ Begin Round</button>` : ''}
-      ${inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 New Round</button>` : ''}
+      ${allEndedTurns ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 End Round</button>` : ''}
       <button class="sv-gm-btn" id="sv-pause-scenario">⏸ Pause</button>
       <button class="sv-gm-btn sv-gm-btn-danger" id="sv-cancel-scenario">✕ Cancel Scenario</button>
     </div>`;
@@ -933,9 +1296,19 @@ function bindScenarioViewEvents() {
         const currentlyReady = sv.readyPlayers[playerId] ?? false;
         if (currentlyReady) {
           sv.readyPlayers[playerId] = false;
-          // Save play state at end of turn
           const memberForPlayer = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
-          if (memberForPlayer) await savePlayStateForChar(memberForPlayer.character_id);
+          if (memberForPlayer) {
+            const charId = memberForPlayer.character_id;
+            const ps = sv.playState[charId];
+            // If player declared Long Rest during card selection, execute it now
+            if (ps?.isLongResting) {
+              await savePlayStateForChar(charId);
+              renderScenarioView();
+              openLongRestModal(charId, memberForPlayer.characters?.class_id ?? '');
+              return;
+            }
+            await savePlayStateForChar(charId);
+          }
           showToast('Turn ended.');
           renderScenarioView();
         }
@@ -1090,6 +1463,45 @@ function bindScenarioViewEvents() {
     });
   });
 
+  // Bottom drawer toggle
+  document.getElementById('sv-drawer-toggle')?.addEventListener('click', () => {
+    sv.drawerOpen = !(sv.drawerOpen ?? false);
+    const drawer = document.getElementById('sv-bottom-drawer');
+    if (drawer) drawer.classList.toggle('sv-drawer-open', sv.drawerOpen);
+    const btn = document.getElementById('sv-drawer-toggle');
+    if (btn) btn.textContent = sv.drawerOpen ? '▼ Hide Goals & Tips' : '▲ Goals & Tips';
+  });
+
+  // Pile click — open viewer modal
+  document.querySelectorAll('.sv-pile-clickable').forEach(pile => {
+    pile.addEventListener('click', () => {
+      const { pile: pileType, charId } = pile.dataset;
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      const classId = member?.characters?.class_id ?? '';
+      openPileModal(charId, pileType, classId);
+    });
+  });
+
+  // Negate damage actions
+  document.querySelectorAll('[data-action^="negate"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const { action, charId } = btn.dataset;
+      const ps = sv.playState[charId];
+      if (!ps) return;
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      const classId = member?.characters?.class_id ?? '';
+
+      if (action === 'negate-hand') {
+        // Show hand cards to pick one to lose
+        openHandToLostModal(charId, classId);
+      } else if (action === 'negate-discard') {
+        // Show discard to pick 2 cards to lose
+        openNegateDiscardModal(charId, classId);
+      }
+    });
+  });
+
   // Rest action handlers
   document.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', async e => {
@@ -1214,6 +1626,16 @@ function bindScenarioViewEvents() {
     });
   });
 
+  // Active non-loss cards checkbox (count toward discard for Long Rest)
+  document.querySelectorAll('.sv-active-nonloss-check').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const { charId } = chk.dataset;
+      const ps = sv.playState[charId];
+      if (ps) ps.hasActiveNonLoss = chk.checked;
+      renderScenarioView();
+    });
+  });
+
   // Declare Exhaustion button
   document.querySelectorAll('.sv-exhaust-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
@@ -1275,12 +1697,20 @@ function bindScenarioViewEvents() {
     showToast(`⚔️ Round ${newRound} begun! Cards are locked in.`);
   });
 
-  // GM New Round button — reset ready states and selection for next round
+  // GM End Round / New Round button
   document.getElementById('sv-new-round')?.addEventListener('click', async () => {
+    // ── END OF ROUND ─────────────────────────────────────────────────
+    // Future end-of-round triggers can be inserted here, for example:
+    //   - Element consumption/generation resets
+    //   - Persistent ability end-of-round effects
+    //   - Certain item ability triggers
+    //   - Status condition duration tracking
+    // ─────────────────────────────────────────────────────────────────
+
     sv.roundPhase = 'select';
     sv.readyPlayers = {};
     sv.selectedCards = {};
-    // Clear long rest flags for next round
+    // Clear rest flags for next round (hasActiveNonLoss persists until manually unchecked)
     Object.values(sv.playState).forEach(ps => {
       ps.isLongResting = false;
       ps.restPhase = null;
@@ -1289,7 +1719,7 @@ function bindScenarioViewEvents() {
     // Save all play states at end of round
     await saveAllPlayStates();
     renderScenarioView();
-    showToast(`🔄 Round ${sv.scenario.round_number} — select your cards.`);
+    showToast(`🔄 Round ${sv.scenario.round_number} ended — begin card selection for next round.`);
   });
 
   // GM cancel
@@ -1381,6 +1811,7 @@ function initSpacebarZoom(overlayEl) {
   sv._zoomKeydown = e => {
     if (e.code === 'Space' && sv._hoveredCardImg) {
       e.preventDefault();
+      e.stopPropagation();
       const zo = document.getElementById('sv-zoom-overlay');
       const zi = zo?.querySelector('img');
       if (zi) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
@@ -1388,6 +1819,7 @@ function initSpacebarZoom(overlayEl) {
   };
   sv._zoomKeyup = e => {
     if (e.code === 'Space') {
+      e.preventDefault();
       const zo = document.getElementById('sv-zoom-overlay');
       if (zo) zo.style.display = 'none';
     }
