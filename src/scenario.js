@@ -54,7 +54,7 @@ async function loadPartyHandCards(party) {
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
     sb().from('character_state').select('*').in('character_id', charIds),
-    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id').in('character_id', charIds),
+    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start').in('character_id', charIds),
   ]);
 
   for (const member of party) {
@@ -86,6 +86,10 @@ async function loadPartyHandCards(party) {
       hasActiveNonLoss: savedState.hasActiveNonLoss ?? false,
       restPhase:       savedState.restPhase ?? null,
       restCandidate:   savedState.restCandidate ?? null,
+      lootedTreasure:  partyRow?.looted_treasure ?? false,
+      // Start snapshots for abandon rollback (only set on first load, not resume)
+      pqChecksStart:      partyRow?.pq_checks_start ?? stateRow?.pq_checks ?? 0,
+      milestoneChecksStart: partyRow?.milestone_checks_start ?? stateRow?.milestone_checks ?? 0,
     };
   }
 }
@@ -464,6 +468,20 @@ function buildRestUI(charId, ps) {
       </div>`;
   }
 
+  // Treasure tile checkbox — show only if player hasn't looted one yet
+  const myMember = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
+  const playerTreasureLooted = myMember?.player
+    ? (sv.campaign.players ?? []).find(p => p.id === myMember.player_id)?.treasure_looted ?? false
+    : false;
+  const scenarioTreasureLooted = ps.lootedTreasure ?? false;
+  const showTreasureCheck = !playerTreasureLooted;
+
+  const treasureCheck = showTreasureCheck ? `
+    <label class="sv-override-check-label">
+      <input type="checkbox" class="sv-treasure-check" data-char-id="${charId}" ${scenarioTreasureLooted ? 'checked' : ''}>
+      🗝️ I looted a treasure tile this scenario
+    </label>` : '';
+
   // Player state checkboxes — always visible regardless of rest availability
   const overrideCheck = `
     <label class="sv-override-check-label">
@@ -492,6 +510,7 @@ function buildRestUI(charId, ps) {
   return `
     <div class="sv-rest-area${mustRest ? ' sv-rest-required' : ''}">
       <div class="sv-rest-title">${mustRest ? '⚠️ Must Rest — not enough cards to play' : canRest ? '💤 Rest available' : '💤 Rest options'}</div>
+      ${treasureCheck}
       ${overrideCheck}
       ${activeNonLossCheck}
       ${restButtons}
@@ -1225,6 +1244,7 @@ function buildGMControls() {
     <div class="sv-gm-controls" id="sv-gm-controls">
       ${allReady && !inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-begin-round">⚔️ Begin Round</button>` : ''}
       ${allEndedTurns ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 End Round</button>` : ''}
+      ${!inPlayPhase && (sv.scenario?.round_number ?? 0) >= 1 ? `<button class="sv-gm-btn sv-gm-btn-gold" id="sv-end-scenario">🏁 End Scenario</button>` : ''}
       <button class="sv-gm-btn" id="sv-pause-scenario">⏸ Pause</button>
       <button class="sv-gm-btn sv-gm-btn-danger" id="sv-cancel-scenario">✕ Cancel Scenario</button>
     </div>`;
@@ -1697,6 +1717,27 @@ function bindScenarioViewEvents() {
     showToast(`⚔️ Round ${newRound} begun! Cards are locked in.`);
   });
 
+  // End Scenario button
+  document.getElementById('sv-end-scenario')?.addEventListener('click', () => {
+    openEndScenarioModal();
+  });
+
+  // Treasure tile checkbox
+  document.querySelectorAll('.sv-treasure-check').forEach(chk => {
+    chk.addEventListener('change', async () => {
+      const { charId } = chk.dataset;
+      const ps = sv.playState[charId];
+      if (!ps) return;
+      ps.lootedTreasure = chk.checked;
+      // Save to scenario_party
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      if (member?.id) {
+        await sb().from('scenario_party').update({ looted_treasure: chk.checked }).eq('id', member.id);
+      }
+      renderScenarioView();
+    });
+  });
+
   // GM End Round / New Round button
   document.getElementById('sv-new-round')?.addEventListener('click', async () => {
     // ── END OF ROUND ─────────────────────────────────────────────────
@@ -1724,13 +1765,23 @@ function bindScenarioViewEvents() {
 
   // GM cancel
   document.getElementById('sv-cancel-scenario')?.addEventListener('click', async () => {
-    if (!confirm('Cancel this scenario? This will abandon the scenario.')) return;
+    if (!confirm('Cancel this scenario? This will abandon the scenario and roll back any PQ/milestone progress made during play.')) return;
     try {
+      // Rollback PQ/milestone checks to start snapshots
+      const party = sv.scenario.scenario_party ?? [];
+      for (const member of party) {
+        const ps = sv.playState[member.character_id];
+        if (!ps?.stateId) continue;
+        await sb().from('character_state').update({
+          pq_checks: ps.pqChecksStart ?? ps.pqChecks,
+          milestone_checks: ps.milestoneChecksStart ?? ps.milestoneChecks,
+        }).eq('id', ps.stateId);
+      }
       await sb().from('scenarios').update({ status: 'abandoned' }).eq('id', sv.scenario.id);
       await updateCampaignPhase(sv.campaign.id, 'city', 'downtime');
       closeScenarioView();
       await loadCampaigns();
-      showToast('Scenario cancelled.');
+      showToast('Scenario cancelled and progress rolled back.');
     } catch (err) {
       showToast('Error: ' + err.message, true);
     }
@@ -1790,6 +1841,207 @@ function bindInitiativeDragDrop() {
 }
 
 // ── Close scenario view ───────────────────────────────────────────
+// ── End Scenario Modal ───────────────────────────────────────────
+function openEndScenarioModal() {
+  const s = sv.scenario;
+  const party = s.scenario_party ?? [];
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-end-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="db-modal" style="max-width:520px">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">🏁 End Scenario ${s.scenario_number}: ${s.scenario_name}</h3>
+      </div>
+      <div class="db-modal-body">
+        <p style="font-size:13px;color:#888;margin-bottom:16px">Select the scenario outcome:</p>
+        <div class="sv-outcome-btns">
+          <button class="sv-outcome-btn sv-outcome-completed" data-outcome="completed">✅ Completed</button>
+          <button class="sv-outcome-btn sv-outcome-lost" data-outcome="lost">❌ Lost</button>
+        </div>
+        <div id="sv-outcome-details" style="margin-top:16px"></div>
+      </div>
+    </div>`;
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+
+  modal.querySelectorAll('.sv-outcome-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.sv-outcome-btn').forEach(b => b.classList.remove('sv-outcome-selected'));
+      btn.classList.add('sv-outcome-selected');
+      const outcome = btn.dataset.outcome;
+      const details = document.getElementById('sv-outcome-details');
+      if (outcome === 'completed') details.innerHTML = buildCompletedDetails(party, s);
+      else if (outcome === 'lost') details.innerHTML = buildLostDetails();
+      bindOutcomeDetails(modal, outcome);
+    });
+  });
+}
+
+function buildCompletedDetails(party, s) {
+  const bgRows = party.map(m => {
+    const ps = sv.playState[m.character_id] ?? {};
+    const playerName = m.player?.player_name ?? '?';
+    const cls = m.characters?.class_id ?? '';
+    const bgCard = m.battle_goal_card;
+    const bgData = bgCard && typeof BATTLE_GOAL_DATA !== 'undefined' ? BATTLE_GOAL_DATA[bgCard] : null;
+    const achieved = ps.bgCompleted ?? false;
+    const bgTitle = bgData ? bgData.title : (bgCard ?? 'No BG');
+    const battleGoalsDone = (sv.campaign.players ?? []).find(p => p.id === m.player_id)?.battle_goals_completed ?? 0;
+    const bgAlreadyDone = battleGoalsDone >= 5;
+    return `
+      <div class="sv-bg-summary-row">
+        ${classIcon(cls, 18)}
+        <span class="sv-bg-summary-name">${playerName}</span>
+        <span class="sv-bg-summary-card">${bgTitle}</span>
+        <span class="sv-bg-summary-result ${achieved ? 'sv-bg-success' : 'sv-bg-fail'}">
+          ${bgAlreadyDone ? '⭐ Party goal met' : achieved ? '✅ Success' : '❌ Not achieved'}
+        </span>
+      </div>`;
+  }).join('');
+
+  const isSideScenario = s.scenario_number >= 51 && s.scenario_number <= 55;
+
+  return `
+    <div class="sv-outcome-section">
+      <div class="sv-outcome-section-title">🎯 Battle Goals</div>
+      ${bgRows}
+    </div>
+    ${isSideScenario ? `<div class="sv-outcome-note">⭐ Side Scenario ${s.scenario_number} — Party Goal will be marked complete</div>` : ''}
+    <div class="sv-outcome-section" style="margin-top:12px">
+      <label class="sv-override-check-label" style="margin-bottom:8px">
+        <input type="checkbox" id="sv-forced-link-check">
+        This scenario has a Forced Link to another scenario
+      </label>
+      <div id="sv-forced-link-fields" style="display:none;margin-top:8px;display:none">
+        <input type="number" id="sv-link-num" class="wizard-input" placeholder="Linked scenario number" style="width:100%;margin-bottom:6px">
+        <input type="text" id="sv-link-name" class="wizard-input" placeholder="Linked scenario name" style="width:100%">
+      </div>
+    </div>
+    <div class="db-modal-footer" style="margin-top:16px;padding:0">
+      <button class="wizard-btn wizard-btn-primary" id="sv-confirm-outcome" data-outcome="completed">✅ Confirm Completed</button>
+    </div>`;
+}
+
+function buildLostDetails() {
+  return `
+    <div class="sv-outcome-section">
+      <p style="font-size:13px;color:#aaa;margin-bottom:12px">PQ and Milestone checks earned during this scenario will be kept.</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="sv-outcome-btn sv-outcome-return" data-lost-action="return">
+          🏛️ Return to Gloomhaven<br>
+          <span style="font-size:11px;font-weight:400;color:#aaa">Triggers City Phase</span>
+        </button>
+        <button class="sv-outcome-btn sv-outcome-replay" data-lost-action="replay">
+          🔄 Replay Scenario<br>
+          <span style="font-size:11px;font-weight:400;color:#aaa">Skip City Phase — restart from Campaign Panel</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+function bindOutcomeDetails(modal, outcome) {
+  // Forced link toggle
+  const flCheck = document.getElementById('sv-forced-link-check');
+  const flFields = document.getElementById('sv-forced-link-fields');
+  if (flCheck && flFields) {
+    flCheck.addEventListener('change', () => {
+      flFields.style.display = flCheck.checked ? 'block' : 'none';
+    });
+  }
+
+  // Confirm completed
+  document.getElementById('sv-confirm-outcome')?.addEventListener('click', async () => {
+    const forcedLink = flCheck?.checked ?? false;
+    const linkNum = parseInt(document.getElementById('sv-link-num')?.value ?? '0') || 0;
+    const linkName = document.getElementById('sv-link-name')?.value?.trim() ?? '';
+    await handleCompletedOutcome(forcedLink, linkNum, linkName);
+    modal.remove();
+  });
+
+  // Lost actions
+  modal.querySelectorAll('[data-lost-action]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await handleLostOutcome(btn.dataset.lostAction);
+      modal.remove();
+    });
+  });
+}
+
+// ── Outcome handlers ──────────────────────────────────────────────
+async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName) {
+  const s = sv.scenario;
+  const party = s.scenario_party ?? [];
+  const campaignId = sv.campaign.id;
+
+  // 1. Update scenario status
+  await sb().from('scenarios').update({ status: 'completed', forced_link: forcedLink }).eq('id', s.id);
+
+  // 2. Award battle goals for players who succeeded (only if < 5 total)
+  for (const m of party) {
+    const ps = sv.playState[m.character_id] ?? {};
+    const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
+    if (!player) continue;
+    const bgData = m.battle_goal_card && typeof BATTLE_GOAL_DATA !== 'undefined'
+      ? BATTLE_GOAL_DATA[m.battle_goal_card] : null;
+    const checks = bgData?.checks ?? 1;
+
+    if (ps.bgCompleted && (player.battle_goals_completed ?? 0) < 5) {
+      const newCount = Math.min(5, (player.battle_goals_completed ?? 0) + checks);
+      await sb().from('players').update({ battle_goals_completed: newCount }).eq('id', player.id);
+    }
+
+    // Award treasure tile if looted
+    if (ps.lootedTreasure && !player.treasure_looted) {
+      await sb().from('players').update({ treasure_looted: true }).eq('id', player.id);
+    }
+  }
+
+  // 3. Side scenario 51-55
+  if (s.scenario_number >= 51 && s.scenario_number <= 55) {
+    await sb().from('campaigns').update({ party_goal_side_scenario: true }).eq('id', campaignId);
+  }
+
+  // 4. Increment scenario completions
+  const currentCompletions = sv.campaign.scenario_completions ?? 0;
+  await sb().from('campaigns').update({ scenario_completions: currentCompletions + 1 }).eq('id', campaignId);
+
+  // 5. Set phase
+  if (forcedLink) {
+    // Bypass City Phase — campaign stays available but no active scenario
+    await sb().from('campaigns').update({ phase: 'city', city_step: 'downtime' }).eq('id', campaignId);
+    showToast(`✅ Scenario completed! Forced link to Scenario ${linkScenarioNum} — start it from the Campaign Panel.`);
+  } else {
+    await sb().from('campaigns').update({ phase: 'city', city_step: 'city_event' }).eq('id', campaignId);
+    showToast('✅ Scenario completed! Return to Gloomhaven — City Phase begins.');
+  }
+
+  closeScenarioView();
+  await loadCampaigns();
+}
+
+async function handleLostOutcome(action) {
+  const s = sv.scenario;
+  const campaignId = sv.campaign.id;
+
+  // Update scenario status
+  await sb().from('scenarios').update({ status: 'lost', replay: action === 'replay' }).eq('id', s.id);
+
+  if (action === 'replay') {
+    // Skip City Phase — back to downtime, GM restarts from Campaign Panel
+    await sb().from('campaigns').update({ phase: 'city', city_step: 'downtime' }).eq('id', campaignId);
+    showToast('❌ Scenario lost. Skip City Phase — restart the scenario from the Campaign Panel.');
+  } else {
+    // Return to Gloomhaven — City Phase
+    await sb().from('campaigns').update({ phase: 'city', city_step: 'city_event' }).eq('id', campaignId);
+    showToast('❌ Scenario lost. Return to Gloomhaven — City Phase begins.');
+  }
+
+  closeScenarioView();
+  await loadCampaigns();
+}
+
 // ── One-time spacebar zoom setup ─────────────────────────────────
 function initSpacebarZoom(overlayEl) {
   // Remove any previous zoom overlay

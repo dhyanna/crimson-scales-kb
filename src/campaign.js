@@ -237,8 +237,21 @@ async function createScenario(campaignId, gmPlayerId, number, name, goal) {
 }
 
 async function addScenarioPartyMember(scenarioId, characterId, playerId, battleGoalCard) {
+  // Fetch current check counts for snapshot (abandon rollback)
+  const { data: stateRow } = await sb().from('character_state')
+    .select('pq_checks, milestone_checks')
+    .eq('character_id', characterId)
+    .maybeSingle();
+
   const { data, error } = await sb().from('scenario_party')
-    .insert({ scenario_id: scenarioId, character_id: characterId, player_id: playerId, battle_goal_card: battleGoalCard })
+    .insert({
+      scenario_id: scenarioId,
+      character_id: characterId,
+      player_id: playerId,
+      battle_goal_card: battleGoalCard,
+      pq_checks_start: stateRow?.pq_checks ?? 0,
+      milestone_checks_start: stateRow?.milestone_checks ?? 0,
+    })
     .select().single();
   if (error) throw error;
   return data;

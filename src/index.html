@@ -2212,6 +2212,46 @@
     .sv-exhaust-btn:hover { opacity: 1; background: rgba(192,57,43,0.1); }
     .sv-init-exhausted { opacity: 0.35; filter: grayscale(1); pointer-events: none; }
 
+    .sv-gm-btn-gold {
+      border-color: var(--color-accent, #c9a84c);
+      color: var(--color-accent, #c9a84c);
+      font-weight: 700;
+    }
+    .sv-gm-btn-gold:hover { background: rgba(201,168,76,0.1); }
+    .sv-outcome-btns { display: flex; gap: 10px; }
+    .sv-outcome-btn {
+      flex: 1; padding: 10px; border-radius: 6px; font-size: 13px;
+      font-weight: 600; cursor: pointer; border: 2px solid var(--color-border, #333);
+      background: rgba(255,255,255,0.04); color: var(--color-text, #e0e0e0);
+      text-align: center; line-height: 1.4;
+    }
+    .sv-outcome-btn:hover { border-color: #888; }
+    .sv-outcome-completed { border-color: #27ae60; color: #2ecc71; }
+    .sv-outcome-lost { border-color: #c0392b; color: #e74c3c; }
+    .sv-outcome-return { border-color: #7090d0; color: #7090d0; }
+    .sv-outcome-replay { border-color: var(--color-accent, #c9a84c); color: var(--color-accent, #c9a84c); }
+    .sv-outcome-selected { background: rgba(255,255,255,0.1) !important; }
+    .sv-outcome-section { margin-bottom: 12px; }
+    .sv-outcome-section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--color-text-secondary, #888);
+      margin-bottom: 8px;
+    }
+    .sv-outcome-note {
+      font-size: 12px; color: var(--color-accent, #c9a84c);
+      background: rgba(201,168,76,0.08); border-radius: 5px;
+      padding: 6px 10px; margin: 8px 0;
+    }
+    .sv-bg-summary-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid var(--color-border, #333);
+      font-size: 12px;
+    }
+    .sv-bg-summary-name { font-weight: 600; min-width: 70px; }
+    .sv-bg-summary-card { flex: 1; color: #888; }
+    .sv-bg-success { color: #2ecc71; font-weight: 700; }
+    .sv-bg-fail { color: #e74c3c; }
+
     /* GM controls */
     .sv-gm-controls {
       position: fixed;
