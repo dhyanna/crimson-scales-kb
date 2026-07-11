@@ -34,7 +34,7 @@ async function setAbsentPlayer(scenarioPartyId, isAbsent, substitutePlayerId) {
 let sv = {
   scenario:       null,   // full scenario row with scenario_party
   campaign:       null,
-  activePartyIdx: 0,      // which player's play area is showing
+  activePlayerId: null,   // which player's play area is showing (by player_id)
   isGM:           false,
   // Per-character play state (keyed by character_id)
   playState:      {},
@@ -208,10 +208,13 @@ async function openScenarioView(scenario, campaign) {
   sv.playState = {};
   await loadPartyHandCards(scenario.scenario_party ?? []);
 
-  // Set active party index to current player's character if possible
+  // Set active player to current player's character if possible
   if (myPlayer) {
-    const myMemberIdx = (scenario.scenario_party ?? []).findIndex(m => m.player_id === myPlayer.id);
-    if (myMemberIdx >= 0) sv.activePartyIdx = myMemberIdx;
+    const myMember = (scenario.scenario_party ?? []).find(m => m.player_id === myPlayer.id);
+    if (myMember) sv.activePlayerId = myMember.player_id;
+  }
+  if (!sv.activePlayerId && scenario.scenario_party?.length) {
+    sv.activePlayerId = scenario.scenario_party[0].player_id;
   }
 
   // Restore ready states from DB
@@ -348,7 +351,7 @@ function buildPlayerTabs(party) {
     const cls = member.characters;
     const classId = cls?.class_id ?? '';
     const playerName = member.player?.player_name ?? '?';
-    const isActive = i === sv.activePartyIdx;
+    const isActive = member.player_id === sv.activePlayerId;
     const isAbsent = member.is_absent;
     const isMyChar = member.player_id === myPlayerId;
     const isSubstitute = isAbsent && member.substitute_player_id === myPlayerId;
@@ -359,7 +362,7 @@ function buildPlayerTabs(party) {
 
     return `
       <button class="sv-player-tab${isActive ? ' sv-player-tab-active' : ''}${isAbsent ? ' sv-tab-is-absent' : ''}"
-          data-party-idx="${i}">
+          data-player-id="${member.player_id}">
         ${CARD_BACK_ASSETS[classId]?.token
           ? `<img src="${getTokenImg(classId)}" class="sv-tab-token" alt="">`
           : `<span class="sv-tab-icon">${classId[0]?.toUpperCase() ?? '?'}</span>`}
@@ -376,7 +379,7 @@ function buildPlayerTabs(party) {
 
 // ── Play Area ─────────────────────────────────────────────────────
 function buildPlayArea(party) {
-  const member = party[sv.activePartyIdx];
+  const member = party.find(m => m.player_id === sv.activePlayerId) ?? party[0];
   if (!member) return '<div class="sv-play-area"><p style="color:#888">No party member selected</p></div>';
 
   const cls = member.characters;
@@ -1311,7 +1314,7 @@ function bindScenarioViewEvents() {
   // Player tab switching
   document.querySelectorAll('.sv-player-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      sv.activePartyIdx = parseInt(tab.dataset.partyIdx);
+      sv.activePlayerId = tab.dataset.playerId;
       renderScenarioView();
     });
   });
@@ -1789,11 +1792,8 @@ function bindScenarioViewEvents() {
         initiative = 99;
       } else {
         const firstCardId = (sv.selectedCards[charId] ?? [])[0];
-        if (firstCardId && classData?.cards) {
-          const card = classData.cards.find(c =>
-            c.name === firstCardId ||
-            c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === firstCardId
-          );
+        if (firstCardId) {
+          const card = getCardDataById(charId, firstCardId);
           if (card?.initiative) initiative = card.initiative;
         }
       }
@@ -1801,8 +1801,27 @@ function bindScenarioViewEvents() {
     });
 
     // Sort by initiative, preserve existing order for ties (stable sort)
-    withInit.sort((a, b) => a.initiative - b.initiative);
+    // Stable sort by initiative
+    withInit.sort((a, b) => {
+      if (a.initiative !== b.initiative) return a.initiative - b.initiative;
+      // Preserve existing order for ties
+      const aIdx = (sv.scenario.scenario_party ?? []).indexOf(a.member);
+      const bIdx = (sv.scenario.scenario_party ?? []).indexOf(b.member);
+      return aIdx - bIdx;
+    });
     sv.scenario.scenario_party = withInit.map(w => w.member);
+
+    // Detect ties and notify GM
+    const initiatives = withInit.map(w => w.initiative);
+    const ties = initiatives.filter((v, i, arr) => arr.indexOf(v) !== i);
+    const uniqueTies = [...new Set(ties)];
+    if (uniqueTies.length > 0) {
+      const tieMsg = uniqueTies.map(initVal => {
+        const tied = withInit.filter(w => w.initiative === initVal).map(w => w.member.player?.player_name ?? '?');
+        return `Initiative ${initVal}: ${tied.join(' & ')}`;
+      }).join('; ');
+      showToast(`⚠️ Ties detected — reorder manually if needed: ${tieMsg}`);
+    }
 
     // Save initiative order to DB
     await saveInitiativeOrder();
@@ -2311,6 +2330,7 @@ function initSpacebarZoom(overlayEl) {
 function closeScenarioView() {
   stopPolling();
   sv.joinOrder = null; // reset for next scenario
+  sv.activePlayerId = null;
   if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
   if (sv._zoomKeydown) { document.removeEventListener('keydown', sv._zoomKeydown); sv._zoomKeydown = null; }
   if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
