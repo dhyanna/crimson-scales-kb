@@ -1321,64 +1321,57 @@ function openScenarioWizard(campaign) {
 
 // openScenarioView is defined in scenario.js
 
-// ── Campaign polling — detect active scenario for all players ────
-let campaignPollTimer = null;
+// ── Campaign Realtime — detect new scenarios for all players ─────
+let campaignPollTimer = null; // kept for stopPolling reference in scenario.js
+let campaignRealtimeChannel = null;
 let lastKnownScenarioId = null;
 
-async function pollCampaignState() {
-  try {
-    // Find active campaign
-    const { data: activeCampaigns } = await sb()
-      .from('campaigns')
-      .select('id, phase')
-      .eq('is_active', true)
-      .limit(1);
+async function handleNewScenario(scenarioId, campaignId) {
+  // If scenario view already open, skip
+  const overlay = document.getElementById('scenario-view-overlay');
+  if (overlay && overlay.style.display !== 'none') return;
+  if (scenarioId === lastKnownScenarioId) return;
+  lastKnownScenarioId = scenarioId;
 
-    const activeCampaign = activeCampaigns?.[0];
-    if (!activeCampaign || activeCampaign.phase !== 'scenario') {
-      lastKnownScenarioId = null;
-      return;
-    }
-
-    // Check for active/paused scenario
-    const { data: scenarios } = await sb()
-      .from('scenarios')
-      .select('id, status')
-      .eq('campaign_id', activeCampaign.id)
-      .in('status', ['active', 'paused'])
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const activeScenario = scenarios?.[0];
-    if (!activeScenario) { lastKnownScenarioId = null; return; }
-
-    // If scenario view is already open, skip
-    const overlay = document.getElementById('scenario-view-overlay');
-    if (overlay && overlay.style.display !== 'none') return;
-
-    // New scenario detected — auto-open for this player
-    if (activeScenario.id !== lastKnownScenarioId) {
-      lastKnownScenarioId = activeScenario.id;
-      // Only auto-open active scenarios (not paused — player must manually resume)
-      if (activeScenario.status === 'active') {
-        await loadCampaigns();
-        // Find the full campaign data
-        const campaigns = window._cachedCampaigns ?? [];
-        const campaign = campaigns.find(c => c.id === activeCampaign.id);
-        if (campaign) {
-          const scenario = await getActiveScenario(campaign.id);
-          if (scenario) await openScenarioView(scenario, campaign);
-        }
-      }
-    }
-  } catch (err) {
-    // Silent fail
+  await loadCampaigns();
+  const campaigns = window._cachedCampaigns ?? [];
+  const campaign = campaigns.find(c => c.id === campaignId);
+  if (!campaign) return;
+  const scenario = await getActiveScenario(campaign.id);
+  if (scenario && scenario.status === 'active') {
+    await openScenarioView(scenario, campaign);
   }
 }
 
 function startCampaignPolling() {
-  if (campaignPollTimer) clearInterval(campaignPollTimer);
-  campaignPollTimer = setInterval(pollCampaignState, 4000);
+  // Subscribe to scenarios table for new active scenarios
+  if (campaignRealtimeChannel) {
+    sb().removeChannel(campaignRealtimeChannel);
+  }
+
+  campaignRealtimeChannel = sb().channel('campaign-scenarios')
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'scenarios' },
+      async payload => {
+        const row = payload.new;
+        if (row?.status === 'active') {
+          await handleNewScenario(row.id, row.campaign_id);
+        }
+      })
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'scenarios' },
+      async payload => {
+        const row = payload.new;
+        // New scenario became active (e.g. resumed)
+        if (row?.status === 'active' && row.id !== lastKnownScenarioId) {
+          await handleNewScenario(row.id, row.campaign_id);
+        }
+        // Campaign phase changed — reload panel
+        if (row?.status && ['completed','lost','abandoned','paused'].includes(row.status)) {
+          await loadCampaigns();
+        }
+      })
+    .subscribe();
 }
 
 // ── INIT ─────────────────────────────────────────────────────

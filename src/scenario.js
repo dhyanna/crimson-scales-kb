@@ -162,6 +162,11 @@ async function saveRoundState() {
     .eq('id', sv.scenario.id);
 }
 
+async function saveRoundPhase(phase) {
+  sv.roundPhase = phase;
+  await sb().from('scenarios').update({ scenario_step: phase }).eq('id', sv.scenario.id);
+}
+
 async function saveInitiativeOrder() {
   // Save ordered player IDs to scenarios table
   const order = (sv.scenario.scenario_party ?? []).map(m => m.player_id);
@@ -204,8 +209,13 @@ async function openScenarioView(scenario, campaign) {
     ? myPlayer.id === scenario.gm_player_id
     : IS_DEV;
 
-  // Fetch hand cards and state for each party member
+  // Reset all local state for new scenario
   sv.playState = {};
+  sv.selectedCards = {};
+  sv.readyPlayers = {};
+  sv.roundPhase = 'select';
+  sv.tipIndex = 0;
+  sv.currentTips = [];
   await loadPartyHandCards(scenario.scenario_party ?? []);
 
   // Set active player to current player's character if possible
@@ -222,6 +232,9 @@ async function openScenarioView(scenario, campaign) {
   (scenario.scenario_party ?? []).forEach(m => {
     if (m.is_ready) sv.readyPlayers[m.player_id] = true;
   });
+
+  // Restore round phase from DB
+  sv.roundPhase = scenario.scenario_step === 'play' ? 'play' : 'select';
 
   // Store stable join order for player tabs (never reordered)
   if (!sv.joinOrder) {
@@ -390,7 +403,7 @@ function buildPlayArea(party) {
 
   // isMyArea: true if this is my own character, OR I am the assigned substitute for an absent player
   // In dev mode with no player selected, treat the active tab as own area
-  const isMyChar = myPlayerId ? member.player_id === myPlayerId : (sv.activePartyIdx === (sv.scenario.scenario_party ?? []).indexOf(member));
+  const isMyChar = myPlayerId ? member.player_id === myPlayerId : true; // dev mode: all areas are own
   const isSubstitute = member.is_absent && member.substitute_player_id === myPlayerId;
   const isMyArea = isMyChar || isSubstitute || (IS_DEV && !myPlayerId);
   const isPeeking = !isMyArea;
@@ -586,6 +599,7 @@ function getCardDataById(charId, cardId) {
   const classId = getClassIdForChar(charId);
   const classData = CLASS_REGISTRY?.[classId];
   return classData?.cards?.find(c =>
+    c.id === cardId ||
     c.name === cardId ||
     c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === cardId
   ) ?? null;
@@ -1775,9 +1789,9 @@ function bindScenarioViewEvents() {
 
   // GM Begin Round button
   document.getElementById('sv-begin-round')?.addEventListener('click', async () => {
-    sv.roundPhase = 'play';
     const newRound = (sv.scenario.round_number ?? 0) + 1;
     await saveRoundNumber(newRound);
+    await saveRoundPhase('play');
 
     // Auto-sort initiative based on first selected card
     const party = sv.scenario.scenario_party ?? [];
@@ -1861,7 +1875,6 @@ function bindScenarioViewEvents() {
     //   - Status condition duration tracking
     // ─────────────────────────────────────────────────────────────────
 
-    sv.roundPhase = 'select';
     sv.readyPlayers = {};
     sv.selectedCards = {};
     // Clear rest flags for next round (hasActiveNonLoss persists until manually unchecked)
@@ -1875,6 +1888,8 @@ function bindScenarioViewEvents() {
     await Promise.all(party.map(m => sb().from('scenario_party').update({ is_ready: false }).eq('id', m.id)));
     // Save all play states at end of round
     await saveAllPlayStates();
+    // Save phase last so polling picks up the full state
+    await saveRoundPhase('select');
     renderScenarioView();
     showToast(`🔄 Round ${sv.scenario.round_number} ended — begin card selection for next round.`);
   });
@@ -1942,7 +1957,7 @@ function bindInitiativeDragDrop() {
     item.addEventListener('dragstart', () => { dragIdx = parseInt(item.dataset.partyIdx); });
     item.addEventListener('dragover', e => { e.preventDefault(); item.classList.add('sv-drag-over'); });
     item.addEventListener('dragleave', () => { item.classList.remove('sv-drag-over'); });
-    item.addEventListener('drop', e => {
+    item.addEventListener('drop', async e => {
       e.preventDefault();
       item.classList.remove('sv-drag-over');
       const dropIdx = parseInt(item.dataset.partyIdx);
@@ -1951,6 +1966,7 @@ function bindInitiativeDragDrop() {
       const party = sv.scenario.scenario_party;
       const [moved] = party.splice(dragIdx, 1);
       party.splice(dropIdx, 0, moved);
+      await saveInitiativeOrder(); // persist for all players
       renderScenarioView();
     });
   });
@@ -2159,135 +2175,143 @@ async function handleLostOutcome(action) {
 }
 
 // ── One-time spacebar zoom setup ─────────────────────────────────
-// ── Live polling for multiplayer sync ────────────────────────────
-let sv_pollTimer = null;
+// ── Supabase Realtime subscriptions ──────────────────────────────
+let sv_realtimeChannel = null;
 
-async function pollScenarioState() {
-  if (!sv.scenario?.id) return;
-  try {
-    // Poll scenario_party for ready/exhaustion/play state changes
-    const { data } = await sb()
-      .from('scenario_party')
-      .select('player_id, is_ready, is_exhausted, play_state, battle_goal_completed, looted_treasure')
-      .eq('scenario_id', sv.scenario.id);
+function handleScenarioUpdate(payload) {
+  const row = payload.new;
+  if (!row || row.id !== sv.scenario?.id) return;
 
-    // Also poll scenarios for initiative order and round number changes
-    const { data: scenarioRow } = await sb()
-      .from('scenarios')
-      .select('initiative_order, round_number, status')
-      .eq('id', sv.scenario.id)
-      .maybeSingle();
+  let changed = false;
 
-    if (!data) return;
+  // Scenario ended/paused/cancelled by GM
+  if (['completed','lost','abandoned'].includes(row.status) && sv.scenario.status === 'active') {
+    sv.scenario.status = row.status;
+    closeScenarioView();
+    loadCampaigns();
+    showToast('The GM has ended the scenario.');
+    return;
+  }
+  if (row.status === 'paused' && sv.scenario.status === 'active') {
+    sv.scenario.status = row.status;
+    closeScenarioView();
+    loadCampaigns();
+    showToast('The GM has paused the scenario.');
+    return;
+  }
 
-    let changed = false;
+  // Sync round number
+  if (row.round_number !== sv.scenario.round_number) {
+    sv.scenario.round_number = row.round_number;
+    changed = true;
+  }
 
-    // Sync scenario-level state
-    if (scenarioRow) {
-      // Scenario ended/paused by GM — close view for other players
-      if (['completed','lost','abandoned'].includes(scenarioRow.status) &&
-          sv.scenario.status === 'active') {
-        closeScenarioView();
-        await loadCampaigns();
-        showToast('The GM has ended the scenario.');
-        return;
-      }
-      if (scenarioRow.status === 'paused' && sv.scenario.status === 'active') {
-        closeScenarioView();
-        await loadCampaigns();
-        showToast('The GM has paused the scenario.');
-        return;
-      }
+  // Sync round phase
+  const dbPhase = row.scenario_step === 'play' ? 'play' : 'select';
+  if (dbPhase !== sv.roundPhase) {
+    sv.roundPhase = dbPhase;
+    if (dbPhase === 'select') {
+      sv.readyPlayers = {};
+      sv.selectedCards = {};
+    }
+    changed = true;
+  }
 
-      // Sync round number
-      if (scenarioRow.round_number !== sv.scenario.round_number) {
-        sv.scenario.round_number = scenarioRow.round_number;
-        // Detect phase change: new round started = play phase
-        if (scenarioRow.round_number > (sv.scenario.round_number ?? 0)) {
-          sv.roundPhase = 'play';
-        }
-        changed = true;
-      }
+  // Sync initiative order
+  if (row.initiative_order && row.initiative_order !== sv.scenario.initiative_order) {
+    sv.scenario.initiative_order = row.initiative_order;
+    try {
+      const order = JSON.parse(row.initiative_order);
+      const party = sv.scenario.scenario_party ?? [];
+      const sorted = order.map(pid => party.find(m => m.player_id === pid)).filter(Boolean);
+      party.forEach(m => { if (!sorted.includes(m)) sorted.push(m); });
+      sv.scenario.scenario_party = sorted;
+    } catch (e) { /* ignore */ }
+    changed = true;
+  }
 
-      // Sync initiative order
-      if (scenarioRow.initiative_order && scenarioRow.initiative_order !== sv.scenario.initiative_order) {
-        sv.scenario.initiative_order = scenarioRow.initiative_order;
-        try {
-          const order = JSON.parse(scenarioRow.initiative_order);
-          const party = sv.scenario.scenario_party ?? [];
-          const sorted = order.map(pid => party.find(m => m.player_id === pid)).filter(Boolean);
-          party.forEach(m => { if (!sorted.includes(m)) sorted.push(m); });
-          sv.scenario.scenario_party = sorted;
-        } catch (e) { /* ignore */ }
-        changed = true;
-      }
+  if (changed) renderScenarioView();
+}
+
+function handlePartyUpdate(payload) {
+  const row = payload.new;
+  if (!row) return;
+
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === row.character_id);
+  if (!member) return;
+
+  let changed = false;
+  const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
+  const isMyChar = myPlayer?.id === member.player_id ||
+    (member.is_absent && member.substitute_player_id === myPlayer?.id);
+
+  // Sync ready state
+  const wasReady = sv.readyPlayers[member.player_id] ?? false;
+  const isNowReady = row.is_ready ?? false;
+  if (wasReady !== isNowReady) {
+    sv.readyPlayers[member.player_id] = isNowReady;
+    member.is_ready = isNowReady;
+    changed = true;
+  }
+
+  const charId = member.character_id;
+  const ps = sv.playState[charId];
+  if (ps) {
+    // Sync exhaustion
+    if (ps.isExhausted !== (row.is_exhausted ?? false)) {
+      ps.isExhausted = row.is_exhausted ?? false;
+      changed = true;
     }
 
-    data.forEach(row => {
-      // Sync ready states
-      const wasReady = sv.readyPlayers[row.player_id] ?? false;
-      const isNowReady = row.is_ready ?? false;
-      if (wasReady !== isNowReady) {
-        sv.readyPlayers[row.player_id] = isNowReady;
-        changed = true;
-      }
+    // Sync BG completion
+    if (ps.bgCompleted !== (row.battle_goal_completed ?? false)) {
+      ps.bgCompleted = row.battle_goal_completed ?? false;
+      changed = true;
+    }
 
-      const member = (sv.scenario.scenario_party ?? []).find(m => m.player_id === row.player_id);
-      if (member) {
-        const charId = member.character_id;
-        const ps = sv.playState[charId];
-        if (!ps) return;
-
-        // Sync exhaustion
-        if (ps.isExhausted !== (row.is_exhausted ?? false)) {
-          ps.isExhausted = row.is_exhausted ?? false;
+    // Sync play state — only for other players' characters
+    if (!isMyChar && row.play_state && Object.keys(row.play_state).length) {
+      const saved = row.play_state;
+      ['active','discard','lost','chargeMap','dotCount'].forEach(key => {
+        const savedVal = JSON.stringify(saved[key] ?? {});
+        const curVal = JSON.stringify(ps[key] ?? {});
+        if (savedVal !== curVal) {
+          ps[key] = saved[key];
           changed = true;
         }
-
-        // Sync BG completion
-        if (ps.bgCompleted !== (row.battle_goal_completed ?? false)) {
-          ps.bgCompleted = row.battle_goal_completed ?? false;
-          changed = true;
-        }
-
-        // Sync play state (cards in zones, charge dots, etc.)
-        if (row.play_state && Object.keys(row.play_state).length) {
-          const saved = row.play_state;
-          const myPlayer = getEffectivePlayer(sv.campaign.players ?? []);
-          const isMyChar = myPlayer?.id === member.player_id ||
-            (member.is_absent && member.substitute_player_id === myPlayer?.id);
-
-          // Only update from DB if this isn't our own character
-          // (our own state is authoritative in memory)
-          if (!isMyChar) {
-            let playChanged = false;
-            ['active','discard','lost','chargeMap','dotCount'].forEach(key => {
-              const savedVal = JSON.stringify(saved[key] ?? (typeof saved[key] === 'object' ? {} : []));
-              const curVal = JSON.stringify(ps[key] ?? (typeof ps[key] === 'object' ? {} : []));
-              if (savedVal !== curVal) {
-                ps[key] = saved[key];
-                playChanged = true;
-              }
-            });
-            if (playChanged) changed = true;
-          }
-        }
-      }
-    });
-
-    if (changed) renderScenarioView();
-  } catch (err) {
-    // Silent fail — polling will retry
+      });
+    }
   }
+
+  if (changed) renderScenarioView();
 }
 
 function startPolling() {
-  if (sv_pollTimer) clearInterval(sv_pollTimer);
-  sv_pollTimer = setInterval(pollScenarioState, 3000); // poll every 3 seconds
+  if (!sv.scenario?.id) return;
+  stopPolling(); // clean up any existing subscription
+
+  const supabase = sb();
+  sv_realtimeChannel = supabase.channel(`scenario-${sv.scenario.id}`)
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'scenarios',
+        filter: `id=eq.${sv.scenario.id}` },
+      handleScenarioUpdate)
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'scenario_party',
+        filter: `scenario_id=eq.${sv.scenario.id}` },
+      handlePartyUpdate)
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Realtime subscribed to scenario', sv.scenario.id);
+      }
+    });
 }
 
 function stopPolling() {
-  if (sv_pollTimer) { clearInterval(sv_pollTimer); sv_pollTimer = null; }
+  if (sv_realtimeChannel) {
+    sb().removeChannel(sv_realtimeChannel);
+    sv_realtimeChannel = null;
+  }
 }
 
 function initSpacebarZoom(overlayEl) {
