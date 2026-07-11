@@ -1790,10 +1790,8 @@ function bindScenarioViewEvents() {
   // GM Begin Round button
   document.getElementById('sv-begin-round')?.addEventListener('click', async () => {
     const newRound = (sv.scenario.round_number ?? 0) + 1;
-    await saveRoundNumber(newRound);
-    await saveRoundPhase('play');
 
-    // Auto-sort initiative based on first selected card
+    // Auto-sort initiative based on first selected card BEFORE saving
     const party = sv.scenario.scenario_party ?? [];
     const withInit = party.map(m => {
       const charId = m.character_id;
@@ -1837,8 +1835,16 @@ function bindScenarioViewEvents() {
       showToast(`⚠️ Ties detected — reorder manually if needed: ${tieMsg}`);
     }
 
-    // Save initiative order to DB
-    await saveInitiativeOrder();
+    // Save initiative order to DB — combine with round/phase in single atomic update
+    const initiativeOrder = JSON.stringify((sv.scenario.scenario_party ?? []).map(m => m.player_id));
+    sv.scenario.initiative_order = initiativeOrder;
+    sv.scenario.round_number = newRound;
+    sv.roundPhase = 'play'; // set locally BEFORE DB write
+    await sb().from('scenarios').update({
+      round_number: newRound,
+      scenario_step: 'play',
+      initiative_order: initiativeOrder,
+    }).eq('id', sv.scenario.id);
 
     renderScenarioView();
     showToast(`⚔️ Round ${newRound} begun! Initiative sorted automatically.`);
@@ -1889,8 +1895,7 @@ function bindScenarioViewEvents() {
     // Save all play states at end of round
     await saveAllPlayStates();
     // Save phase last so polling picks up the full state
-    await saveRoundPhase('select');
-    renderScenarioView();
+    await saveRoundPhase('select');    renderScenarioView();
     showToast(`🔄 Round ${sv.scenario.round_number} ended — begin card selection for next round.`);
   });
 
@@ -2206,11 +2211,13 @@ function handleScenarioUpdate(payload) {
     changed = true;
   }
 
-  // Sync round phase
+  // Sync round phase — only act if truly different from local state
   const dbPhase = row.scenario_step === 'play' ? 'play' : 'select';
   if (dbPhase !== sv.roundPhase) {
     sv.roundPhase = dbPhase;
-    if (dbPhase === 'select') {
+    // Only reset selected/ready when transitioning back to select phase
+    // AND the round_number also changed (genuine new round, not a race condition)
+    if (dbPhase === 'select' && row.round_number === sv.scenario.round_number) {
       sv.readyPlayers = {};
       sv.selectedCards = {};
     }
