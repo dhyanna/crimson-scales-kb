@@ -9,3 +9,6 @@ alter table scenarios add column if not exists round_number int not null default
 
 -- Add play_state JSONB to scenario_party for pause/resume persistence
 alter table scenario_party add column if not exists play_state jsonb not null default '{}';
+
+-- Add is_ready to scenario_party for real-time sync
+alter table scenario_party add column if not exists is_ready boolean not null default false;

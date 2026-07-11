@@ -54,7 +54,7 @@ async function loadPartyHandCards(party) {
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
     sb().from('character_state').select('*').in('character_id', charIds),
-    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start').in('character_id', charIds),
+    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start, is_ready').in('character_id', charIds),
   ]);
 
   for (const member of party) {
@@ -119,6 +119,14 @@ async function saveExhaustedForChar(charId, exhausted) {
 }
 
 // Save play state for a character to scenario_party
+async function saveReadyState(playerId, isReady) {
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.player_id === playerId);
+  if (!member?.id) return;
+  await sb().from('scenario_party').update({ is_ready: isReady }).eq('id', member.id);
+  // Update local scenario_party reference
+  member.is_ready = isReady;
+}
+
 async function savePlayStateForChar(charId) {
   const ps = sv.playState[charId];
   if (!ps?.partyRowId) return;
@@ -195,9 +203,16 @@ async function openScenarioView(scenario, campaign) {
     if (myMemberIdx >= 0) sv.activePartyIdx = myMemberIdx;
   }
 
+  // Restore ready states from DB
+  sv.readyPlayers = {};
+  (scenario.scenario_party ?? []).forEach(m => {
+    if (m.is_ready) sv.readyPlayers[m.player_id] = true;
+  });
+
   const overlayEl = document.getElementById('scenario-view-overlay');
   renderScenarioView();
   initSpacebarZoom(overlayEl);
+  startPolling();
 }
 
 // ── Main renderer ─────────────────────────────────────────────────
@@ -1139,6 +1154,10 @@ function buildPlayTips(classId, member) {
         <div class="sv-tips-divider"></div>` : ''}
       ${classTips.length ? `
         <div class="sv-tips-header">
+          <div class="sv-tips-nav-inline">
+            <button class="sv-tip-nav-btn" id="sv-tip-prev" tabindex="-1">◀</button>
+            <button class="sv-tip-nav-btn" id="sv-tip-next" tabindex="-1">▶</button>
+          </div>
           <div class="sv-tips-label">💡 Class Tips</div>
           <div class="sv-tips-counter" id="sv-tips-counter">1 / ${classTips.length}</div>
         </div>
@@ -1147,10 +1166,6 @@ function buildPlayTips(classId, member) {
             <span class="sv-tip-label">${firstTip.category}:</span>
             <span class="sv-tip-text">${firstTip.text}</span>
           </div>` : ''}
-        </div>
-        <div class="sv-tips-nav">
-          <button class="sv-tip-nav-btn" id="sv-tip-prev">◀</button>
-          <button class="sv-tip-nav-btn" id="sv-tip-next">▶</button>
         </div>` : ''}
     </div>`;
 }
@@ -1174,10 +1189,9 @@ function bindTipsCarousel() {
   document.getElementById('sv-tip-prev')?.addEventListener('click', () => showTip(sv.tipIndex - 1));
   document.getElementById('sv-tip-next')?.addEventListener('click', () => showTip(sv.tipIndex + 1));
 
-  // Auto-rotate every 10 seconds — only start fresh if not already running
-  if (!sv.tipTimer) {
-    sv.tipTimer = setInterval(() => showTip(sv.tipIndex + 1), 10000);
-  }
+  // Always restart timer so it uses current sv.currentTips
+  if (sv.tipTimer) clearInterval(sv.tipTimer);
+  sv.tipTimer = setInterval(() => showTip((sv.tipIndex ?? 0) + 1), 10000);
 }
 
 // ── Absent Player Modal ───────────────────────────────────────────
@@ -1316,6 +1330,7 @@ function bindScenarioViewEvents() {
         const currentlyReady = sv.readyPlayers[playerId] ?? false;
         if (currentlyReady) {
           sv.readyPlayers[playerId] = false;
+          await saveReadyState(playerId, false);
           const memberForPlayer = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
           if (memberForPlayer) {
             const charId = memberForPlayer.character_id;
@@ -1351,7 +1366,9 @@ function bindScenarioViewEvents() {
         }
       }
 
-      sv.readyPlayers[playerId] = !currentlyReady;
+      const newReady = !currentlyReady;
+      sv.readyPlayers[playerId] = newReady;
+      await saveReadyState(playerId, newReady);
       renderScenarioView();
     });
   });
@@ -1757,6 +1774,9 @@ function bindScenarioViewEvents() {
       ps.restPhase = null;
       ps.restCandidate = null;
     });
+    // Reset all ready states in DB
+    const party = sv.scenario?.scenario_party ?? [];
+    await Promise.all(party.map(m => sb().from('scenario_party').update({ is_ready: false }).eq('id', m.id)));
     // Save all play states at end of round
     await saveAllPlayStates();
     renderScenarioView();
@@ -2043,6 +2063,58 @@ async function handleLostOutcome(action) {
 }
 
 // ── One-time spacebar zoom setup ─────────────────────────────────
+// ── Live polling for multiplayer sync ────────────────────────────
+let sv_pollTimer = null;
+
+async function pollScenarioState() {
+  if (!sv.scenario?.id) return;
+  try {
+    const { data } = await sb()
+      .from('scenario_party')
+      .select('player_id, is_ready, is_exhausted, play_state, battle_goal_completed, looted_treasure')
+      .eq('scenario_id', sv.scenario.id);
+    if (!data) return;
+
+    let changed = false;
+    data.forEach(row => {
+      // Sync ready states
+      const wasReady = sv.readyPlayers[row.player_id] ?? false;
+      const isNowReady = row.is_ready ?? false;
+      if (wasReady !== isNowReady) {
+        sv.readyPlayers[row.player_id] = isNowReady;
+        changed = true;
+      }
+      // Sync exhaustion
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.player_id === row.player_id);
+      if (member) {
+        const charId = member.character_id;
+        const ps = sv.playState[charId];
+        if (ps && ps.isExhausted !== row.is_exhausted) {
+          ps.isExhausted = row.is_exhausted;
+          changed = true;
+        }
+        if (ps && row.battle_goal_completed !== ps.bgCompleted) {
+          ps.bgCompleted = row.battle_goal_completed;
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) renderScenarioView();
+  } catch (err) {
+    // Silent fail — polling will retry
+  }
+}
+
+function startPolling() {
+  if (sv_pollTimer) clearInterval(sv_pollTimer);
+  sv_pollTimer = setInterval(pollScenarioState, 3000); // poll every 3 seconds
+}
+
+function stopPolling() {
+  if (sv_pollTimer) { clearInterval(sv_pollTimer); sv_pollTimer = null; }
+}
+
 function initSpacebarZoom(overlayEl) {
   // Remove any previous zoom overlay
   const existing = document.getElementById('sv-zoom-overlay');
@@ -2081,6 +2153,7 @@ function initSpacebarZoom(overlayEl) {
 }
 
 function closeScenarioView() {
+  stopPolling();
   if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
   if (sv._zoomKeydown) { document.removeEventListener('keydown', sv._zoomKeydown); sv._zoomKeydown = null; }
   if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
