@@ -568,6 +568,7 @@ async function loadCampaigns() {
   container.innerHTML = '<div class="campaigns-loading">Loading…</div>';
   try {
     const campaigns = await getCampaigns();
+    window._cachedCampaigns = campaigns; // cache for polling
     if (!campaigns.length) {
       container.innerHTML = '<div class="campaigns-empty">No campaigns yet. Click + to create one!</div>';
       return;
@@ -1320,6 +1321,66 @@ function openScenarioWizard(campaign) {
 
 // openScenarioView is defined in scenario.js
 
+// ── Campaign polling — detect active scenario for all players ────
+let campaignPollTimer = null;
+let lastKnownScenarioId = null;
+
+async function pollCampaignState() {
+  try {
+    // Find active campaign
+    const { data: activeCampaigns } = await sb()
+      .from('campaigns')
+      .select('id, phase')
+      .eq('is_active', true)
+      .limit(1);
+
+    const activeCampaign = activeCampaigns?.[0];
+    if (!activeCampaign || activeCampaign.phase !== 'scenario') {
+      lastKnownScenarioId = null;
+      return;
+    }
+
+    // Check for active/paused scenario
+    const { data: scenarios } = await sb()
+      .from('scenarios')
+      .select('id, status')
+      .eq('campaign_id', activeCampaign.id)
+      .in('status', ['active', 'paused'])
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const activeScenario = scenarios?.[0];
+    if (!activeScenario) { lastKnownScenarioId = null; return; }
+
+    // If scenario view is already open, skip
+    const overlay = document.getElementById('scenario-view-overlay');
+    if (overlay && overlay.style.display !== 'none') return;
+
+    // New scenario detected — auto-open for this player
+    if (activeScenario.id !== lastKnownScenarioId) {
+      lastKnownScenarioId = activeScenario.id;
+      // Only auto-open active scenarios (not paused — player must manually resume)
+      if (activeScenario.status === 'active') {
+        await loadCampaigns();
+        // Find the full campaign data
+        const campaigns = window._cachedCampaigns ?? [];
+        const campaign = campaigns.find(c => c.id === activeCampaign.id);
+        if (campaign) {
+          const scenario = await getActiveScenario(campaign.id);
+          if (scenario) await openScenarioView(scenario, campaign);
+        }
+      }
+    }
+  } catch (err) {
+    // Silent fail
+  }
+}
+
+function startCampaignPolling() {
+  if (campaignPollTimer) clearInterval(campaignPollTimer);
+  campaignPollTimer = setInterval(pollCampaignState, 4000);
+}
+
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
@@ -1331,4 +1392,5 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('campaign-wizard-modal')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) closeCampaignWizard();
   });
+  startCampaignPolling();
 });

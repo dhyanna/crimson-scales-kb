@@ -191,7 +191,11 @@ async function openScenarioView(scenario, campaign) {
 
   // Determine if current user is GM
   const myPlayer = getEffectivePlayer(campaign.players ?? []);
-  sv.isGM = myPlayer?.id === scenario.gm_player_id || IS_DEV;
+  // isGM: true only if this player created the scenario
+  // In dev mode with no player selected, treat as GM for testing
+  sv.isGM = myPlayer
+    ? myPlayer.id === scenario.gm_player_id
+    : IS_DEV;
 
   // Fetch hand cards and state for each party member
   sv.playState = {};
@@ -213,6 +217,10 @@ async function openScenarioView(scenario, campaign) {
   renderScenarioView();
   initSpacebarZoom(overlayEl);
   startPolling();
+  // Pause campaign polling while in scenario view
+  if (typeof campaignPollTimer !== 'undefined' && campaignPollTimer) {
+    clearInterval(campaignPollTimer);
+  }
 }
 
 // ── Main renderer ─────────────────────────────────────────────────
@@ -2159,4 +2167,6 @@ function closeScenarioView() {
   if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
   const overlay = document.getElementById('scenario-view-overlay');
   if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
+  // Restart campaign polling
+  if (typeof startCampaignPolling === 'function') startCampaignPolling();
 }
