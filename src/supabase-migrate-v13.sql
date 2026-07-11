@@ -6,3 +6,6 @@ alter table scenario_party add column if not exists milestone_checks_start int n
 
 -- Treasure tile tracking per player per scenario
 alter table scenario_party add column if not exists looted_treasure boolean not null default false;
+
+-- Add initiative_order to scenarios for multiplayer sync
+alter table scenarios add column if not exists initiative_order text;

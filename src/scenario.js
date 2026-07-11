@@ -162,6 +162,13 @@ async function saveRoundState() {
     .eq('id', sv.scenario.id);
 }
 
+async function saveInitiativeOrder() {
+  // Save ordered player IDs to scenarios table
+  const order = (sv.scenario.scenario_party ?? []).map(m => m.player_id);
+  await sb().from('scenarios').update({ initiative_order: JSON.stringify(order) }).eq('id', sv.scenario.id);
+  sv.scenario.initiative_order = JSON.stringify(order);
+}
+
 async function saveRoundNumber(roundNum) {
   await sb().from('scenarios').update({ round_number: roundNum }).eq('id', sv.scenario.id);
   sv.scenario.round_number = roundNum;
@@ -212,6 +219,25 @@ async function openScenarioView(scenario, campaign) {
   (scenario.scenario_party ?? []).forEach(m => {
     if (m.is_ready) sv.readyPlayers[m.player_id] = true;
   });
+
+  // Store stable join order for player tabs (never reordered)
+  if (!sv.joinOrder) {
+    sv.joinOrder = (scenario.scenario_party ?? []).map(m => m.player_id);
+  }
+
+  // Restore initiative order if saved
+  if (scenario.initiative_order) {
+    try {
+      const order = JSON.parse(scenario.initiative_order);
+      const party = scenario.scenario_party ?? [];
+      const sorted = order
+        .map(pid => party.find(m => m.player_id === pid))
+        .filter(Boolean);
+      // Add any members not in saved order at end
+      party.forEach(m => { if (!sorted.includes(m)) sorted.push(m); });
+      sv.scenario.scenario_party = sorted;
+    } catch (e) { /* ignore parse errors */ }
+  }
 
   const overlayEl = document.getElementById('scenario-view-overlay');
   renderScenarioView();
@@ -310,7 +336,15 @@ function buildPlayerTabs(party) {
   const myPlayer = getEffectivePlayer(sv.campaign.players ?? []);
   const myPlayerId = myPlayer?.id ?? null;
 
-  const tabs = party.map((member, i) => {
+  // Use stable join order for tabs, not initiative order
+  const joinOrder = sv.joinOrder ?? party.map(m => m.player_id);
+  const orderedParty = joinOrder
+    .map(pid => party.find(m => m.player_id === pid))
+    .filter(Boolean);
+  // Add any members not in join order
+  party.forEach(m => { if (!orderedParty.includes(m)) orderedParty.push(m); });
+
+  const tabs = orderedParty.map((member, i) => {
     const cls = member.characters;
     const classId = cls?.class_id ?? '';
     const playerName = member.player?.player_name ?? '?';
@@ -1306,15 +1340,15 @@ function bindScenarioViewEvents() {
 
   // Play card button (only visible in play phase for selected cards)
   document.querySelectorAll('.sv-play-card-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const { cardId, charId } = btn.dataset;
       if (!sv.playState[charId]) sv.playState[charId] = { hand: [], active: [], discard: [], lost: [], handCards: [] };
       sv.playState[charId].active.push(cardId);
-      // Remove from selected
       if (sv.selectedCards[charId]) {
         sv.selectedCards[charId] = sv.selectedCards[charId].filter(id => id !== cardId);
       }
+      await savePlayStateForChar(charId);
       renderScenarioView();
     });
   });
@@ -1383,7 +1417,7 @@ function bindScenarioViewEvents() {
 
   // Move card from active zone
   document.querySelectorAll('.sv-move-card-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const { dest, cardId, charId } = btn.dataset;
       const ps = sv.playState[charId];
@@ -1391,13 +1425,14 @@ function bindScenarioViewEvents() {
       ps.active = ps.active.filter(n => n !== cardId);
       if (dest === 'discard') ps.discard.push(cardId);
       else if (dest === 'lost') ps.lost.push(cardId);
+      await savePlayStateForChar(charId);
       renderScenarioView();
     });
   });
 
   // Charge dot tap-to-fill
   document.querySelectorAll('.sv-charge-dot').forEach(dot => {
-    dot.addEventListener('click', e => {
+    dot.addEventListener('click', async e => {
       e.stopPropagation();
       const { cardId, charId, dot: dotIdx } = dot.dataset;
       const ps = sv.playState[charId];
@@ -1406,6 +1441,7 @@ function bindScenarioViewEvents() {
       const current = ps.chargeMap[cardId] ?? 0;
       const idx = parseInt(dotIdx);
       ps.chargeMap[cardId] = (idx < current) ? idx : idx + 1;
+      await savePlayStateForChar(charId);
       renderScenarioView();
     });
   });
@@ -1439,13 +1475,14 @@ function bindScenarioViewEvents() {
 
   // Add charge slot button
   document.querySelectorAll('.sv-charge-add-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const { cardId, charId } = btn.dataset;
       const ps = sv.playState[charId];
       if (!ps) return;
       if (!ps.dotCount) ps.dotCount = {};
       ps.dotCount[cardId] = (ps.dotCount[cardId] ?? 0) + 1;
+      await savePlayStateForChar(charId);
       renderScenarioView();
     });
   });
@@ -1738,8 +1775,40 @@ function bindScenarioViewEvents() {
     sv.roundPhase = 'play';
     const newRound = (sv.scenario.round_number ?? 0) + 1;
     await saveRoundNumber(newRound);
+
+    // Auto-sort initiative based on first selected card
+    const party = sv.scenario.scenario_party ?? [];
+    const withInit = party.map(m => {
+      const charId = m.character_id;
+      const ps = sv.playState[charId];
+      const classId = m.characters?.class_id ?? '';
+      const classData = CLASS_REGISTRY?.[classId];
+      let initiative = 99; // default for long rest or unknown
+
+      if (ps?.isLongResting) {
+        initiative = 99;
+      } else {
+        const firstCardId = (sv.selectedCards[charId] ?? [])[0];
+        if (firstCardId && classData?.cards) {
+          const card = classData.cards.find(c =>
+            c.name === firstCardId ||
+            c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === firstCardId
+          );
+          if (card?.initiative) initiative = card.initiative;
+        }
+      }
+      return { member: m, initiative };
+    });
+
+    // Sort by initiative, preserve existing order for ties (stable sort)
+    withInit.sort((a, b) => a.initiative - b.initiative);
+    sv.scenario.scenario_party = withInit.map(w => w.member);
+
+    // Save initiative order to DB
+    await saveInitiativeOrder();
+
     renderScenarioView();
-    showToast(`⚔️ Round ${newRound} begun! Cards are locked in.`);
+    showToast(`⚔️ Round ${newRound} begun! Initiative sorted automatically.`);
   });
 
   // End Scenario button
@@ -2077,13 +2146,64 @@ let sv_pollTimer = null;
 async function pollScenarioState() {
   if (!sv.scenario?.id) return;
   try {
+    // Poll scenario_party for ready/exhaustion/play state changes
     const { data } = await sb()
       .from('scenario_party')
       .select('player_id, is_ready, is_exhausted, play_state, battle_goal_completed, looted_treasure')
       .eq('scenario_id', sv.scenario.id);
+
+    // Also poll scenarios for initiative order and round number changes
+    const { data: scenarioRow } = await sb()
+      .from('scenarios')
+      .select('initiative_order, round_number, status')
+      .eq('id', sv.scenario.id)
+      .maybeSingle();
+
     if (!data) return;
 
     let changed = false;
+
+    // Sync scenario-level state
+    if (scenarioRow) {
+      // Scenario ended/paused by GM — close view for other players
+      if (['completed','lost','abandoned'].includes(scenarioRow.status) &&
+          sv.scenario.status === 'active') {
+        closeScenarioView();
+        await loadCampaigns();
+        showToast('The GM has ended the scenario.');
+        return;
+      }
+      if (scenarioRow.status === 'paused' && sv.scenario.status === 'active') {
+        closeScenarioView();
+        await loadCampaigns();
+        showToast('The GM has paused the scenario.');
+        return;
+      }
+
+      // Sync round number
+      if (scenarioRow.round_number !== sv.scenario.round_number) {
+        sv.scenario.round_number = scenarioRow.round_number;
+        // Detect phase change: new round started = play phase
+        if (scenarioRow.round_number > (sv.scenario.round_number ?? 0)) {
+          sv.roundPhase = 'play';
+        }
+        changed = true;
+      }
+
+      // Sync initiative order
+      if (scenarioRow.initiative_order && scenarioRow.initiative_order !== sv.scenario.initiative_order) {
+        sv.scenario.initiative_order = scenarioRow.initiative_order;
+        try {
+          const order = JSON.parse(scenarioRow.initiative_order);
+          const party = sv.scenario.scenario_party ?? [];
+          const sorted = order.map(pid => party.find(m => m.player_id === pid)).filter(Boolean);
+          party.forEach(m => { if (!sorted.includes(m)) sorted.push(m); });
+          sv.scenario.scenario_party = sorted;
+        } catch (e) { /* ignore */ }
+        changed = true;
+      }
+    }
+
     data.forEach(row => {
       // Sync ready states
       const wasReady = sv.readyPlayers[row.player_id] ?? false;
@@ -2092,18 +2212,46 @@ async function pollScenarioState() {
         sv.readyPlayers[row.player_id] = isNowReady;
         changed = true;
       }
-      // Sync exhaustion
+
       const member = (sv.scenario.scenario_party ?? []).find(m => m.player_id === row.player_id);
       if (member) {
         const charId = member.character_id;
         const ps = sv.playState[charId];
-        if (ps && ps.isExhausted !== row.is_exhausted) {
-          ps.isExhausted = row.is_exhausted;
+        if (!ps) return;
+
+        // Sync exhaustion
+        if (ps.isExhausted !== (row.is_exhausted ?? false)) {
+          ps.isExhausted = row.is_exhausted ?? false;
           changed = true;
         }
-        if (ps && row.battle_goal_completed !== ps.bgCompleted) {
-          ps.bgCompleted = row.battle_goal_completed;
+
+        // Sync BG completion
+        if (ps.bgCompleted !== (row.battle_goal_completed ?? false)) {
+          ps.bgCompleted = row.battle_goal_completed ?? false;
           changed = true;
+        }
+
+        // Sync play state (cards in zones, charge dots, etc.)
+        if (row.play_state && Object.keys(row.play_state).length) {
+          const saved = row.play_state;
+          const myPlayer = getEffectivePlayer(sv.campaign.players ?? []);
+          const isMyChar = myPlayer?.id === member.player_id ||
+            (member.is_absent && member.substitute_player_id === myPlayer?.id);
+
+          // Only update from DB if this isn't our own character
+          // (our own state is authoritative in memory)
+          if (!isMyChar) {
+            let playChanged = false;
+            ['active','discard','lost','chargeMap','dotCount'].forEach(key => {
+              const savedVal = JSON.stringify(saved[key] ?? (typeof saved[key] === 'object' ? {} : []));
+              const curVal = JSON.stringify(ps[key] ?? (typeof ps[key] === 'object' ? {} : []));
+              if (savedVal !== curVal) {
+                ps[key] = saved[key];
+                playChanged = true;
+              }
+            });
+            if (playChanged) changed = true;
+          }
         }
       }
     });
@@ -2162,6 +2310,7 @@ function initSpacebarZoom(overlayEl) {
 
 function closeScenarioView() {
   stopPolling();
+  sv.joinOrder = null; // reset for next scenario
   if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
   if (sv._zoomKeydown) { document.removeEventListener('keydown', sv._zoomKeydown); sv._zoomKeydown = null; }
   if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
