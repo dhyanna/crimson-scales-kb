@@ -129,7 +129,22 @@ async function saveReadyState(playerId, isReady) {
 
 async function savePlayStateForChar(charId) {
   const ps = sv.playState[charId];
-  if (!ps?.partyRowId) return;
+  if (!ps) return;
+
+  // Look up the party row ID directly rather than relying on cached partyRowId
+  // This handles cases where partyRowId wasn't set correctly on load
+  let rowId = ps.partyRowId;
+  if (!rowId) {
+    const { data: partyRow } = await sb()
+      .from('scenario_party')
+      .select('id')
+      .eq('scenario_id', sv.scenario.id)
+      .eq('character_id', charId)
+      .maybeSingle();
+    rowId = partyRow?.id ?? null;
+    if (rowId) ps.partyRowId = rowId; // cache it for future saves
+  }
+  if (!rowId) return; // truly not found
   const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
   const stateToSave = {
     active:             ps.active,
@@ -145,9 +160,12 @@ async function savePlayStateForChar(charId) {
     // Persist selected cards so GM can read all players' initiatives at Begin Round
     selectedCards:      sv.selectedCards[charId] ?? [],
   };
-  await sb().from('scenario_party')
+  const result = await sb().from('scenario_party')
     .update({ play_state: stateToSave })
-    .eq('id', ps.partyRowId);
+    .eq('id', rowId)
+    .select('id');
+  if (result.error) throw new Error(`play_state save failed: ${result.error.message}`);
+  if (!result.data || result.data.length === 0) throw new Error(`play_state save matched 0 rows (rowId=${rowId})`);
 }
 
 // Save all party members' play states
@@ -1451,8 +1469,13 @@ function bindScenarioViewEvents() {
       if (sv.selectedCards[charId]) {
         sv.selectedCards[charId] = sv.selectedCards[charId].filter(id => id !== cardId);
       }
-      await savePlayStateForChar(charId);
       renderScenarioView();
+      showToast(`▶ Playing card...`);
+      try {
+        await savePlayStateForChar(charId);
+        showToast(`✓ Card played`);
+      }
+      catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   });
 
@@ -1533,8 +1556,10 @@ function bindScenarioViewEvents() {
       ps.active = ps.active.filter(n => n !== cardId);
       if (dest === 'discard') ps.discard.push(cardId);
       else if (dest === 'lost') ps.lost.push(cardId);
-      await savePlayStateForChar(charId);
+      else if (dest === 'hand') { /* already removed from active */ }
       renderScenarioView();
+      try { await savePlayStateForChar(charId); }
+      catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   });
 
