@@ -285,8 +285,14 @@ function buildScenarioViewHTML() {
     <div class="sv-container">
       ${buildScenarioBanner(s)}
       ${buildInitiativeTracker(party)}
-      ${buildPlayerTabs(party)}
-      ${buildPlayArea(party)}
+      <div class="sv-main-layout">
+        <div class="sv-left-tabs">
+          ${buildPlayerTabs(party)}
+        </div>
+        <div class="sv-play-content">
+          ${buildPlayArea(party)}
+        </div>
+      </div>
       ${buildGMControls()}
     </div>`;
 }
@@ -327,6 +333,7 @@ function buildInitiativeTracker(party) {
     const initiative = member.initiative;
     const isReady = sv.readyPlayers[member.player_id] ?? false;
     const isExhausted = sv.playState[member.character_id]?.isExhausted ?? false;
+    const charName = member.characters?.character_name || playerName;
     return `
       <div class="sv-init-item${initiative ? ' sv-init-revealed' : ' sv-init-unrevealed'}${isReady ? ' sv-init-ready' : ''}${isExhausted ? ' sv-init-exhausted' : ''}"
            data-party-idx="${i}"
@@ -336,7 +343,7 @@ function buildInitiativeTracker(party) {
           ${assets.token ? `<img src="${assets.token}" class="sv-init-token-img" alt="">` :
             `<div class="sv-init-placeholder">${classId[0]?.toUpperCase() ?? '?'}</div>`}
         </div>
-        <div class="sv-init-name">${playerName}</div>
+        <div class="sv-init-name">${charName}</div>
         ${initiative ? `<div class="sv-init-number">${initiative}</div>` : ''}
       </div>`;
   }).join('');
@@ -442,7 +449,8 @@ function buildPlayArea(party) {
             ${ps.discard.length > 0
               ? `<div class="sv-pile-clickable" data-pile="discard" data-char-id="${charId}">
                   <img src="${getCardBack(classId)}" class="sv-pile-card" alt="Discard pile">
-                  <div class="sv-pile-view-hint">👁 View</div>
+                  <div class="sv-pile-count-badge">${ps.discard.length}</div>
+                  ${!isPeeking ? '<div class="sv-pile-view-hint">👁 View</div>' : ''}
                 </div>`
               : '<div class="sv-zone-empty">—</div>'}
           </div>
@@ -456,18 +464,22 @@ function buildPlayArea(party) {
           <div class="sv-zone-label">Lost (${ps.lost.length})</div>
           <div class="sv-pile-stack">
             ${ps.lost.length > 0
-              ? `<div class="sv-pile-clickable" data-pile="lost" data-char-id="${charId}">
+              ? `<div class="sv-pile-clickable${isPeeking ? ' sv-pile-no-click' : ''}" data-pile="lost" data-char-id="${charId}">
                   <img src="${getCardBack(classId)}" class="sv-pile-card" alt="Lost pile">
-                  <div class="sv-pile-view-hint">👁 View</div>
+                  <div class="sv-pile-count-badge">${ps.lost.length}</div>
+                  ${!isPeeking ? '<div class="sv-pile-view-hint">👁 View</div>' : ''}
                 </div>`
               : '<div class="sv-zone-empty">—</div>'}
           </div>
         </div>
       </div>
 
+      <!-- Staged cards (selected, waiting to play) -->
+      ${!isPeeking ? buildStagedCards(handCards, classId, charId, ps) : ''}
+
       <!-- Hand cards -->
       <div class="sv-zone sv-zone-hand">
-        <div class="sv-zone-label">Hand (${Math.max(0, handCards.length - ps.active.length - ps.discard.length - ps.lost.length)} remaining)</div>
+        <div class="sv-zone-label">Hand (${Math.max(0, handCards.length - ps.active.length - ps.discard.length - ps.lost.length - (sv.selectedCards[charId]?.length ?? 0))} remaining)</div>
         <div class="sv-hand-cards" id="sv-hand-cards">
           ${buildHandCards(handCards, classId, charId, ps, isPeeking)}
         </div>
@@ -598,11 +610,17 @@ function getClassIdForChar(charId) {
 function getCardDataById(charId, cardId) {
   const classId = getClassIdForChar(charId);
   const classData = CLASS_REGISTRY?.[classId];
-  return classData?.cards?.find(c =>
-    c.id === cardId ||
-    c.name === cardId ||
-    c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === cardId
-  ) ?? null;
+  if (!classData) return null;
+  return classData.cards?.find(c => {
+    if (c.id === cardId) return true;
+    if (c.name === cardId) return true;
+    // slugify match: "Chokehold" -> "chokehold"
+    if (c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g,'') === cardId) return true;
+    // imageUrl filename match: extract slug from URL
+    const urlSlug = c.imageUrl?.split('/').pop()?.replace(/\.jpe?g$/i,'') ?? '';
+    if (urlSlug === cardId) return true;
+    return false;
+  }) ?? null;
 }
 
 // ── Compact negate damage (for action bar) ───────────────────────
@@ -962,34 +980,36 @@ function buildCharacterMat(classId, classData) {
 
 // ── Hand Cards ────────────────────────────────────────────────────
 function buildHandCards(dbCards, classId, charId, ps, isPeeking) {
-  const classData = CLASS_REGISTRY?.[classId];
   const playedSet = new Set([...ps.active, ...ps.discard, ...ps.lost]);
   const available = dbCards.filter(dc => !playedSet.has(dc.card_id));
   if (!available.length) return '<div class="sv-zone-empty">No cards in hand</div>';
 
   const selected = sv.selectedCards[charId] ?? [];
   const inPlayPhase = sv.roundPhase === 'play';
+  const memberForChar = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
+  const playerIsReady = memberForChar ? (sv.readyPlayers[memberForChar.player_id] ?? false) : false;
 
-  return available.map(dc => {
+  if (isPeeking) {
+    // Peek: show remaining (non-staged) hand cards face down
+    return available.filter(dc => !selected.includes(dc.card_id)).map(dc =>
+      `<div class="sv-hand-card sv-hand-card-facedown" data-card-id="${dc.card_id}" data-char-id="${charId}">
+        <img src="${getCardBack(classId)}" class="sv-card-img" alt="Card back">
+      </div>`
+    ).join('') || '<div class="sv-zone-empty">No cards in hand</div>';
+  }
+
+  // In play phase: staged cards move to their own area, remaining hand is freely interactable
+  const stagedSet = inPlayPhase ? new Set(selected) : new Set();
+  const remainingCards = available.filter(dc => !stagedSet.has(dc.card_id));
+
+  return remainingCards.map(dc => {
     const cardId = dc.card_id;
-    const cardData = classData?.cards?.find(c =>
-      c.name === cardId ||
-      c.name.toLowerCase().replace(/[^a-z0-9]/g, '-') === cardId
-    );
+    const cardData = getCardDataById(charId, cardId);
     const cardName = cardData?.name ?? cardId;
     const cardImg = cardData?.imageUrl ?? getCardBack(classId);
 
-    if (isPeeking) {
-      return `<div class="sv-hand-card sv-hand-card-facedown" data-card-id="${cardId}" data-char-id="${charId}">
-        <img src="${getCardBack(classId)}" class="sv-card-img" alt="Card back">
-      </div>`;
-    }
-
-    const isSelected = selected.includes(cardId);
-    // Find if this player is ready (cards locked once green)
-    const memberForChar = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
-    const playerIsReady = memberForChar ? (sv.readyPlayers[memberForChar.player_id] ?? false) : false;
-    const isLocked = (inPlayPhase && !isSelected) || (playerIsReady && !isSelected);
+    const isSelected = !inPlayPhase && selected.includes(cardId);
+    const isLocked = !inPlayPhase && playerIsReady && !isSelected;
     const selIdx = selected.indexOf(cardId);
     const selLabel = selIdx === 0 ? '1st' : selIdx === 1 ? '2nd' : '';
 
@@ -998,10 +1018,33 @@ function buildHandCards(dbCards, classId, charId, ps, isPeeking) {
       <img src="${cardImg}" class="sv-card-img" alt="${cardName}">
       ${isSelected ? `<div class="sv-card-sel-badge">${selLabel}</div>` : ''}
       <div class="sv-card-name">${cardName}</div>
-      ${isSelected && inPlayPhase ? `<button class="sv-play-card-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Play card">▶ Play</button>` : ''}
+    </div>`;
+  }).join('') || '<div class="sv-zone-empty">No remaining cards in hand</div>';
+}
+
+// ── Staged cards (selected cards waiting to be played) ────────────
+function buildStagedCards(dbCards, classId, charId, ps) {
+  const selected = sv.selectedCards[charId] ?? [];
+  if (!selected.length || sv.roundPhase !== 'play') return '';
+
+  const cards = selected.map(cardId => {
+    const cardData = getCardDataById(charId, cardId);
+    const cardName = cardData?.name ?? cardId;
+    const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+    return `<div class="sv-staged-card" data-card-id="${cardId}" data-char-id="${charId}" data-img="${cardImg}">
+      <img src="${cardImg}" class="sv-card-img sv-zoomable" alt="${cardName}">
+      <div class="sv-card-name">${cardName}</div>
+      <button class="sv-play-card-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Play card">▶ Play</button>
     </div>`;
   }).join('');
+
+  return `
+    <div class="sv-staged-area">
+      <div class="sv-zone-label">⚔️ Cards to Play</div>
+      <div class="sv-staged-cards">${cards}</div>
+    </div>`;
 }
+
 
 // ── Active Card ───────────────────────────────────────────────────
 function buildActiveCard(cardId, classId, charId) {
@@ -1329,6 +1372,32 @@ function bindScenarioViewEvents() {
   document.querySelectorAll('.sv-player-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       sv.activePlayerId = tab.dataset.playerId;
+      renderScenarioView();
+    });
+  });
+
+  // Hand card drag-to-reorder
+  let dragCardId = null;
+  document.querySelectorAll('.sv-hand-card:not(.sv-hand-card-facedown)').forEach(card => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', () => { dragCardId = card.dataset.cardId; });
+    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('sv-drag-over'); });
+    card.addEventListener('dragleave', () => { card.classList.remove('sv-drag-over'); });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('sv-drag-over');
+      const dropCardId = card.dataset.cardId;
+      const charId = card.dataset.charId;
+      if (!dragCardId || dragCardId === dropCardId || !charId) return;
+      const ps = sv.playState[charId];
+      if (!ps?.handCards) return;
+      // Reorder handCards array
+      const fromIdx = ps.handCards.findIndex(c => c.card_id === dragCardId);
+      const toIdx = ps.handCards.findIndex(c => c.card_id === dropCardId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const [moved] = ps.handCards.splice(fromIdx, 1);
+      ps.handCards.splice(toIdx, 0, moved);
+      dragCardId = null;
       renderScenarioView();
     });
   });
@@ -2258,6 +2327,14 @@ function handlePartyUpdate(payload) {
   if (wasReady !== isNowReady) {
     sv.readyPlayers[member.player_id] = isNowReady;
     member.is_ready = isNowReady;
+    changed = true;
+  }
+
+  // Sync absent/substitute changes (#3 fix)
+  if (member.is_absent !== (row.is_absent ?? false) ||
+      member.substitute_player_id !== (row.substitute_player_id ?? null)) {
+    member.is_absent = row.is_absent ?? false;
+    member.substitute_player_id = row.substitute_player_id ?? null;
     changed = true;
   }
 
