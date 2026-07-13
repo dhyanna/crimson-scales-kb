@@ -212,6 +212,38 @@ async function completePqForChar(charId) {
   ps.pqCompleted = true;
 }
 
+// ── Global mobile-friendly handlers ──────────────────────────────
+// These are called via inline onclick for iPad/touch compatibility
+window._handlePlayCard = async function(cardId, charId) {
+  showToast(`▶ Playing card...`);
+  if (!sv.playState[charId]) sv.playState[charId] = { hand: [], active: [], discard: [], lost: [], handCards: [] };
+  if (sv.playState[charId].active.includes(cardId)) return; // guard double-fire
+  sv.playState[charId].active.push(cardId);
+  if (sv.selectedCards[charId]) {
+    sv.selectedCards[charId] = sv.selectedCards[charId].filter(id => id !== cardId);
+  }
+  renderScenarioView();
+  try {
+    await savePlayStateForChar(charId);
+    showToast(`✓ Card played`);
+  } catch(err) {
+    showToast('⚠️ Sync error: ' + err.message, true);
+  }
+};
+
+window._handleMoveCard = async function(dest, cardId, charId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+  if (dest === 'discard' && ps.discard.includes(cardId)) return;
+  if (dest === 'lost' && ps.lost.includes(cardId)) return;
+  ps.active = ps.active.filter(n => n !== cardId);
+  if (dest === 'discard') ps.discard.push(cardId);
+  else if (dest === 'lost') ps.lost.push(cardId);
+  renderScenarioView();
+  try { await savePlayStateForChar(charId); }
+  catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
+};
+
 // ── Entry point ───────────────────────────────────────────────────
 async function openScenarioView(scenario, campaign) {
   sv.scenario = scenario;
@@ -1069,7 +1101,8 @@ function buildStagedCards(dbCards, classId, charId, ps) {
     return `<div class="sv-staged-card" data-card-id="${cardId}" data-char-id="${charId}" data-img="${cardImg}">
       <img src="${cardImg}" class="sv-card-img sv-zoomable" alt="${cardName}">
       <div class="sv-card-name">${cardName}</div>
-      <button class="sv-play-card-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Play card">▶ Play</button>
+      <button class="sv-play-card-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Play card"
+        onclick="window._handlePlayCard('${cardId}','${charId}')">▶ Play</button>
     </div>`;
   }).join('');
 
@@ -1112,9 +1145,12 @@ function buildActiveCard(cardId, classId, charId) {
       <div class="sv-card-name">${displayName}</div>
       ${chargeDots}
       <div class="sv-active-card-actions">
-        <button class="sv-move-card-btn" data-dest="discard" data-card-id="${cardId}" data-char-id="${charId}">→ Discard</button>
-        <button class="sv-move-card-btn" data-dest="lost" data-card-id="${cardId}" data-char-id="${charId}">→ Lost</button>
-        <button class="sv-move-card-btn" data-dest="hand" data-card-id="${cardId}" data-char-id="${charId}">→ Hand</button>
+        <button class="sv-move-card-btn" data-dest="discard" data-card-id="${cardId}" data-char-id="${charId}"
+          onclick="window._handleMoveCard('discard','${cardId}','${charId}')">→ Discard</button>
+        <button class="sv-move-card-btn" data-dest="lost" data-card-id="${cardId}" data-char-id="${charId}"
+          onclick="window._handleMoveCard('lost','${cardId}','${charId}')">→ Lost</button>
+        <button class="sv-move-card-btn" data-dest="hand" data-card-id="${cardId}" data-char-id="${charId}"
+          onclick="window._handleMoveCard('hand','${cardId}','${charId}')">→ Hand</button>
       </div>
     </div>`;
 }
@@ -1457,8 +1493,9 @@ function bindScenarioViewEvents() {
       }
       renderScenarioView();
       // Save selectedCards to DB so GM can read initiative at Begin Round
-      // Fire-and-forget — don't await
-      savePlayStateForChar(charId).catch(() => {});
+      savePlayStateForChar(charId).catch(err => {
+        showToast('⚠️ Card select sync error: ' + err.message, true);
+      });
     });
   });
 
@@ -2441,14 +2478,17 @@ function handlePartyUpdate(payload) {
     member.substitute_player_id = nowSubId;
     changed = true;
 
-    // If I am now the substitute for this absent player, switch my view to their area
+    // Notify the player who was just assigned as substitute
     const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
     if (myPlayer && nowSubId === myPlayer.id && nowAbsent) {
-      // Don't auto-switch if I already have my own character tab selected
-      const myOwnMember = (sv.scenario?.scenario_party ?? []).find(
-        m => m.player_id === myPlayer.id && m.character_id !== member.character_id
-      );
-      if (!myOwnMember) sv.activePlayerId = member.player_id;
+      const absentPlayerName = member.player?.player_name ?? 'an absent player';
+      const charName = member.characters?.character_name ?? 'their character';
+      showToast(`👤 You have been assigned to play for ${absentPlayerName} (${charName})`);
+      sv.activePlayerId = member.player_id;
+    }
+    // Notify if assignment was removed
+    if (myPlayer && wasSubId === myPlayer.id && !nowSubId) {
+      showToast(`👤 You are no longer assigned to play for an absent player`);
     }
   }
 
@@ -2506,27 +2546,21 @@ function startPolling() {
     .subscribe((status) => {
       console.log('Realtime status:', status);
       if (status === 'SUBSCRIBED') {
-        showToast('🔗 Connected to live session');
         // Clear fallback poll if Realtime works
         if (sv._fallbackPollTimer) {
           clearInterval(sv._fallbackPollTimer);
           sv._fallbackPollTimer = null;
         }
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        showToast('⚠️ Live sync unavailable — using fallback polling', true);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        // Start fallback polling when Realtime is unreliable
         startFallbackPolling();
       }
     });
 
-  // Start fallback polling immediately — cancel it if Realtime connects within 5s
+  // Start fallback polling immediately as safety net
+  // It will be cancelled if Realtime is stable (SUBSCRIBED without CLOSED)
   sv._fallbackPollTimer = setInterval(fallbackPoll, 3000);
-  setTimeout(() => {
-    // If still polling after 5s and Realtime is subscribed, stop fallback
-    if (sv_realtimeChannel?.state === 'joined' && sv._fallbackPollTimer) {
-      clearInterval(sv._fallbackPollTimer);
-      sv._fallbackPollTimer = null;
-    }
-  }, 5000);
+  fallbackPoll();
 }
 
 async function fallbackPoll() {
@@ -2553,6 +2587,7 @@ async function fallbackPoll() {
 
 function startFallbackPolling() {
   if (sv._fallbackPollTimer) return;
+  fallbackPoll(); // run immediately
   sv._fallbackPollTimer = setInterval(fallbackPoll, 3000);
 }
 
