@@ -130,17 +130,20 @@ async function saveReadyState(playerId, isReady) {
 async function savePlayStateForChar(charId) {
   const ps = sv.playState[charId];
   if (!ps?.partyRowId) return;
+  const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
   const stateToSave = {
-    active:            ps.active,
-    discard:           ps.discard,
-    lost:              ps.lost,
-    chargeMap:         ps.chargeMap,
-    dotCount:          ps.dotCount,
-    isLongResting:     ps.isLongResting,
+    active:             ps.active,
+    discard:            ps.discard,
+    lost:               ps.lost,
+    chargeMap:          ps.chargeMap,
+    dotCount:           ps.dotCount,
+    isLongResting:      ps.isLongResting,
     hasOverrideAbility: ps.hasOverrideAbility,
-    hasActiveNonLoss:  ps.hasActiveNonLoss,
-    restPhase:         ps.restPhase,
-    restCandidate:     ps.restCandidate,
+    hasActiveNonLoss:   ps.hasActiveNonLoss,
+    restPhase:          ps.restPhase,
+    restCandidate:      ps.restCandidate,
+    // Persist selected cards so GM can read all players' initiatives at Begin Round
+    selectedCards:      sv.selectedCards[charId] ?? [],
   };
   await sb().from('scenario_party')
     .update({ play_state: stateToSave })
@@ -384,11 +387,15 @@ function buildPlayerTabs(party) {
     const isSubstitute = isAbsent && member.substitute_player_id === myPlayerId;
     const isMyArea = isMyChar || isSubstitute;
 
-    const absentBadge = isAbsent ? '<span class="sv-tab-absent">ABSENT</span>' : '';
+    // Green highlight for own player or assigned absentee
+    const myHighlight = isMyChar ? ' sv-tab-mine' : isSubstitute ? ' sv-tab-substitute' : '';
+    const absentBadge = isAbsent
+      ? `<span class="sv-tab-absent${isSubstitute ? ' sv-tab-absent-mine' : ''}">ABSENT</span>`
+      : '';
     const peekIcon = !isMyArea && !isActive ? '<span class="sv-tab-peek">👁</span>' : '';
 
     return `
-      <button class="sv-player-tab${isActive ? ' sv-player-tab-active' : ''}${isAbsent ? ' sv-tab-is-absent' : ''}"
+      <button class="sv-player-tab${isActive ? ' sv-player-tab-active' : ''}${isAbsent ? ' sv-tab-is-absent' : ''}${myHighlight}"
           data-player-id="${member.player_id}">
         ${CARD_BACK_ASSETS[classId]?.token
           ? `<img src="${getTokenImg(classId)}" class="sv-tab-token" alt="">`
@@ -1507,6 +1514,11 @@ function bindScenarioViewEvents() {
       const newReady = !currentlyReady;
       sv.readyPlayers[playerId] = newReady;
       await saveReadyState(playerId, newReady);
+      // Also save play state (including selectedCards) when going ready
+      if (newReady) {
+        const memberForReady = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
+        if (memberForReady) await savePlayStateForChar(memberForReady.character_id);
+      }
       renderScenarioView();
     });
   });
@@ -1872,20 +1884,35 @@ function bindScenarioViewEvents() {
 
     // Auto-sort initiative based on first selected card BEFORE saving
     const party = sv.scenario.scenario_party ?? [];
+    // Fetch latest play_state for all party members to get their selectedCards
+    const { data: freshPartyRows } = await sb()
+      .from('scenario_party')
+      .select('character_id, play_state, is_ready')
+      .eq('scenario_id', sv.scenario.id);
+
     const withInit = party.map(m => {
       const charId = m.character_id;
       const ps = sv.playState[charId];
       const classId = m.characters?.class_id ?? '';
-      const classData = CLASS_REGISTRY?.[classId];
       let initiative = 99; // default for long rest or unknown
 
-      if (ps?.isLongResting) {
+      // Use local selectedCards for own character, DB play_state for others
+      const freshRow = (freshPartyRows ?? []).find(r => r.character_id === charId);
+      const savedSelected = freshRow?.play_state?.selectedCards ?? [];
+      const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
+      const isMyChar = myPlayer?.id === m.player_id;
+      const effectiveSelected = isMyChar
+        ? (sv.selectedCards[charId] ?? [])
+        : savedSelected;
+
+      if (ps?.isLongResting || freshRow?.play_state?.isLongResting) {
         initiative = 99;
       } else {
-        const firstCardId = (sv.selectedCards[charId] ?? [])[0];
+        const firstCardId = effectiveSelected[0];
         if (firstCardId) {
           const card = getCardDataById(charId, firstCardId);
           if (card?.initiative) initiative = card.initiative;
+          else console.warn(`[CSKB] Initiative lookup failed: charId=${charId} cardId=${firstCardId}`);
         }
       }
       return { member: m, initiative };
@@ -1926,7 +1953,10 @@ function bindScenarioViewEvents() {
     }).eq('id', sv.scenario.id);
 
     renderScenarioView();
-    showToast(`⚔️ Round ${newRound} begun! Initiative sorted automatically.`);
+    const beginMsg = `⚔️ Round ${newRound} begun! Initiative sorted automatically.`;
+    showToast(beginMsg);
+    // Save toast for other players to see
+    await sb().from('scenarios').update({ toast_message: beginMsg, toast_at: new Date().toISOString() }).eq('id', sv.scenario.id);
   });
 
   // End Scenario button
@@ -2320,6 +2350,14 @@ function handleScenarioUpdate(payload) {
     changed = true;
   }
 
+  // Sync toast messages from GM to all players
+  if (row.toast_message && row.toast_at !== sv.scenario.lastToastAt) {
+    sv.scenario.lastToastAt = row.toast_at;
+    const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
+    // Don't show to GM (they already saw it locally)
+    if (!sv.isGM || !myPlayer) showToast(row.toast_message);
+  }
+
   if (changed) renderScenarioView();
 }
 
@@ -2386,14 +2424,19 @@ function handlePartyUpdate(payload) {
     // Sync play state — only for other players' characters
     if (!isMyChar && row.play_state && Object.keys(row.play_state).length) {
       const saved = row.play_state;
-      ['active','discard','lost','chargeMap','dotCount'].forEach(key => {
-        const savedVal = JSON.stringify(saved[key] ?? {});
-        const curVal = JSON.stringify(ps[key] ?? {});
+      const arrayKeys = ['active', 'discard', 'lost'];
+      const objKeys = ['chargeMap', 'dotCount'];
+      let playChanged = false;
+      [...arrayKeys, ...objKeys].forEach(key => {
+        const fallback = arrayKeys.includes(key) ? [] : {};
+        const savedVal = JSON.stringify(saved[key] ?? fallback);
+        const curVal = JSON.stringify(ps[key] ?? fallback);
         if (savedVal !== curVal) {
-          ps[key] = saved[key];
-          changed = true;
+          ps[key] = saved[key] ?? fallback;
+          playChanged = true;
         }
       });
+      if (playChanged) changed = true;
     }
   }
 

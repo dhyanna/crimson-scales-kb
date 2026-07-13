@@ -1221,6 +1221,15 @@ function showToast(msg, isError = false) {
   setTimeout(() => toast.classList.remove('cs-toast-show'), 3500);
 }
 
+// Broadcast a toast to all connected players via scenarios table
+window.broadcastScenarioToast = function(scenarioId, msg) {
+  if (!scenarioId) return;
+  sb().from('scenarios')
+    .update({ toast_message: msg, toast_at: new Date().toISOString() })
+    .eq('id', scenarioId)
+    .then(() => {});
+};
+
 // ── Scenario Wizard ──────────────────────────────────────────────
 let scenarioWizardState = { campaignId: null };
 
