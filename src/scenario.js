@@ -1456,15 +1456,21 @@ function bindScenarioViewEvents() {
         sel.push(cardId);
       }
       renderScenarioView();
+      // Save selectedCards to DB so GM can read initiative at Begin Round
+      // Fire-and-forget — don't await
+      savePlayStateForChar(charId).catch(() => {});
     });
   });
 
   // Play card button (only visible in play phase for selected cards)
   document.querySelectorAll('.sv-play-card-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
+    async function handlePlayCard(e) {
       e.stopPropagation();
+      e.preventDefault();
       const { cardId, charId } = btn.dataset;
       if (!sv.playState[charId]) sv.playState[charId] = { hand: [], active: [], discard: [], lost: [], handCards: [] };
+      // Guard against double-fire from touch+click
+      if (sv.playState[charId].active.includes(cardId)) return;
       sv.playState[charId].active.push(cardId);
       if (sv.selectedCards[charId]) {
         sv.selectedCards[charId] = sv.selectedCards[charId].filter(id => id !== cardId);
@@ -1476,7 +1482,9 @@ function bindScenarioViewEvents() {
         showToast(`✓ Card played`);
       }
       catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
-    });
+    }
+    btn.addEventListener('click', handlePlayCard);
+    btn.addEventListener('touchend', handlePlayCard, { passive: false });
   });
 
   // Initiative icon click — toggle ready state (select phase) OR end turn (play phase)
@@ -1548,19 +1556,24 @@ function bindScenarioViewEvents() {
 
   // Move card from active zone
   document.querySelectorAll('.sv-move-card-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
+    async function handleMoveCard(e) {
       e.stopPropagation();
+      e.preventDefault();
       const { dest, cardId, charId } = btn.dataset;
       const ps = sv.playState[charId];
       if (!ps) return;
+      // Guard against double-fire
+      if (dest === 'discard' && ps.discard.includes(cardId)) return;
+      if (dest === 'lost' && ps.lost.includes(cardId)) return;
       ps.active = ps.active.filter(n => n !== cardId);
       if (dest === 'discard') ps.discard.push(cardId);
       else if (dest === 'lost') ps.lost.push(cardId);
-      else if (dest === 'hand') { /* already removed from active */ }
       renderScenarioView();
       try { await savePlayStateForChar(charId); }
       catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
-    });
+    }
+    btn.addEventListener('click', handleMoveCard);
+    btn.addEventListener('touchend', handleMoveCard, { passive: false });
   });
 
   // Charge dot tap-to-fill
@@ -2385,11 +2398,10 @@ function handleScenarioUpdate(payload) {
   }
 
   // Sync toast messages from GM to all players
-  if (row.toast_message && row.toast_at !== sv.scenario.lastToastAt) {
+  if (row.toast_message && row.toast_at && row.toast_at !== sv.scenario.lastToastAt) {
     sv.scenario.lastToastAt = row.toast_at;
-    const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
-    // Don't show to GM (they already saw it locally)
-    if (!sv.isGM || !myPlayer) showToast(row.toast_message);
+    // Show to all non-GM players
+    if (!sv.isGM) showToast(row.toast_message);
   }
 
   if (changed) renderScenarioView();
