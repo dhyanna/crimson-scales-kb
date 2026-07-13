@@ -1912,9 +1912,12 @@ function bindScenarioViewEvents() {
         if (firstCardId) {
           const card = getCardDataById(charId, firstCardId);
           if (card?.initiative) initiative = card.initiative;
-          else console.warn(`[CSKB] Initiative lookup failed: charId=${charId} cardId=${firstCardId}`);
+          else console.warn(`[CSKB] Initiative lookup FAILED: classId=${classId} cardId=${firstCardId}`);
+        } else {
+          console.warn(`[CSKB] No selectedCard for charId=${charId} isMyChar=${isMyChar} localSel=${JSON.stringify(sv.selectedCards[charId])} dbSel=${JSON.stringify(savedSelected)} freshRow=${JSON.stringify(freshRow?.play_state)}`);
         }
       }
+      console.log(`[CSKB] Initiative: player=${m.player?.player_name} classId=${classId} firstCard=${effectiveSelected[0]} initiative=${initiative} isMyChar=${isMyChar}`);
       return { member: m, initiative };
     });
 
@@ -1941,7 +1944,7 @@ function bindScenarioViewEvents() {
       showToast(`⚠️ Ties detected — reorder manually if needed: ${tieMsg}`);
     }
 
-    // Save initiative order to DB — combine with round/phase in single atomic update
+    const beginMsg = `⚔️ Round ${newRound} begun! Initiative sorted automatically.`;
     const initiativeOrder = JSON.stringify((sv.scenario.scenario_party ?? []).map(m => m.player_id));
     sv.scenario.initiative_order = initiativeOrder;
     sv.scenario.round_number = newRound;
@@ -1950,13 +1953,12 @@ function bindScenarioViewEvents() {
       round_number: newRound,
       scenario_step: 'play',
       initiative_order: initiativeOrder,
+      toast_message: beginMsg,
+      toast_at: new Date().toISOString(),
     }).eq('id', sv.scenario.id);
 
     renderScenarioView();
-    const beginMsg = `⚔️ Round ${newRound} begun! Initiative sorted automatically.`;
     showToast(beginMsg);
-    // Save toast for other players to see
-    await sb().from('scenarios').update({ toast_message: beginMsg, toast_at: new Date().toISOString() }).eq('id', sv.scenario.id);
   });
 
   // End Scenario button
@@ -2015,8 +2017,9 @@ function bindScenarioViewEvents() {
   document.getElementById('sv-cancel-scenario')?.addEventListener('click', async () => {
     if (!confirm('Cancel this scenario? This will abandon the scenario and roll back any PQ/milestone progress made during play.')) return;
     try {
-      // Rollback PQ/milestone checks to start snapshots
       const party = sv.scenario.scenario_party ?? [];
+
+      // Rollback PQ/milestone checks to start snapshots
       for (const member of party) {
         const ps = sv.playState[member.character_id];
         if (!ps?.stateId) continue;
@@ -2025,6 +2028,12 @@ function bindScenarioViewEvents() {
           milestone_checks: ps.milestoneChecksStart ?? ps.milestoneChecks,
         }).eq('id', ps.stateId);
       }
+
+      // Clear play_state on all scenario_party rows (abandon = clean slate)
+      await Promise.all(party.map(m =>
+        sb().from('scenario_party').update({ play_state: {} }).eq('id', m.id)
+      ));
+
       await sb().from('scenarios').update({ status: 'abandoned' }).eq('id', sv.scenario.id);
       await updateCampaignPhase(sv.campaign.id, 'city', 'downtime');
       closeScenarioView();
