@@ -224,13 +224,10 @@ async function createScenario(campaignId, gmPlayerId, number, name, goal) {
     .update({ status: 'abandoned', updated_at: new Date().toISOString() })
     .eq('campaign_id', campaignId)
     .in('status', ['active', 'paused']);
-  // Set campaign phase to scenario
-  const { error: phaseError } = await sb().from('campaigns')
-    .update({ phase: 'scenario' })
-    .eq('id', campaignId);
-  if (phaseError) console.error('Phase update error:', phaseError);
+  // Set campaign phase to scenario — done after party members inserted
+  // (Phase update happens after scenario status set to active in wizard)
   const { data, error } = await sb().from('scenarios')
-    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'active', scenario_step: 'beginning', round_number: 0 })
+    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'pending', scenario_step: 'beginning', round_number: 0 })
     .select().single();
   if (error) throw error;
   return data;
@@ -1297,13 +1294,19 @@ function openScenarioWizard(campaign) {
     try {
       const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal);
       const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
-      for (const cb of checked) {
+      // Insert all party members first before activating
+      await Promise.all(checked.map(cb => {
         const bgInput = document.querySelector(`.scenario-bg-input[data-char-id="${cb.dataset.charId}"]`);
         const bgKey = typeof resolveBattleGoalKey !== 'undefined'
           ? resolveBattleGoalKey(bgInput?.value.trim())
           : (bgInput?.value.trim() || null);
-        await addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgKey);
-      }
+        return addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgKey);
+      }));
+      // Only NOW activate the scenario — Realtime fires to other browsers with all party ready
+      await Promise.all([
+        sb().from('scenarios').update({ status: 'active' }).eq('id', scenario.id),
+        sb().from('campaigns').update({ phase: 'scenario' }).eq('id', campaign.id),
+      ]);
       overlay.style.display = 'none';
       await loadCampaigns();
       const fullScenario = await getActiveScenario(campaign.id);

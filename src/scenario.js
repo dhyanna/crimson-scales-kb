@@ -2347,12 +2347,25 @@ function handlePartyUpdate(payload) {
     changed = true;
   }
 
-  // Sync absent/substitute changes (#3 fix)
-  if (member.is_absent !== (row.is_absent ?? false) ||
-      member.substitute_player_id !== (row.substitute_player_id ?? null)) {
-    member.is_absent = row.is_absent ?? false;
-    member.substitute_player_id = row.substitute_player_id ?? null;
+  // Sync absent/substitute changes
+  const wasAbsent = member.is_absent ?? false;
+  const wasSubId = member.substitute_player_id ?? null;
+  const nowAbsent = row.is_absent ?? false;
+  const nowSubId = row.substitute_player_id ?? null;
+  if (wasAbsent !== nowAbsent || wasSubId !== nowSubId) {
+    member.is_absent = nowAbsent;
+    member.substitute_player_id = nowSubId;
     changed = true;
+
+    // If I am now the substitute for this absent player, switch my view to their area
+    const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
+    if (myPlayer && nowSubId === myPlayer.id && nowAbsent) {
+      // Don't auto-switch if I already have my own character tab selected
+      const myOwnMember = (sv.scenario?.scenario_party ?? []).find(
+        m => m.player_id === myPlayer.id && m.character_id !== member.character_id
+      );
+      if (!myOwnMember) sv.activePlayerId = member.player_id;
+    }
   }
 
   const charId = member.character_id;
