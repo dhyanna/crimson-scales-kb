@@ -54,7 +54,7 @@ async function loadPartyHandCards(party) {
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
     sb().from('character_state').select('*').in('character_id', charIds),
-    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start, is_ready').in('character_id', charIds),
+    sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start, is_ready').eq('scenario_id', sv.scenario.id).in('character_id', charIds),
   ]);
 
   for (const member of party) {
