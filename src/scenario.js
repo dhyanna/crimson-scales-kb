@@ -2504,16 +2504,66 @@ function startPolling() {
         filter: `scenario_id=eq.${sv.scenario.id}` },
       handlePartyUpdate)
     .subscribe((status) => {
+      console.log('Realtime status:', status);
       if (status === 'SUBSCRIBED') {
-        console.log('Realtime subscribed to scenario', sv.scenario.id);
+        showToast('🔗 Connected to live session');
+        // Clear fallback poll if Realtime works
+        if (sv._fallbackPollTimer) {
+          clearInterval(sv._fallbackPollTimer);
+          sv._fallbackPollTimer = null;
+        }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        showToast('⚠️ Live sync unavailable — using fallback polling', true);
+        startFallbackPolling();
       }
     });
+
+  // Start fallback polling immediately — cancel it if Realtime connects within 5s
+  sv._fallbackPollTimer = setInterval(fallbackPoll, 3000);
+  setTimeout(() => {
+    // If still polling after 5s and Realtime is subscribed, stop fallback
+    if (sv_realtimeChannel?.state === 'joined' && sv._fallbackPollTimer) {
+      clearInterval(sv._fallbackPollTimer);
+      sv._fallbackPollTimer = null;
+    }
+  }, 5000);
+}
+
+async function fallbackPoll() {
+  if (!sv.scenario?.id) return;
+  try {
+    // Poll scenarios for phase/round changes
+    const { data: scenarioRow } = await sb()
+      .from('scenarios')
+      .select('scenario_step, round_number, status, initiative_order, toast_message, toast_at')
+      .eq('id', sv.scenario.id)
+      .maybeSingle();
+    if (scenarioRow) handleScenarioUpdate({ new: scenarioRow });
+
+    // Poll scenario_party for play state changes
+    const { data: partyRows } = await sb()
+      .from('scenario_party')
+      .select('character_id, is_ready, is_exhausted, play_state, battle_goal_completed, is_absent, substitute_player_id')
+      .eq('scenario_id', sv.scenario.id);
+    (partyRows ?? []).forEach(row => handlePartyUpdate({ new: row }));
+  } catch (err) {
+    // Silent fail
+  }
+}
+
+function startFallbackPolling() {
+  if (sv._fallbackPollTimer) return;
+  sv._fallbackPollTimer = setInterval(fallbackPoll, 3000);
 }
 
 function stopPolling() {
   if (sv_realtimeChannel) {
     sb().removeChannel(sv_realtimeChannel);
     sv_realtimeChannel = null;
+  }
+  if (sv._fallbackPollTimer) {
+    clearInterval(sv._fallbackPollTimer);
+    sv._fallbackPollTimer = null;
   }
 }
 
