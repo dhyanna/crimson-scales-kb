@@ -174,11 +174,6 @@ async function saveInitiativeOrder() {
   sv.scenario.initiative_order = JSON.stringify(order);
 }
 
-async function saveRoundNumber(roundNum) {
-  await sb().from('scenarios').update({ round_number: roundNum }).eq('id', sv.scenario.id);
-  sv.scenario.round_number = roundNum;
-}
-
 async function saveBgCompletedForChar(charId, completed) {
   // Persist to scenario_party.battle_goal_completed
   const member = (sv.scenario?.scenario_party ?? []).find(m => m.character_id === charId);
@@ -216,13 +211,25 @@ async function openScenarioView(scenario, campaign) {
   sv.roundPhase = 'select';
   sv.tipIndex = 0;
   sv.currentTips = [];
+  if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
   await loadPartyHandCards(scenario.scenario_party ?? []);
 
-  // Set active player to current player's character if possible
+  // Set active player — match current user against scenario party
   if (myPlayer) {
     const myMember = (scenario.scenario_party ?? []).find(m => m.player_id === myPlayer.id);
     if (myMember) sv.activePlayerId = myMember.player_id;
   }
+  // Fallback: try matching by email against party's player records
+  if (!sv.activePlayerId) {
+    const currentEmail = window.currentUser?.email ?? null;
+    if (currentEmail) {
+      const myMember = (scenario.scenario_party ?? []).find(m =>
+        m.player?.player_email === currentEmail
+      );
+      if (myMember) sv.activePlayerId = myMember.player_id;
+    }
+  }
+  // Final fallback: use first party member (solo or unmatched)
   if (!sv.activePlayerId && scenario.scenario_party?.length) {
     sv.activePlayerId = scenario.scenario_party[0].player_id;
   }
@@ -237,9 +244,9 @@ async function openScenarioView(scenario, campaign) {
   sv.roundPhase = scenario.scenario_step === 'play' ? 'play' : 'select';
 
   // Store stable join order for player tabs (never reordered)
-  if (!sv.joinOrder) {
-    sv.joinOrder = (scenario.scenario_party ?? []).map(m => m.player_id);
-  }
+  // Always reset join order on scenario open to get correct order
+  // Use DB creation order (scenario_party rows are ordered by created_at)
+  sv.joinOrder = (scenario.scenario_party ?? []).map(m => m.player_id);
 
   // Restore initiative order if saved
   if (scenario.initiative_order) {
@@ -608,10 +615,11 @@ function getClassIdForChar(charId) {
 }
 
 function getCardDataById(charId, cardId) {
+  if (!cardId) return null;
   const classId = getClassIdForChar(charId);
   const classData = CLASS_REGISTRY?.[classId];
   if (!classData) return null;
-  return classData.cards?.find(c => {
+  const found = classData.cards?.find(c => {
     if (c.id === cardId) return true;
     if (c.name === cardId) return true;
     // slugify match: "Chokehold" -> "chokehold"
@@ -621,6 +629,8 @@ function getCardDataById(charId, cardId) {
     if (urlSlug === cardId) return true;
     return false;
   }) ?? null;
+  if (!found) console.warn(`[CSKB] Card not found: classId=${classId} cardId=${cardId}`);
+  return found;
 }
 
 // ── Compact negate damage (for action bar) ───────────────────────
@@ -1958,13 +1968,16 @@ function bindScenarioViewEvents() {
       ps.restPhase = null;
       ps.restCandidate = null;
     });
-    // Reset all ready states in DB
-    const party = sv.scenario?.scenario_party ?? [];
-    await Promise.all(party.map(m => sb().from('scenario_party').update({ is_ready: false }).eq('id', m.id)));
-    // Save all play states at end of round
+    // Save all play states first
     await saveAllPlayStates();
-    // Save phase last so polling picks up the full state
-    await saveRoundPhase('select');    renderScenarioView();
+    // Reset all ready states + phase atomically in parallel
+    const party = sv.scenario?.scenario_party ?? [];
+    await Promise.all([
+      sb().from('scenarios').update({ scenario_step: 'select' }).eq('id', sv.scenario.id),
+      ...party.map(m => sb().from('scenario_party').update({ is_ready: false }).eq('id', m.id))
+    ]);
+    sv.scenario.scenario_step = 'select';
+    renderScenarioView();
     showToast(`🔄 Round ${sv.scenario.round_number} ended — begin card selection for next round.`);
   });
 
@@ -2259,14 +2272,15 @@ function handleScenarioUpdate(payload) {
   let changed = false;
 
   // Scenario ended/paused/cancelled by GM
-  if (['completed','lost','abandoned'].includes(row.status) && sv.scenario.status === 'active') {
+  if (['completed','lost','abandoned'].includes(row.status) &&
+      !['completed','lost','abandoned'].includes(sv.scenario.status ?? '')) {
     sv.scenario.status = row.status;
     closeScenarioView();
     loadCampaigns();
     showToast('The GM has ended the scenario.');
     return;
   }
-  if (row.status === 'paused' && sv.scenario.status === 'active') {
+  if (row.status === 'paused' && sv.scenario.status !== 'paused') {
     sv.scenario.status = row.status;
     closeScenarioView();
     loadCampaigns();
@@ -2318,10 +2332,13 @@ function handlePartyUpdate(payload) {
 
   let changed = false;
   const myPlayer = getEffectivePlayer(sv.campaign?.players ?? []);
-  const isMyChar = myPlayer?.id === member.player_id ||
-    (member.is_absent && member.substitute_player_id === myPlayer?.id);
+  // In dev with no player selected, never overwrite local state from DB
+  const isMyChar = IS_DEV && !myPlayer
+    ? true  // protect all local state in dev
+    : (myPlayer?.id === member.player_id ||
+       (member.is_absent && member.substitute_player_id === myPlayer?.id));
 
-  // Sync ready state
+  // Sync ready state — skip echo for own player (already set locally)
   const wasReady = sv.readyPlayers[member.player_id] ?? false;
   const isNowReady = row.is_ready ?? false;
   if (wasReady !== isNowReady) {

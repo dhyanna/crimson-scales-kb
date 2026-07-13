@@ -259,7 +259,7 @@ async function addScenarioPartyMember(scenarioId, characterId, playerId, battleG
 
 async function getActiveScenario(campaignId) {
   const { data, error } = await sb().from('scenarios')
-    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(*))`)
+    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(id, player_name, player_email, user_id, role, battle_goals_completed, treasure_looted, xp_100_gained, gold_60_spent, is_founding_member))`)
     .eq('campaign_id', campaignId)
     .in('status', ['active', 'paused'])
     .order('created_at', { ascending: false })
@@ -1322,7 +1322,6 @@ function openScenarioWizard(campaign) {
 // openScenarioView is defined in scenario.js
 
 // ── Campaign Realtime — detect new scenarios for all players ─────
-let campaignPollTimer = null; // kept for stopPolling reference in scenario.js
 let campaignRealtimeChannel = null;
 let lastKnownScenarioId = null;
 
