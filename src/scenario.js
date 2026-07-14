@@ -244,6 +244,11 @@ window._handleMoveCard = async function(dest, cardId, charId) {
   catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
 };
 
+// Self-test: fires a toast 3s after scenario opens to confirm JS+toast works on this browser
+window._scenarioSelfTest = function() {
+  setTimeout(() => showToast('✓ JS running on this browser'), 3000);
+};
+
 // ── Entry point ───────────────────────────────────────────────────
 async function openScenarioView(scenario, campaign) {
   sv.scenario = scenario;
@@ -319,6 +324,7 @@ async function openScenarioView(scenario, campaign) {
   renderScenarioView();
   initSpacebarZoom(overlayEl);
   startPolling();
+  window._scenarioSelfTest();
   // Pause campaign polling while in scenario view
   if (typeof campaignPollTimer !== 'undefined' && campaignPollTimer) {
     clearInterval(campaignPollTimer);
