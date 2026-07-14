@@ -183,6 +183,18 @@ async function saveRoundState() {
     .eq('id', sv.scenario.id);
 }
 
+async function broadcastToast(msg, delayMs = 0) {
+  if (!sv.scenario?.id) return;
+  const fire = async () => {
+    showToast(msg);
+    await sb().from('scenarios')
+      .update({ toast_message: msg, toast_at: new Date().toISOString() })
+      .eq('id', sv.scenario.id);
+  };
+  if (delayMs > 0) setTimeout(fire, delayMs);
+  else await fire();
+}
+
 async function saveRoundPhase(phase) {
   sv.roundPhase = phase;
   await sb().from('scenarios').update({ scenario_step: phase }).eq('id', sv.scenario.id);
@@ -324,6 +336,8 @@ async function openScenarioView(scenario, campaign) {
   renderScenarioView();
   initSpacebarZoom(overlayEl);
   startPolling();
+  // Broadcast opening instruction to all players
+  broadcastToast('🃏 Select two cards to play', 1500);
   // Pause campaign polling while in scenario view
   if (typeof campaignPollTimer !== 'undefined' && campaignPollTimer) {
     clearInterval(campaignPollTimer);
@@ -2038,7 +2052,8 @@ function bindScenarioViewEvents() {
     }).eq('id', sv.scenario.id);
 
     renderScenarioView();
-    showToast(beginMsg);
+    await broadcastToast(beginMsg);
+    broadcastToast('⚔️ Play cards in initiative order', 4000);
   });
 
   // End Scenario button
@@ -2090,7 +2105,8 @@ function bindScenarioViewEvents() {
     ]);
     sv.scenario.scenario_step = 'select';
     renderScenarioView();
-    showToast(`🔄 Round ${sv.scenario.round_number} ended — begin card selection for next round.`);
+    await broadcastToast('🔄 End of Round');
+    broadcastToast('🃏 Select two cards to play', 4000);
   });
 
   // GM cancel
