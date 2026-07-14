@@ -324,7 +324,6 @@ async function openScenarioView(scenario, campaign) {
   renderScenarioView();
   initSpacebarZoom(overlayEl);
   startPolling();
-  window._scenarioSelfTest();
   // Pause campaign polling while in scenario view
   if (typeof campaignPollTimer !== 'undefined' && campaignPollTimer) {
     clearInterval(campaignPollTimer);

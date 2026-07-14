@@ -1519,6 +1519,7 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      -webkit-overflow-scrolling: touch;
     }
     .sv-player-tabs {
       display: flex;
@@ -1563,7 +1564,8 @@
     /* Play Area */
     .sv-play-area {
       flex: 1;
-      overflow-y: auto;
+      overflow-y: scroll;
+      -webkit-overflow-scrolling: touch;
       padding: 12px;
       padding-bottom: 80px;
       display: flex;
@@ -2346,6 +2348,15 @@
       color: var(--color-text, #e0e0e0);
     }
     .sv-gm-btn:hover { background: rgba(255,255,255,0.08); }
+    /* Touch-action for all interactive scenario elements - critical for iPad/iOS */
+    .sv-play-card-btn, .sv-move-card-btn, .sv-gm-btn,
+    .sv-player-tab, .sv-init-item, .sv-rest-btn,
+    .sv-exhaust-btn, .sv-drawer-toggle,
+    .sv-negate-compact-btn, .sv-pile-clickable,
+    .sv-hand-card, .sv-staged-card, .sv-active-card {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(201,168,76,0.15);
+    }
     .sv-gm-btn-danger { border-color: #c0392b; color: #e74c3c; }
     .sv-gm-btn-danger:hover { background: rgba(192,57,43,0.15); }
 
