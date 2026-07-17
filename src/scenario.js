@@ -53,14 +53,14 @@ async function loadPartyHandCards(party) {
   // Batch fetch — 2 parallel calls instead of 2N sequential
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
-    sb().from('character_state').select('*').in('character_id', charIds),
+    sb().from('character_state').select('id, character_id, milestone_checks, milestone_earned, pq_checks, pq_completed, pq_group_checks').in('character_id', charIds),
     sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start, is_ready').eq('scenario_id', sv.scenario.id).in('character_id', charIds),
   ]);
 
   for (const member of party) {
     const charId = member.character_id;
     const cards    = (allCards   ?? []).filter(c => c.character_id === charId);
-    const stateRow = (allStates  ?? []).find(s => s.character_id === charId);
+    const stateRow = (allStates  ?? []).find(s => s.character_id === charId); // includes pq_group_checks via select *
     const partyRow = (allPartyRows ?? []).find(p => p.character_id === charId);
 
     // Restore persisted play state if available
@@ -79,6 +79,7 @@ async function loadPartyHandCards(party) {
       milestoneEarned: stateRow?.milestone_earned ?? false,
       pqChecks:        stateRow?.pq_checks ?? 0,
       pqCompleted:     stateRow?.pq_completed ?? false,
+      pqGroupChecks:   stateRow?.pq_group_checks ?? {},
       bgCompleted:     partyRow?.battle_goal_completed ?? false,
       isExhausted:     partyRow?.is_exhausted ?? false,
       isLongResting:   savedState.isLongResting ?? false,
@@ -102,11 +103,14 @@ async function saveMilestoneChecksForChar(charId, checks) {
   ps.milestoneChecks = checks;
 }
 
-async function savePqChecksForChar(charId, checks) {
+async function savePqChecksForChar(charId, checks, groupChecks) {
   const ps = sv.playState[charId];
   if (!ps?.stateId) return;
-  await sb().from('character_state').update({ pq_checks: checks }).eq('id', ps.stateId);
+  const update = { pq_checks: checks };
+  if (groupChecks !== undefined) update.pq_group_checks = groupChecks;
+  await sb().from('character_state').update(update).eq('id', ps.stateId);
   ps.pqChecks = checks;
+  if (groupChecks !== undefined) ps.pqGroupChecks = groupChecks;
 }
 
 async function saveExhaustedForChar(charId, exhausted) {
@@ -385,6 +389,17 @@ function buildScenarioBanner(s) {
     return `<div class="sv-round-box${isCurrent ? ' sv-round-current' : ''}">${r}</div>`;
   }).join('') : '';
 
+  // GM scenario management buttons — in banner, right side
+  const canEndScenario = !sv.isGM ? '' :
+    (sv.roundPhase !== 'play' && (s.round_number ?? 0) >= 1)
+      ? `<button class="sv-banner-btn sv-banner-btn-gold" id="sv-end-scenario">🏁 End</button>` : '';
+  const gmBannerBtns = sv.isGM ? `
+    <div class="sv-banner-gm-btns">
+      ${canEndScenario}
+      <button class="sv-banner-btn" id="sv-pause-scenario">⏸</button>
+      <button class="sv-banner-btn sv-banner-btn-danger" id="sv-cancel-scenario">✕</button>
+    </div>` : '';
+
   return `
     <div class="sv-banner">
       <div class="sv-banner-inner">
@@ -395,8 +410,11 @@ function buildScenarioBanner(s) {
           </div>
           ${s.scenario_goal ? `<div class="sv-scenario-goal">${s.scenario_goal}</div>` : ''}
         </div>
-        <div class="sv-round-track" id="sv-round-track">
-          ${roundBoxes}
+        <div class="sv-banner-right">
+          <div class="sv-round-track" id="sv-round-track">
+            ${roundBoxes}
+          </div>
+          ${gmBannerBtns}
         </div>
       </div>
     </div>`;
@@ -729,18 +747,105 @@ function buildNegateDamageCompact(charId, ps) {
 // ── Bottom drawer: trackers + tips ───────────────────────────────
 function buildBottomDrawer(member, classId, classData, charId, ps, isPeeking) {
   const isOpen = sv.drawerOpen ?? false;
-  const trackerHtml = buildTrackerRow(member, classId, classData, isPeeking);
-  const tipsHtml = !isPeeking && !ps.isExhausted ? buildPlayTips(classId, member) : '';
+  const activeTab = sv.drawerTab ?? 'goals';
+
+  // Goals tab: compact tip-style display matching original drawer format
+  function buildGoalsTab() {
+    const tips = [];
+
+    // Milestone — only show if not yet earned (#3 fix)
+    const msCondition = MILESTONE_TRACKER_DATA?.[classId];
+    const msChecks = ps.milestoneChecks ?? 0;
+    const msEarned = ps.milestoneEarned ?? false;
+    if (msCondition && !msEarned) {
+      tips.push({ icon: '🏆', label: `Milestone (${msChecks}/10):`, text: msCondition });
+    } else if (msCondition && msEarned) {
+      tips.push({ icon: '🏆', label: 'Milestone:', text: '✅ Earned!' });
+    }
+
+    // PQ
+    const pqId = member.characters?.pq_card_id;
+    const pqTracker = pqId ? PQ_TRACKER_DATA?.[pqId] : null;
+    const pqChecks = ps.pqChecks ?? 0;
+    const pqCompleted = ps.pqCompleted ?? false;
+    if (pqTracker) {
+      const pqLabel = pqCompleted
+        ? 'Personal Quest:'
+        : `Personal Quest (${Math.min(pqChecks, pqTracker.count)}/${pqTracker.count}):`;
+      tips.push({ icon: '📜', label: pqLabel, text: pqCompleted ? '✅ Complete — Ready to Retire!' : pqTracker.condition });
+    }
+
+    // Battle Goal
+    const bgCard = member.battle_goal_card;
+    const bgData = (bgCard && typeof BATTLE_GOAL_DATA !== 'undefined') ? BATTLE_GOAL_DATA?.[bgCard] : null;
+    const bgCompleted = ps.bgCompleted ?? false;
+    if (bgData) {
+      tips.push({ icon: '🎯', label: `Battle Goal (${bgData.checks === 2 ? '★★' : '★'}):`, text: bgCompleted ? '✅ Achieved!' : bgData.condition });
+    } else if (bgCard) {
+      tips.push({ icon: '🎯', label: 'Battle Goal:', text: bgCompleted ? '✅ Achieved!' : 'Check your card for the goal.' });
+    }
+
+    if (!tips.length) return '<div class="sv-drawer-empty">No goal data available.</div>';
+    return `<div class="sv-tips-static">${tips.map(t => `
+      <div class="sv-tip">
+        <span class="sv-tip-icon">${t.icon}</span>
+        <span class="sv-tip-label">${t.label}</span>
+        <span class="sv-tip-text">${t.text}</span>
+      </div>`).join('')}</div>`;
+  }
+
+  // Tips tab: rotating class tips carousel
+  function buildTipsTab() {
+    const classTips = classData?.tips ?? [];
+    sv.currentTips = classTips;
+    sv.tipIndex = sv.tipIndex ?? 0;
+    const firstTip = classTips[sv.tipIndex] ?? classTips[0];
+    if (!classTips.length) return '<div class="sv-drawer-empty">No tips available for this class.</div>';
+    return `
+      <div class="sv-tips-header">
+        <div class="sv-tips-nav-inline">
+          <button class="sv-tip-nav-btn" id="sv-tip-prev" tabindex="-1">◀</button>
+          <button class="sv-tip-nav-btn" id="sv-tip-next" tabindex="-1">▶</button>
+        </div>
+        <div class="sv-tips-label">💡 Class Tips</div>
+        <div class="sv-tips-counter" id="sv-tips-counter">${(sv.tipIndex ?? 0) + 1} / ${classTips.length}</div>
+      </div>
+      <div class="sv-tip-carousel" id="sv-tip-carousel">
+        ${firstTip ? `<div class="sv-tip">
+          <span class="sv-tip-label">${firstTip.category}:</span>
+          <span class="sv-tip-text">${firstTip.text}</span>
+        </div>` : ''}
+      </div>`;
+  }
+
+  const trackersHtml = buildTrackerRow(member, classId, classData, isPeeking);
+  const goalsHtml = buildGoalsTab();
+  const tipsHtml = !isPeeking && !ps.isExhausted ? buildTipsTab() : '';
+
+  const tabs = [
+    { id: 'goals',    label: '🎯 Goals' },
+    { id: 'tips',     label: '💡 Tips' },
+    { id: 'trackers', label: '📋 Trackers' },
+  ];
+
+  const tabButtons = tabs.map(t => `
+    <button class="sv-drawer-tab${activeTab === t.id ? ' sv-drawer-tab-active' : ''}"
+        data-tab="${t.id}" tabindex="-1">${t.label}</button>`
+  ).join('');
+
+  const tabContent =
+    activeTab === 'goals'    ? goalsHtml :
+    activeTab === 'tips'     ? tipsHtml :
+    activeTab === 'trackers' ? trackersHtml : '';
 
   return `
     <div class="sv-bottom-drawer${isOpen ? ' sv-drawer-open' : ''}" id="sv-bottom-drawer">
       <button class="sv-drawer-toggle" id="sv-drawer-toggle" tabindex="-1">
-        ${isOpen ? '▼ Hide Goals & Tips' : '▲ Goals & Tips'}
+        ${isOpen ? '▼ Hide' : '▲ Goals & Tips'}
       </button>
-      <div class="sv-drawer-content">
-        ${trackerHtml}
-        ${tipsHtml}
-      </div>
+      ${isOpen ? `
+        <div class="sv-drawer-tabs">${tabButtons}</div>
+        <div class="sv-drawer-content">${tabContent}</div>` : ''}
     </div>`;
 }
 
@@ -1246,15 +1351,19 @@ function buildTrackerRow(member, classId, classData, isPeeking = false) {
     // Build grouped or flat dots
     let dots = '';
     if (tracker.groups) {
-      let offset = 0;
-      dots = tracker.groups.map(g => {
+      const groupChecks = ps.pqGroupChecks ?? {};
+      dots = tracker.groups.map((g, gi) => {
+        const gKey = gi.toString();
+        const gCount = groupChecks[gKey] ?? 0;
+        const groupDone = gCount >= g.count;
         const groupDots = Array.from({length: g.count}, (_, i) => {
-          const idx = offset + i;
-          return `<button class="sv-check-box ${idx < pqChecks ? 'sv-check-filled' : ''}"
-            data-tracker="pq" data-idx="${idx}" data-char-id="${charId}">${idx < pqChecks ? '✓' : ''}</button>`;
+          return `<button class="sv-check-box ${i < gCount ? 'sv-check-filled' : ''}"
+            data-tracker="pq-group" data-group="${gi}" data-idx="${i}" data-char-id="${charId}">${i < gCount ? '✓' : ''}</button>`;
         }).join('');
-        offset += g.count;
-        return `<div class="sv-pq-group-row"><span class="sv-pq-group-lbl">${g.label}</span>${groupDots}</div>`;
+        return `<div class="sv-pq-group-row">
+          <span class="sv-pq-group-lbl${groupDone ? ' sv-pq-group-done' : ''}">${g.label}${groupDone ? ' ✓' : ''}</span>
+          ${groupDots}
+        </div>`;
       }).join('');
     } else {
       dots = Array.from({length: tracker.count}, (_, i) =>
@@ -1285,7 +1394,7 @@ function buildTrackerRow(member, classId, classData, isPeeking = false) {
       <div class="sv-tracker-card sv-tracker-bg">
         <div class="sv-tracker-label">🎯 Battle Goal${bgData ? ` — ${bgData.checks === 2 ? '★★' : '★'}` : ''}</div>
         <img src="${bgDisplayImg}" class="sv-tracker-img sv-zoomable" alt="${bgTitle}" onerror="this.src='${BG_BACK}'">
-        ${!isPeeking ? `<div class="sv-tracker-checks" style="margin-top:4px">
+        ${!isPeeking ? `<div class="sv-tracker-checks">
           <button class="sv-check-box ${bgCompleted ? 'sv-check-filled' : ''}"
             data-tracker="bg" data-char-id="${charId}">${bgCompleted ? '✓' : ''}</button>
           <span style="font-size:11px;color:#888;margin-left:6px">${bgCompleted ? 'Goal achieved!' : 'Mark if achieved'}</span>
@@ -1302,6 +1411,7 @@ function buildTrackerRow(member, classId, classData, isPeeking = false) {
       ${msHtml}
       ${msHtml && pqHtml ? '<div class="sv-tracker-sep"></div>' : ''}
       ${pqHtml}
+      ${pqHtml && bgHtml ? '<div class="sv-tracker-sep"></div>' : ''}
       ${bgHtml}
     </div>`;
 }
@@ -1446,13 +1556,11 @@ function buildGMControls() {
     party.every(m => !(sv.readyPlayers[m.player_id] ?? false));
   const inPlayPhase = sv.roundPhase === 'play';
 
+  if (!allReady && !allEndedTurns) return ''; // nothing to show
   return `
     <div class="sv-gm-controls" id="sv-gm-controls">
       ${allReady && !inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-begin-round">⚔️ Begin Round</button>` : ''}
       ${allEndedTurns ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 End Round</button>` : ''}
-      ${!inPlayPhase && (sv.scenario?.round_number ?? 0) >= 1 ? `<button class="sv-gm-btn sv-gm-btn-gold" id="sv-end-scenario">🏁 End Scenario</button>` : ''}
-      <button class="sv-gm-btn" id="sv-pause-scenario">⏸ Pause</button>
-      <button class="sv-gm-btn sv-gm-btn-danger" id="sv-cancel-scenario">✕ Cancel Scenario</button>
     </div>`;
 }
 
@@ -1750,10 +1858,17 @@ function bindScenarioViewEvents() {
   // Bottom drawer toggle
   document.getElementById('sv-drawer-toggle')?.addEventListener('click', () => {
     sv.drawerOpen = !(sv.drawerOpen ?? false);
-    const drawer = document.getElementById('sv-bottom-drawer');
-    if (drawer) drawer.classList.toggle('sv-drawer-open', sv.drawerOpen);
-    const btn = document.getElementById('sv-drawer-toggle');
-    if (btn) btn.textContent = sv.drawerOpen ? '▼ Hide Goals & Tips' : '▲ Goals & Tips';
+    if (sv.drawerOpen && !sv.drawerTab) sv.drawerTab = 'goals';
+    renderScenarioView();
+  });
+
+  // Drawer tab switching
+  document.querySelectorAll('.sv-drawer-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      sv.drawerTab = tab.dataset.tab;
+      renderScenarioView();
+      if (sv.drawerTab === 'tips') bindTipsCarousel();
+    });
   });
 
   // Pile click — open viewer modal
@@ -2154,8 +2269,8 @@ function bindScenarioViewEvents() {
     }
   });
 
-  // Tips carousel
-  bindTipsCarousel();
+  // Tips carousel — only bind when tips tab is active
+  if ((sv.drawerTab ?? 'goals') === 'tips') bindTipsCarousel();
 
   // Spacebar zoom — rebind mouseenter/leave on ALL card images in the view
   document.querySelectorAll('.sv-card-img, .sv-tracker-img, .sv-pile-card, .sv-rest-card-img, .sv-rest-override-card img, .sv-active-card img, .sv-mat-img').forEach(img => {

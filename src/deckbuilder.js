@@ -94,11 +94,14 @@ async function saveMilestoneChecks(checks) {
   db.state.milestone_checks = checks;
 }
 
-async function savePqChecks(checks) {
+async function savePqChecks(checks, groupChecks) {
+  const update = { pq_checks: checks, updated_at: new Date().toISOString() };
+  if (groupChecks !== undefined) update.pq_group_checks = groupChecks;
   await sb().from('character_state')
-    .update({ pq_checks: checks, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('id', db.state.id);
   db.state.pq_checks = checks;
+  if (groupChecks !== undefined) db.state.pq_group_checks = groupChecks;
 }
 
 async function completePq() {
@@ -227,9 +230,10 @@ function handCount() {
 }
 
 // ── OPEN / CLOSE ─────────────────────────────────────────────
-async function openDeckBuilder(character, player) {
+async function openDeckBuilder(character, player, campaignPhase) {
   db.character = character;
   db.player = player;
+  db.campaignPhase = campaignPhase ?? 'city'; // 'city' | 'scenario'
   db.allClassCards = CLASS_REGISTRY[character.class_id]?.cards ?? [];
   db.activeBuild = null;
   db.activeCardTab = 'milestone';
@@ -310,6 +314,7 @@ function renderDeckBuilder() {
 
   const handFull = hand >= handSize;
   const handOk = hand === handSize;
+  const handLocked = db.campaignPhase === 'scenario';
 
   // Build toggle buttons from CLASS_BUILDS
   const buildsData = CLASS_BUILDS?.[db.character.class_id];
@@ -342,9 +347,10 @@ function renderDeckBuilder() {
           </div>
         </div>
         <div class="db-header-actions">
-          ${db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
-          ${db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn" ${!db.hasKbData ? 'disabled' : ''}>↩ Undo Level Up</button>` : ''}
-          <button class="db-btn db-btn-secondary db-btn-retire" id="db-retire-btn">⚰️ Retire / Set Aside</button>
+          ${db.campaignPhase !== 'scenario' && db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
+          ${db.campaignPhase !== 'scenario' && db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn" ${!db.hasKbData ? 'disabled' : ''}>↩ Undo Level Up</button>` : ''}
+          ${db.campaignPhase !== 'scenario' ? `<button class="db-btn db-btn-secondary db-btn-retire" id="db-retire-btn">⚰️ Retire / Set Aside</button>` : ''}
+          ${db.campaignPhase === 'scenario' ? `<div class="db-scenario-lock">🔒 Scenario in progress — level up and retire unavailable</div>` : ''}
           <button class="db-btn db-btn-close" id="db-close-btn">✕ Close</button>
         </div>
       </div>
@@ -510,17 +516,19 @@ function renderPqInner() {
     // Phase 1: checkbox grid — grouped or flat
     let boxes = '';
     if (tracker.groups) {
-      let offset = 0;
-      const groupItems = tracker.groups.map(g => {
+      const groupChecks = db.state.pq_group_checks ?? {};
+      const groupItems = tracker.groups.map((g, gi) => {
+        const gKey = gi.toString();
+        const gCount = groupChecks[gKey] ?? 0;
         const groupBoxes = Array.from({ length: g.count }, (_, i) => {
-          const idx = offset + i;
-          return `<button class="db-check-box ${idx < checks ? 'db-check-filled' : ''}" data-pq-check="${idx}">
-            ${idx < checks ? '✓' : ''}
+          return `<button class="db-check-box ${i < gCount ? 'db-check-filled' : ''}"
+            data-pq-group="${gi}" data-pq-group-idx="${i}">
+            ${i < gCount ? '✓' : ''}
           </button>`;
         }).join('');
-        offset += g.count;
-        return `<div class="db-pq-group">
-          <div class="db-pq-group-label">${g.label}</div>
+        const groupDone = gCount >= g.count;
+        return `<div class="db-pq-group${groupDone ? ' db-pq-group-done' : ''}">
+          <div class="db-pq-group-label">${g.label}${groupDone ? ' ✓' : ''}</div>
           <div class="db-checks-grid">${groupBoxes}</div>
         </div>`;
       }).join('');
@@ -618,7 +626,8 @@ function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
   const cid = card.id || slugify(card.name);
   const action = inHand ? 'remove' : 'add';
   const btnLabel = inHand ? '↓ Move to Sideboard' : '↑ Add to Hand';
-  const btnClass = inHand ? 'db-card-btn-remove' : `db-card-btn-add ${handFull ? 'db-card-btn-disabled' : ''}`;
+  const scenarioLocked = db.campaignPhase === 'scenario';
+  const btnClass = inHand ? 'db-card-btn-remove' : `db-card-btn-add ${(handFull || scenarioLocked) ? 'db-card-btn-disabled' : ''}`;
 
   return `
     <div class="db-card-tile ${highlightClass}" data-card-id="${cid}">
@@ -628,8 +637,8 @@ function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
         <div class="db-card-overlay">
           <button class="db-card-btn ${btnClass}"
             data-action="${action}" data-card-id="${cid}"
-            ${!inHand && handFull ? 'disabled' : ''}>
-            ${btnLabel}
+            ${(!inHand && handFull) || scenarioLocked ? 'disabled' : ''}>
+            ${scenarioLocked ? '🔒 Scenario active' : btnLabel}
           </button>
         </div>
       </div>
@@ -795,20 +804,32 @@ function bindDeckBuilderEvents() {
   });
 
   // PQ checkbox handler
+  // Flat PQ checks (non-grouped)
   document.querySelectorAll('[data-pq-check]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const i = parseInt(btn.dataset.pqCheck);
       const checks = db.state.pq_checks ?? 0;
       const newChecks = (i < checks) ? i : i + 1;
       await savePqChecks(newChecks);
-      // Check if all boxes now filled — prompt to mark complete
+      renderDeckBuilder();
+    });
+  });
+
+  // Grouped PQ checks (e.g. CS-344)
+  document.querySelectorAll('[data-pq-group]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const gi = btn.dataset.pqGroup;
+      const idx = parseInt(btn.dataset.pqGroupIdx);
       const tracker = PQ_TRACKER_DATA[db.character.pq_card_id];
-      if (tracker && newChecks >= tracker.count && !db.state.pq_completed) {
-        renderDeckBuilder();
-        // Show complete button, handled below
-      } else {
-        renderDeckBuilder();
-      }
+      const groupChecks = { ...(db.state.pq_group_checks ?? {}) };
+      const current = groupChecks[gi] ?? 0;
+      // Toggle: clicking filled box unfills it, clicking empty fills up to idx+1
+      groupChecks[gi] = (idx < current) ? idx : idx + 1;
+      // Recalculate total pq_checks as sum of all group checks
+      const totalChecks = tracker.groups.reduce((sum, _, i) =>
+        sum + (groupChecks[i.toString()] ?? 0), 0);
+      await savePqChecks(totalChecks, groupChecks);
+      renderDeckBuilder();
     });
   });
 

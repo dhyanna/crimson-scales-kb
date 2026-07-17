@@ -622,7 +622,7 @@ function renderCampaignCard(campaign) {
         </div>
         <div class="campaign-player-class">${char.character_name ? `${char.character_name} · ` : ''}${cls.name}</div>
       </div>
-      ${isMe ? `<button class="campaign-deck-btn" data-char-id="${char.id}" data-player-id="${myPlayer.id}">🃏 Deck</button>` : ''}
+      ${isMe ? `<button class="campaign-deck-btn" data-char-id="${char.id}" data-player-id="${myPlayer.id}" data-campaign-id="${campaign.id}" data-campaign-phase="${campaign.phase ?? 'city'}">🃏 Deck</button>` : ''}
     </div>`;
   }
 
@@ -973,12 +973,13 @@ function bindCampaignListEvents(campaigns) {
       e.stopPropagation();
       const charId = btn.dataset.charId;
       const playerId = btn.dataset.playerId;
+      const campaignPhase = btn.dataset.campaignPhase ?? 'city';
       // Load full character + player objects
       const { data: char } = await sb().from('characters').select('*').eq('id', charId).single();
       const { data: player } = await sb().from('players').select('*').eq('id', playerId).single();
       if (char && player) {
         closeCampaignPanel();
-        openDeckBuilder(char, player);
+        openDeckBuilder(char, player, campaignPhase);
       }
     });
   });
