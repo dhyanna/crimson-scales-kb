@@ -973,13 +973,16 @@ function bindCampaignListEvents(campaigns) {
       e.stopPropagation();
       const charId = btn.dataset.charId;
       const playerId = btn.dataset.playerId;
-      const campaignPhase = btn.dataset.campaignPhase ?? 'city';
-      // Load full character + player objects
-      const { data: char } = await sb().from('characters').select('*').eq('id', charId).single();
-      const { data: player } = await sb().from('players').select('*').eq('id', playerId).single();
+      const campaignId = btn.dataset.campaignId;
+      // Load full character + player objects AND fresh campaign phase
+      const [{ data: char }, { data: player }, { data: freshCampaign }] = await Promise.all([
+        sb().from('characters').select('*').eq('id', charId).single(),
+        sb().from('players').select('*').eq('id', playerId).single(),
+        sb().from('campaigns').select('phase').eq('id', campaignId).single(),
+      ]);
       if (char && player) {
         closeCampaignPanel();
-        openDeckBuilder(char, player, campaignPhase);
+        openDeckBuilder(char, player, freshCampaign?.phase ?? 'city');
       }
     });
   });
