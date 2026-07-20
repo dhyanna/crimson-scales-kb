@@ -53,7 +53,7 @@ async function loadPartyHandCards(party) {
   // Batch fetch — 2 parallel calls instead of 2N sequential
   const [{ data: allCards }, { data: allStates }, { data: allPartyRows }] = await Promise.all([
     sb().from('character_cards').select('*').in('character_id', charIds).eq('in_hand', true),
-    sb().from('character_state').select('id, character_id, milestone_checks, milestone_earned, pq_checks, pq_completed, pq_group_checks').in('character_id', charIds),
+    sb().from('character_state').select('id, character_id, milestone_checks, milestone_earned, pq_checks, pq_completed, pq_group_checks, notes').in('character_id', charIds),
     sb().from('scenario_party').select('battle_goal_completed, is_exhausted, play_state, character_id, id, looted_treasure, pq_checks_start, milestone_checks_start, is_ready').eq('scenario_id', sv.scenario.id).in('character_id', charIds),
   ]);
 
@@ -80,6 +80,7 @@ async function loadPartyHandCards(party) {
       pqChecks:        stateRow?.pq_checks ?? 0,
       pqCompleted:     stateRow?.pq_completed ?? false,
       pqGroupChecks:   stateRow?.pq_group_checks ?? {},
+      notes:           stateRow?.notes ?? '',
       bgCompleted:     partyRow?.battle_goal_completed ?? false,
       isExhausted:     partyRow?.is_exhausted ?? false,
       isLongResting:   savedState.isLongResting ?? false,
@@ -101,6 +102,14 @@ async function saveMilestoneChecksForChar(charId, checks) {
   if (!ps?.stateId) return;
   await sb().from('character_state').update({ milestone_checks: checks }).eq('id', ps.stateId);
   ps.milestoneChecks = checks;
+}
+
+async function saveNotesForChar(charId, text) {
+  const ps = sv.playState[charId];
+  if (!ps?.stateId) return;
+  const trimmed = text.slice(0, 1024);
+  await sb().from('character_state').update({ notes: trimmed }).eq('id', ps.stateId);
+  ps.notes = trimmed;
 }
 
 async function savePqChecksForChar(charId, checks, groupChecks) {
@@ -591,7 +600,7 @@ function buildPlayArea(party) {
     </div>
 
     <!-- Bottom drawer: trackers + tips -->
-    ${buildBottomDrawer(member, classId, classData, charId, ps, isPeeking)}`;
+    ${buildBottomDrawer(member, classId, classData, charId, ps, isPeeking)}`; // drawer hides itself when peeking
 }
 
 // ── Rest UI ──────────────────────────────────────────────────────
@@ -818,14 +827,29 @@ function buildBottomDrawer(member, classId, classData, charId, ps, isPeeking) {
       </div>`;
   }
 
-  const trackersHtml = buildTrackerRow(member, classId, classData, isPeeking);
+  // Hide drawer entirely when peeking
+  if (isPeeking) return '';
+
+  const trackersHtml = buildTrackerRow(member, classId, classData, false);
   const goalsHtml = buildGoalsTab();
-  const tipsHtml = !isPeeking && !ps.isExhausted ? buildTipsTab() : '';
+  const tipsHtml = !ps.isExhausted ? buildTipsTab() : '';
+
+  // Notes tab
+  const notesHtml = `
+    <div class="sv-notes-area">
+      <textarea class="sv-notes-textarea" id="sv-notes-textarea"
+        data-char-id="${charId}"
+        maxlength="1024"
+        placeholder="Record card combos, round strategies, opening plays..."
+        >${(ps.notes ?? '').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+      <div class="sv-notes-count" id="sv-notes-count">${(ps.notes ?? '').length}/1024</div>
+    </div>`;
 
   const tabs = [
     { id: 'goals',    label: '🎯 Goals' },
     { id: 'tips',     label: '💡 Tips' },
     { id: 'trackers', label: '📋 Trackers' },
+    { id: 'notes',    label: '📝 Notes' },
   ];
 
   const tabButtons = tabs.map(t => `
@@ -836,7 +860,8 @@ function buildBottomDrawer(member, classId, classData, charId, ps, isPeeking) {
   const tabContent =
     activeTab === 'goals'    ? goalsHtml :
     activeTab === 'tips'     ? tipsHtml :
-    activeTab === 'trackers' ? trackersHtml : '';
+    activeTab === 'trackers' ? trackersHtml :
+    activeTab === 'notes'    ? notesHtml : '';
 
   return `
     <div class="sv-bottom-drawer${isOpen ? ' sv-drawer-open' : ''}" id="sv-bottom-drawer">
@@ -1861,6 +1886,27 @@ function bindScenarioViewEvents() {
     if (sv.drawerOpen && !sv.drawerTab) sv.drawerTab = 'goals';
     renderScenarioView();
   });
+
+  // Notes textarea in drawer — debounced auto-save
+  const svNotesTextarea = document.getElementById('sv-notes-textarea');
+  const svNotesCount = document.getElementById('sv-notes-count');
+  if (svNotesTextarea) {
+    let svNotesTimer = null;
+    svNotesTextarea.addEventListener('input', () => {
+      const len = svNotesTextarea.value.length;
+      if (svNotesCount) svNotesCount.textContent = `${len}/1024`;
+      clearTimeout(svNotesTimer);
+      svNotesTimer = setTimeout(async () => {
+        const charId = svNotesTextarea.dataset.charId;
+        await saveNotesForChar(charId, svNotesTextarea.value);
+      }, 800);
+    });
+    svNotesTextarea.addEventListener('blur', async () => {
+      clearTimeout(svNotesTimer);
+      const charId = svNotesTextarea.dataset.charId;
+      await saveNotesForChar(charId, svNotesTextarea.value);
+    });
+  }
 
   // Drawer tab switching
   document.querySelectorAll('.sv-drawer-tab').forEach(tab => {

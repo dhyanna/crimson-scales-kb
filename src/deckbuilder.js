@@ -94,6 +94,14 @@ async function saveMilestoneChecks(checks) {
   db.state.milestone_checks = checks;
 }
 
+async function saveNotes(text) {
+  const trimmed = text.slice(0, 1024);
+  await sb().from('character_state')
+    .update({ notes: trimmed, updated_at: new Date().toISOString() })
+    .eq('id', db.state.id);
+  db.state.notes = trimmed;
+}
+
 async function savePqChecks(checks, groupChecks) {
   const update = { pq_checks: checks, updated_at: new Date().toISOString() };
   if (groupChecks !== undefined) update.pq_group_checks = groupChecks;
@@ -201,6 +209,10 @@ async function levelUp(chosenCardId, passedOverIds) {
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
+function escapeHtml(str) {
+  return (str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -378,6 +390,17 @@ function renderDeckBuilder() {
           ${handCards.map(c => renderCardTile(c, true, false, cardBuildClass(c))).join('')}
           ${hand === 0 ? '<div class="db-empty">No cards in hand — move cards up from your sideboard</div>' : ''}
         </div>
+      </div>
+
+      <!-- Notes -->
+      <div class="db-section db-notes-section">
+        <div class="db-section-header">
+          <h3 class="db-section-title">📝 Notes</h3>
+          <span class="db-notes-count" id="db-notes-count">${(db.state.notes ?? '').length}/1024</span>
+        </div>
+        <textarea class="db-notes-textarea" id="db-notes-textarea"
+          maxlength="1024" placeholder="Record card combos, round strategies, opening plays..."
+          >${escapeHtml(db.state.notes ?? '')}</textarea>
       </div>
 
       <!-- Sideboard -->
@@ -832,6 +855,25 @@ function bindDeckBuilderEvents() {
       renderDeckBuilder();
     });
   });
+
+  // Notes textarea — debounced auto-save
+  const notesTextarea = document.getElementById('db-notes-textarea');
+  const notesCount = document.getElementById('db-notes-count');
+  if (notesTextarea) {
+    let notesTimer = null;
+    notesTextarea.addEventListener('input', () => {
+      const len = notesTextarea.value.length;
+      if (notesCount) notesCount.textContent = `${len}/1024`;
+      clearTimeout(notesTimer);
+      notesTimer = setTimeout(async () => {
+        await saveNotes(notesTextarea.value);
+      }, 800);
+    });
+    notesTextarea.addEventListener('blur', async () => {
+      clearTimeout(notesTimer);
+      await saveNotes(notesTextarea.value);
+    });
+  }
 
   // Mark PQ complete button
   document.getElementById('db-complete-pq')?.addEventListener('click', async () => {
