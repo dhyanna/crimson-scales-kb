@@ -2485,6 +2485,11 @@ function bindOutcomeDetails(modal, outcome) {
 }
 
 // ── Outcome handlers ──────────────────────────────────────────────
+function getPartyCharacterNames() {
+  return (sv.scenario?.scenario_party ?? [])
+    .map(m => m.characters?.character_name ?? m.player?.player_name ?? '?');
+}
+
 async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName) {
   const s = sv.scenario;
   const party = s.scenario_party ?? [];
@@ -2522,7 +2527,17 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
   const currentCompletions = sv.campaign.scenario_completions ?? 0;
   await sb().from('campaigns').update({ scenario_completions: currentCompletions + 1 }).eq('id', campaignId);
 
-  // 5. Set phase
+  // 5. Create adventure log entry
+  const logResult = forcedLink ? 'completed_forced_link' : 'completed';
+  if (typeof createScenarioLogEntry === 'function') {
+    await createScenarioLogEntry(
+      campaignId, s.id, s.scenario_number, s.scenario_name,
+      s.is_replay ?? false, s.replay_number ?? null,
+      logResult, getPartyCharacterNames(), forcedLink
+    );
+  }
+
+  // 6. Set phase
   if (forcedLink) {
     // Bypass City Phase — campaign stays available but no active scenario
     await sb().from('campaigns').update({ phase: 'city', city_step: 'downtime' }).eq('id', campaignId);
@@ -2542,6 +2557,16 @@ async function handleLostOutcome(action) {
 
   // Update scenario status
   await sb().from('scenarios').update({ status: 'lost', replay: action === 'replay' }).eq('id', s.id);
+
+  // Create adventure log entry
+  const logResult = action === 'replay' ? 'lost_replay' : 'lost_return';
+  if (typeof createScenarioLogEntry === 'function') {
+    await createScenarioLogEntry(
+      campaignId, s.id, s.scenario_number, s.scenario_name,
+      s.is_replay ?? false, s.replay_number ?? null,
+      logResult, getPartyCharacterNames(), false
+    );
+  }
 
   if (action === 'replay') {
     // Skip City Phase — back to downtime, GM restarts from Campaign Panel

@@ -139,6 +139,41 @@
       flex-shrink: 0;
     }
     .campaign-panel-title { margin: 0; font-size: 18px; }
+    .campaign-log-btn {
+      background: none;
+      border: 1px solid var(--color-border, #444);
+      border-radius: 6px;
+      color: var(--color-text-secondary, #888);
+      padding: 4px 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .campaign-log-btn:hover { color: var(--color-accent, #c9a84c); border-color: var(--color-accent, #c9a84c); }
+    /* Adventure Log table */
+    .adv-log-campaign-name {
+      font-size: 16px; font-weight: 700;
+      color: var(--color-accent, #c9a84c); margin-bottom: 16px;
+    }
+    .adv-log-table-wrap { overflow-x: auto; }
+    .adv-log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .adv-log-th {
+      text-align: left; padding: 8px 12px;
+      border-bottom: 2px solid var(--color-accent, #c9a84c);
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--color-accent, #c9a84c); white-space: nowrap;
+    }
+    .adv-log-row { border-bottom: 1px solid var(--color-border, #333); }
+    .adv-log-row:hover { background: rgba(255,255,255,0.03); }
+    .adv-log-cell { padding: 10px 12px; vertical-align: top; color: var(--color-text, #e0e0e0); line-height: 1.4; }
+    .adv-log-scenario { min-width: 200px; }
+    .adv-log-cp { white-space: nowrap; }
+    .adv-log-link { color: var(--color-accent, #c9a84c); text-decoration: none; font-weight: 600; }
+    .adv-log-link:hover { text-decoration: underline; }
+    .adv-log-upload-btn {
+      background: none; border: none; cursor: pointer;
+      color: #666; font-size: 12px; padding: 0 2px; vertical-align: middle;
+    }
+    .adv-log-upload-btn:hover { color: var(--color-accent, #c9a84c); }
     .campaign-panel-close {
       background: none; border: none; color: var(--color-text-secondary, #888);
       font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px;
@@ -2605,6 +2640,7 @@
     <div class="campaign-panel-header">
       <h2 class="campaign-panel-title">📜 Campaigns</h2>
       <div style="display:flex;align-items:center;gap:8px">
+        <button class="campaign-log-btn" id="open-log-btn" title="Adventure Log">📋</button>
         <button class="campaign-plus-btn" id="new-campaign-btn" title="New Campaign">＋</button>
         <button class="campaign-panel-close" id="close-campaigns-btn">✕</button>
       </div>
@@ -2885,6 +2921,21 @@
   </div>
 
   <!-- ── SCENARIO VIEW ── -->
+  <!-- Adventure Log Overlay -->
+  <div class="deckbuilder-overlay" id="adventure-log-overlay">
+    <div class="db-container" style="max-width:900px">
+      <div class="db-header">
+        <div class="db-header-left">
+          <h2 class="db-title">📋 Campaign Adventure Log</h2>
+        </div>
+        <button class="db-close-btn" id="close-log-btn">✕</button>
+      </div>
+      <div class="db-body" id="adventure-log-body">
+        <div class="campaigns-loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+
   <div class="sv-overlay" id="scenario-view-overlay" style="display:none"></div>
 
     <div class="footer-inner">

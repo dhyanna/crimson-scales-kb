@@ -218,7 +218,18 @@ async function deleteCampaign(id) {
 }
 
 // ── Scenario functions ────────────────────────────────────────────
-async function createScenario(campaignId, gmPlayerId, number, name, goal) {
+async function checkReplayScenario(campaignId, scenarioNumber) {
+  // Check if this scenario number has been played before in this campaign
+  const { data } = await sb()
+    .from('scenario_log')
+    .select('id, is_replay, replay_number')
+    .eq('campaign_id', campaignId)
+    .eq('scenario_number', scenarioNumber)
+    .order('created_at', { ascending: false });
+  return data ?? [];
+}
+
+async function createScenario(campaignId, gmPlayerId, number, name, goal, isReplay = false, replayNumber = null) {
   // Deactivate any previous active/paused scenario for this campaign
   await sb().from('scenarios')
     .update({ status: 'abandoned', updated_at: new Date().toISOString() })
@@ -227,7 +238,7 @@ async function createScenario(campaignId, gmPlayerId, number, name, goal) {
   // Set campaign phase to scenario — done after party members inserted
   // (Phase update happens after scenario status set to active in wizard)
   const { data, error } = await sb().from('scenarios')
-    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'pending', scenario_step: 'beginning', round_number: 0 })
+    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'pending', scenario_step: 'beginning', round_number: 0, is_replay: isReplay, replay_number: replayNumber })
     .select().single();
   if (error) throw error;
   return data;
@@ -264,6 +275,33 @@ async function getActiveScenario(campaignId) {
     .maybeSingle();
   if (error) throw error;
   return data;
+}
+
+async function createScenarioLogEntry(campaignId, scenarioId, scenarioNumber, scenarioName,
+  isReplay, replayNumber, result, partyNames, forcedLink) {
+
+  // Determine CP number
+  let cpNumber = null;
+  const hasCityPhase = result !== 'completed_forced_link' && result !== 'lost_replay';
+  if (hasCityPhase) {
+    // Increment cp_count on campaign
+    const { data: camp } = await sb().from('campaigns').select('cp_count').eq('id', campaignId).single();
+    const newCpCount = (camp?.cp_count ?? 0) + 1;
+    await sb().from('campaigns').update({ cp_count: newCpCount }).eq('id', campaignId);
+    cpNumber = newCpCount;
+  }
+
+  await sb().from('scenario_log').insert({
+    campaign_id: campaignId,
+    scenario_id: scenarioId,
+    scenario_number: scenarioNumber,
+    scenario_name: scenarioName,
+    is_replay: isReplay,
+    replay_number: replayNumber ?? null,
+    result,
+    party_names: partyNames,
+    cp_number: cpNumber,
+  });
 }
 
 async function updateCampaignPhase(campaignId, phase, cityStep = 'downtime') {
@@ -1302,10 +1340,24 @@ function openScenarioWizard(campaign) {
     const name = document.getElementById('scenario-name').value.trim();
     const goal = document.getElementById('scenario-goal').value.trim();
     const myPlayer = getEffectivePlayer(campaign.players ?? []) ?? (campaign.players ?? [])[0] ?? null;
+
+    // Check for replay
+    let isReplay = false;
+    let replayNumber = null;
+    const previousRuns = await checkReplayScenario(campaign.id, number);
+    if (previousRuns.length > 0) {
+      const confirmed = confirm(`Scenario ${number} has been played before. Is this a replay?`);
+      if (!confirmed) return; // Cancel scenario creation
+      isReplay = true;
+      // Count how many replays have already happened
+      const replayCount = previousRuns.filter(r => r.is_replay).length;
+      replayNumber = replayCount + 2; // First replay = 2, second = 3, etc.
+    }
+
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Starting...';
     try {
-      const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal);
+      const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal, isReplay, replayNumber);
       const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
       // Insert all party members first before activating
       await Promise.all(checked.map(cb => {
@@ -1323,7 +1375,9 @@ function openScenarioWizard(campaign) {
       overlay.style.display = 'none';
       await loadCampaigns();
       const fullScenario = await getActiveScenario(campaign.id);
-      if (fullScenario) await openScenarioView(fullScenario, campaign);
+      if (fullScenario) {
+        await openScenarioView(fullScenario, campaign);
+      }
     } catch (err) {
       console.error('Scenario creation error:', err);
       showToast('Error: ' + err.message, true);
@@ -1389,10 +1443,151 @@ function startCampaignPolling() {
     .subscribe();
 }
 
+// ── Adventure Log ─────────────────────────────────────────────
+async function openAdventureLog() {
+  const overlay = document.getElementById('adventure-log-overlay');
+  if (!overlay) return;
+  overlay.classList.add('db-open');
+  renderAdventureLog();
+}
+
+function closeAdventureLog() {
+  document.getElementById('adventure-log-overlay')?.classList.remove('db-open');
+}
+
+async function renderAdventureLog() {
+  const body = document.getElementById('adventure-log-body');
+  if (!body) return;
+  body.innerHTML = '<div class="campaigns-loading">Loading...</div>';
+
+  try {
+    // Find active campaign
+    const { data: camps } = await sb().from('campaigns')
+      .select('id, name, is_active').eq('is_active', true).limit(1);
+    const campaign = camps?.[0];
+    if (!campaign) {
+      body.innerHTML = '<div class="campaigns-empty">No active campaign found.</div>';
+      return;
+    }
+
+    const { data: logs } = await sb()
+      .from('scenario_log')
+      .select('*')
+      .eq('campaign_id', campaign.id)
+      .order('created_at', { ascending: true });
+
+    if (!logs?.length) {
+      body.innerHTML = '<div class="campaigns-empty">No scenarios logged yet for this campaign.</div>';
+      return;
+    }
+
+    const resultLabel = {
+      'completed': '✅ Completed',
+      'completed_forced_link': '✅ Completed (Forced Link)',
+      'lost_return': '❌ Lost — Return to Gloomhaven',
+      'lost_replay': '❌ Lost — Replay',
+    };
+
+    const rows = logs.map(log => {
+      // Scenario label
+      let scenarioLabel = `Scenario ${log.scenario_number}: ${log.scenario_name}`;
+      if (log.is_replay && log.replay_number) scenarioLabel += ` (Replay ${log.replay_number})`;
+      const scenarioCell = log.scenario_log_url
+        ? `<a href="${log.scenario_log_url}" target="_blank" class="adv-log-link">${scenarioLabel}</a>`
+        : `<span>${scenarioLabel}</span>`;
+
+      // Party
+      const partyCell = (log.party_names ?? []).join(', ') || '—';
+
+      // Result
+      const resultCell = resultLabel[log.result] ?? log.result;
+
+      // City Phase
+      const cpLabel = log.cp_number ? `CP-${String(log.cp_number).padStart(2,'0')}` : '—';
+      const cpCell = log.cp_log_url
+        ? `<a href="${log.cp_log_url}" target="_blank" class="adv-log-link">${cpLabel}</a>`
+        : `<span>${cpLabel}</span>`;
+
+      // GM upload buttons (current player = GM check)
+      const isGM = !!currentPlayer || IS_DEV;
+      const uploadScenBtn = isGM ? `<button class="adv-log-upload-btn" data-log-id="${log.id}" data-type="scenario">📎</button>` : '';
+      const uploadCpBtn = isGM && log.cp_number ? `<button class="adv-log-upload-btn" data-log-id="${log.id}" data-type="cp">📎</button>` : '';
+
+      return `<tr class="adv-log-row">
+        <td class="adv-log-cell adv-log-scenario">${scenarioCell} ${uploadScenBtn}</td>
+        <td class="adv-log-cell">${partyCell}</td>
+        <td class="adv-log-cell">${resultCell}</td>
+        <td class="adv-log-cell adv-log-cp">${cpCell} ${uploadCpBtn}</td>
+      </tr>`;
+    }).join('');
+
+    body.innerHTML = `
+      <h3 class="adv-log-campaign-name">${campaign.name}</h3>
+      <div class="adv-log-table-wrap">
+        <table class="adv-log-table">
+          <thead>
+            <tr>
+              <th class="adv-log-th">Scenario Phase</th>
+              <th class="adv-log-th">Party</th>
+              <th class="adv-log-th">Result</th>
+              <th class="adv-log-th">City Phase</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <input type="file" id="adv-log-file-input" accept=".html" style="display:none">`;
+
+    // Bind upload buttons
+    let uploadTarget = null;
+    const fileInput = document.getElementById('adv-log-file-input');
+
+    document.querySelectorAll('.adv-log-upload-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        uploadTarget = { logId: btn.dataset.logId, type: btn.dataset.type };
+        fileInput.click();
+      });
+    });
+
+    fileInput?.addEventListener('change', async () => {
+      const file = fileInput.files?.[0];
+      if (!file || !uploadTarget) return;
+      if (file.size > 2 * 1024 * 1024) {
+        showToast('File too large — max 2MB', true);
+        return;
+      }
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('logId', uploadTarget.logId);
+        formData.append('type', uploadTarget.type);
+
+        const res = await fetch('/api/upload-log', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(await res.text());
+        const { url } = await res.json();
+
+        const field = uploadTarget.type === 'scenario' ? 'scenario_log_url' : 'cp_log_url';
+        await sb().from('scenario_log').update({ [field]: url }).eq('id', uploadTarget.logId);
+        showToast('✅ File uploaded successfully');
+        renderAdventureLog();
+      } catch (err) {
+        showToast('Upload failed: ' + err.message, true);
+      }
+      fileInput.value = '';
+      uploadTarget = null;
+    });
+
+  } catch (err) {
+    body.innerHTML = `<div class="campaigns-empty">Error loading log: ${err.message}</div>`;
+  }
+}
+
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   document.getElementById('open-campaigns-btn')?.addEventListener('click', openCampaignPanel);
+  document.getElementById('open-log-btn')?.addEventListener('click', openAdventureLog);
+  document.getElementById('close-log-btn')?.addEventListener('click', closeAdventureLog);
   document.getElementById('close-campaigns-btn')?.addEventListener('click', closeCampaignPanel);
   document.getElementById('campaign-backdrop')?.addEventListener('click', closeCampaignPanel);
   document.getElementById('new-campaign-btn')?.addEventListener('click', openCampaignWizard);
