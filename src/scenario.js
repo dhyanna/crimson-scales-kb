@@ -264,6 +264,9 @@ window._handleMoveCard = async function(dest, cardId, charId) {
   ps.active = ps.active.filter(n => n !== cardId);
   if (dest === 'discard') ps.discard.push(cardId);
   else if (dest === 'lost') ps.lost.push(cardId);
+  // Reset charge dots so card plays fresh if returned to active later
+  if (ps.chargeMap) delete ps.chargeMap[cardId];
+  if (ps.dotCount) delete ps.dotCount[cardId];
   renderScenarioView();
   try { await savePlayStateForChar(charId); }
   catch(err) { showToast('⚠️ Sync error: ' + err.message, true); }
@@ -546,7 +549,7 @@ function buildPlayArea(party) {
       <div class="sv-zone sv-zone-active">
         <div class="sv-zone-label">Active / Persistent</div>
         <div class="sv-zone-cards" id="sv-active-cards">
-          ${ps.active.map(cardId => buildActiveCard(cardId, classId, charId)).join('')}
+          ${ps.active.map(cardId => buildActiveCard(cardId, classId, charId, isPeeking)).join('')}
           ${ps.active.length === 0 ? '<div class="sv-zone-empty">Cards played this turn appear here</div>' : ''}
         </div>
       </div>
@@ -1043,6 +1046,12 @@ function openNegateDiscardModal(charId, classId) {
     document.getElementById('sv-negate-modal-close2')?.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
+    // Bind hover zoom for card images inside modal
+    modal.querySelectorAll('.sv-zoomable').forEach(img => {
+      img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
+      img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
+    });
+
     modal.querySelectorAll('.sv-pile-modal-card').forEach(card => {
       card.addEventListener('click', () => {
         const cardId = card.dataset.cardId;
@@ -1264,7 +1273,7 @@ function buildStagedCards(dbCards, classId, charId, ps) {
 
 
 // ── Active Card ───────────────────────────────────────────────────
-function buildActiveCard(cardId, classId, charId) {
+function buildActiveCard(cardId, classId, charId, isPeeking = false) {
   const classData = CLASS_REGISTRY?.[classId];
   const card = classData?.cards?.find(c =>
     c.name === cardId ||
@@ -1273,34 +1282,39 @@ function buildActiveCard(cardId, classId, charId) {
   const displayName = card?.name ?? cardId;
   const imgSrc = card?.imageUrl ?? getCardBack(classId);
 
-  // Charge dots — player manually adds dots as needed for charge tracking
+  // Charge dots — only interactive for own area, view-only when peeking
   const ps = sv.playState[charId];
   const chargeMap = ps?.chargeMap ?? {};
   const filledCount = chargeMap[cardId] ?? 0;
   const totalDots = ps?.dotCount?.[cardId] ?? 0;
 
-  const chargeDots = `
-    <div class="sv-charge-dots">
-      ${Array.from({length: totalDots}, (_, i) =>
-        `<button class="sv-charge-dot ${i < filledCount ? 'sv-charge-filled' : ''}"
-          data-card-id="${cardId}" data-char-id="${charId}" data-dot="${i}"></button>`
-      ).join('')}
-      <button class="sv-charge-add-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Add charge slot">+</button>
-    </div>`;
+  const chargeDots = isPeeking
+    ? `<div class="sv-charge-dots">
+        ${Array.from({length: totalDots}, (_, i) =>
+          `<span class="sv-charge-dot ${i < filledCount ? 'sv-charge-filled' : ''}" style="pointer-events:none"></span>`
+        ).join('')}
+       </div>`
+    : `<div class="sv-charge-dots">
+        ${Array.from({length: totalDots}, (_, i) =>
+          `<button class="sv-charge-dot ${i < filledCount ? 'sv-charge-filled' : ''}"
+            data-card-id="${cardId}" data-char-id="${charId}" data-dot="${i}"></button>`
+        ).join('')}
+        <button class="sv-charge-add-btn" data-card-id="${cardId}" data-char-id="${charId}" title="Add charge slot">+</button>
+       </div>`;
 
   return `
     <div class="sv-active-card" data-card-id="${cardId}" data-char-id="${charId}" data-img="${imgSrc}">
       <img src="${imgSrc}" class="sv-card-img sv-zoomable" alt="${displayName}">
       <div class="sv-card-name">${displayName}</div>
       ${chargeDots}
-      <div class="sv-active-card-actions">
+      ${!isPeeking ? `<div class="sv-active-card-actions">
         <button class="sv-move-card-btn" data-dest="discard" data-card-id="${cardId}" data-char-id="${charId}"
           onclick="window._handleMoveCard('discard','${cardId}','${charId}')">→ Discard</button>
         <button class="sv-move-card-btn" data-dest="lost" data-card-id="${cardId}" data-char-id="${charId}"
           onclick="window._handleMoveCard('lost','${cardId}','${charId}')">→ Lost</button>
         <button class="sv-move-card-btn" data-dest="hand" data-card-id="${cardId}" data-char-id="${charId}"
           onclick="window._handleMoveCard('hand','${cardId}','${charId}')">→ Hand</button>
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -1681,8 +1695,11 @@ function bindScenarioViewEvents() {
   document.querySelectorAll('.sv-init-item').forEach(item => {
     item.addEventListener('click', async () => {
       const playerId = item.dataset.playerId;
-      if (!myPlayer && !IS_DEV) return;
-      if (myPlayer && myPlayer.id !== playerId && !IS_DEV) return;
+      if (!myPlayer) return;
+      // Allow if this is the player's own character OR they are the assigned substitute
+      const partyMemberForInit = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
+      const isSubstituteForInit = partyMemberForInit?.is_absent && partyMemberForInit?.substitute_player_id === myPlayer?.id;
+      if (myPlayer.id !== playerId && !isSubstituteForInit) return;
 
       const isExhausted = (sv.scenario.scenario_party ?? [])
         .find(m => m.player_id === playerId)?.character_id
@@ -1960,7 +1977,10 @@ function bindScenarioViewEvents() {
         ps.restPhase = 'done';
         // Auto-ready the player
         const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
-        if (member) sv.readyPlayers[member.player_id] = true;
+        if (member) {
+          sv.readyPlayers[member.player_id] = true;
+          await saveReadyState(member.player_id, true);
+        }
         showToast('🌙 Long Rest selected — you are ready for the round.');
         renderScenarioView();
       }

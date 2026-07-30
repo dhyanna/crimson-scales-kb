@@ -154,10 +154,56 @@ async function getCampaigns() {
   const { data, error } = await sb()
     .from('campaigns')
     .select(`*, players(*), characters(*), campaign_unlocked_classes(*)`)
+    .eq('is_archived', false)
     .order('is_active', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+async function getArchivedCampaigns() {
+  const { data, error } = await sb()
+    .from('campaigns')
+    .select(`*, players(*), characters(*), campaign_unlocked_classes(*)`)
+    .eq('is_archived', true)
+    .order('archived_at', { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function archiveCampaign(id) {
+  const { error } = await sb().from('campaigns')
+    .update({ is_archived: true, is_active: false, archived_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+async function restoreCampaign(id) {
+  const { error } = await sb().from('campaigns')
+    .update({ is_archived: false, archived_at: null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteCampaignWithCleanup(id) {
+  // Fetch all log entries to clean up uploaded files first
+  const { data: logs } = await sb()
+    .from('scenario_log')
+    .select('scenario_log_url, cp_log_url')
+    .eq('campaign_id', id);
+
+  if (logs?.length) {
+    const urls = logs.flatMap(l => [l.scenario_log_url, l.cp_log_url]).filter(Boolean);
+    await Promise.all(urls.map(async url => {
+      try {
+        const fileId = url.split('/api/logs/')[1];
+        if (fileId) await fetch(`/api/logs/${fileId}`, { method: 'DELETE' });
+      } catch (_) { /* best effort */ }
+    }));
+  }
+
+  const { error } = await sb().from('campaigns').delete().eq('id', id);
+  if (error) throw error;
 }
 
 async function setActiveCampaign(campaignId) {
@@ -210,11 +256,6 @@ function isCM(players) {
   // In dev mode with no player selected, allow CM actions for testing
   if (IS_DEV) return true;
   return false;
-}
-
-async function deleteCampaign(id) {
-  const { error } = await sb().from('campaigns').delete().eq('id', id);
-  if (error) throw error;
 }
 
 // ── Scenario functions ────────────────────────────────────────────
@@ -608,8 +649,9 @@ async function loadCampaigns() {
       container.innerHTML = '<div class="campaigns-empty">No campaigns yet. Click + to create one!</div>';
       return;
     }
-    container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('');
+    container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('') + renderArchivedSection();
     bindCampaignListEvents(campaigns);
+    bindArchivedSectionEvents();
     // Update sidebar class grouping from active campaign
     const activeCampaign = campaigns.find(c => c.is_active) ?? campaigns[0] ?? null;
     if (window.updateSidebarFromCampaign) {
@@ -765,7 +807,7 @@ function renderCampaignCard(campaign) {
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           ${amCM ? `<button class="campaign-plus-btn campaign-add-player-btn" data-campaign-id="${campaign.id}" title="Add Player">＋</button>` : ''}
-          ${amCM ? `<button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>` : ''}
+          ${amCM ? `<button class="campaign-archive-btn" data-id="${campaign.id}" title="Archive campaign">📦</button>` : ''}
         </div>
       </div>
       ${!isActive && amCM ? `<div class="campaign-set-active-bar"><button class="campaign-set-active-btn" data-campaign-id="${campaign.id}">⭐ Set as Active Campaign</button></div>` : ''}
@@ -798,6 +840,95 @@ function renderCampaignCard(campaign) {
     </div>`;
 }
 
+
+// ── ARCHIVED CAMPAIGNS ───────────────────────────────────────
+function renderArchivedSection() {
+  return `
+    <div class="campaign-archive-section" id="campaign-archive-section">
+      <button class="campaign-archive-toggle" id="campaign-archive-toggle">
+        <span id="campaign-archive-toggle-icon">▶</span> Archived Campaigns
+      </button>
+      <div class="campaign-archive-list" id="campaign-archive-list" style="display:none">
+        <div class="campaigns-loading" id="campaign-archive-loading">Loading…</div>
+      </div>
+    </div>`;
+}
+
+async function loadArchivedCampaigns() {
+  const list = document.getElementById('campaign-archive-list');
+  if (!list) return;
+  list.innerHTML = '<div class="campaigns-loading">Loading…</div>';
+  try {
+    const campaigns = await getArchivedCampaigns();
+    if (!campaigns.length) {
+      list.innerHTML = '<div class="campaigns-empty" style="padding:12px 16px;font-size:13px">No archived campaigns.</div>';
+      return;
+    }
+    list.innerHTML = campaigns.map(c => {
+      const myPlayer = getEffectivePlayer(c.players ?? []);
+      const amCM = isCM(c.players ?? []);
+      const archivedDate = c.archived_at ? new Date(c.archived_at).toLocaleDateString() : '—';
+      return `
+        <div class="campaign-archive-card" data-id="${c.id}">
+          <div class="campaign-archive-card-info">
+            <div class="campaign-archive-card-name">${c.party_name ? `${c.party_name} — ${c.name}` : c.name}</div>
+            <div class="campaign-archive-card-date">Archived ${archivedDate}</div>
+          </div>
+          ${amCM ? `<div class="campaign-archive-card-actions">
+            <button class="campaign-restore-btn wizard-btn" data-id="${c.id}">↩ Restore</button>
+            <button class="campaign-delete-btn wizard-btn wizard-btn-danger" data-id="${c.id}">🗑 Delete</button>
+          </div>` : ''}
+        </div>`;
+    }).join('');
+    bindArchivedCardEvents();
+  } catch (err) {
+    list.innerHTML = `<div class="campaigns-error">Error: ${err.message}</div>`;
+  }
+}
+
+function bindArchivedSectionEvents() {
+  const toggle = document.getElementById('campaign-archive-toggle');
+  const list = document.getElementById('campaign-archive-list');
+  const icon = document.getElementById('campaign-archive-toggle-icon');
+  if (!toggle || !list) return;
+
+  toggle.addEventListener('click', async () => {
+    const isOpen = list.style.display !== 'none';
+    if (isOpen) {
+      list.style.display = 'none';
+      icon.textContent = '▶';
+    } else {
+      list.style.display = 'block';
+      icon.textContent = '▼';
+      await loadArchivedCampaigns();
+    }
+  });
+}
+
+function bindArchivedCardEvents() {
+  document.querySelectorAll('.campaign-restore-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      try {
+        await restoreCampaign(btn.dataset.id);
+        showToast('Campaign restored.');
+        loadCampaigns();
+      } catch (err) { showToast('Error: ' + err.message, true); }
+    });
+  });
+
+  document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('Permanently delete this campaign and all its data? This cannot be undone.')) return;
+      try {
+        await deleteCampaignWithCleanup(btn.dataset.id);
+        showToast('Campaign deleted.');
+        await loadArchivedCampaigns();
+      } catch (err) { showToast('Error: ' + err.message, true); }
+    });
+  });
+}
 
 // ── PARTY PROGRESS ───────────────────────────────────────────
 function computeGoals(campaign, players) {
@@ -1138,12 +1269,12 @@ function bindCampaignListEvents(campaigns) {
     });
   });
 
-  // Delete campaign
-  document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
+  // Archive campaign
+  document.querySelectorAll('.campaign-archive-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Delete this campaign? This cannot be undone.')) return;
-      try { await deleteCampaign(btn.dataset.id); loadCampaigns(); showToast('Campaign deleted.'); }
+      if (!confirm('Archive this campaign? It can be restored later from the Archived Campaigns section.')) return;
+      try { await archiveCampaign(btn.dataset.id); loadCampaigns(); showToast('Campaign archived.'); }
       catch (err) { showToast('Error: ' + err.message, true); }
     });
   });
