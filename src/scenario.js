@@ -364,11 +364,16 @@ async function openScenarioView(scenario, campaign) {
 function renderScenarioView() {
   const overlay = document.getElementById('scenario-view-overlay');
   if (!overlay) return;
-  // Preserve zoom overlay across re-renders
+  // Preserve scroll position and zoom overlay across re-renders
   const zoomOverlay = document.getElementById('sv-zoom-overlay');
+  const playContent = document.getElementById('sv-play-content');
+  const savedScrollTop = playContent?.scrollTop ?? 0;
   overlay.innerHTML = buildScenarioViewHTML();
   overlay.style.display = 'flex';
   if (zoomOverlay) overlay.appendChild(zoomOverlay);
+  // Restore scroll position
+  const newPlayContent = document.getElementById('sv-play-content');
+  if (newPlayContent && savedScrollTop) newPlayContent.scrollTop = savedScrollTop;
   bindScenarioViewEvents();
 }
 
@@ -384,7 +389,7 @@ function buildScenarioViewHTML() {
         <div class="sv-left-tabs">
           ${buildPlayerTabs(party)}
         </div>
-        <div class="sv-play-content">
+        <div class="sv-play-content" id="sv-play-content">
           ${buildPlayArea(party)}
         </div>
       </div>
@@ -919,12 +924,6 @@ function openPileModal(charId, pile, classId) {
 
   document.getElementById('scenario-view-overlay').appendChild(modal);
 
-  // Rebind zoom for new images
-  modal.querySelectorAll('.sv-zoomable').forEach(img => {
-    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
-    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
-  });
-
   document.getElementById('sv-pile-modal-close').addEventListener('click', () => modal.remove());
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
@@ -1046,12 +1045,6 @@ function openNegateDiscardModal(charId, classId) {
     document.getElementById('sv-negate-modal-close2')?.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
-    // Bind hover zoom for card images inside modal
-    modal.querySelectorAll('.sv-zoomable').forEach(img => {
-      img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
-      img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
-    });
-
     modal.querySelectorAll('.sv-pile-modal-card').forEach(card => {
       card.addEventListener('click', () => {
         const cardId = card.dataset.cardId;
@@ -1130,12 +1123,6 @@ function openLongRestModal(charId, classId) {
 
   document.getElementById('scenario-view-overlay').appendChild(modal);
 
-  // Rebind zoom
-  modal.querySelectorAll('.sv-zoomable').forEach(img => {
-    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
-    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
-  });
-
   async function completeLongRest(charId, lostCardId, source) {
     const ps = sv.playState[charId];
     if (!ps) return;
@@ -1151,6 +1138,8 @@ function openLongRestModal(charId, classId) {
     modal.remove();
     await savePlayStateForChar(charId);
     showToast('🌙 Long Rest complete — discard returned to hand.');
+    // Flush any renders that were deferred while this modal was open
+    sv._pendingRender = false;
     renderScenarioView();
   }
 
@@ -1699,7 +1688,9 @@ function bindScenarioViewEvents() {
       // Allow if this is the player's own character OR they are the assigned substitute
       const partyMemberForInit = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
       const isSubstituteForInit = partyMemberForInit?.is_absent && partyMemberForInit?.substitute_player_id === myPlayer?.id;
-      if (myPlayer.id !== playerId && !isSubstituteForInit) return;
+      // Substitute can only click absentee initiative when actively viewing that player's tab
+      const isViewingTheirTab = sv.activePlayerId === playerId;
+      if (myPlayer.id !== playerId && !(isSubstituteForInit && isViewingTheirTab)) return;
 
       const isExhausted = (sv.scenario.scenario_party ?? [])
         .find(m => m.player_id === playerId)?.character_id
@@ -1711,6 +1702,19 @@ function bindScenarioViewEvents() {
         // Play phase — green icon click ends the player's turn (turns red)
         const currentlyReady = sv.readyPlayers[playerId] ?? false;
         if (currentlyReady) {
+          // Guard: player must have played all staged cards before ending their turn
+          // (Long Rest players are exempt — they have no cards to play)
+          const memberForGuard = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
+          if (memberForGuard) {
+            const charIdForGuard = memberForGuard.character_id;
+            const psForGuard = sv.playState[charIdForGuard];
+            const isLongRestingGuard = psForGuard?.isLongResting ?? false;
+            const stagedCards = sv.selectedCards[charIdForGuard] ?? [];
+            if (!isLongRestingGuard && stagedCards.length > 0) {
+              showToast('⚠️ Play your cards first before ending your turn.', true);
+              return;
+            }
+          }
           sv.readyPlayers[playerId] = false;
           await saveReadyState(playerId, false);
           const memberForPlayer = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
@@ -2338,12 +2342,6 @@ function bindScenarioViewEvents() {
   // Tips carousel — only bind when tips tab is active
   if ((sv.drawerTab ?? 'goals') === 'tips') bindTipsCarousel();
 
-  // Spacebar zoom — rebind mouseenter/leave on ALL card images in the view
-  document.querySelectorAll('.sv-card-img, .sv-tracker-img, .sv-pile-card, .sv-rest-card-img, .sv-rest-override-card img, .sv-active-card img, .sv-mat-img').forEach(img => {
-    img.addEventListener('mouseenter', () => { sv._hoveredCardImg = img.src; });
-    img.addEventListener('mouseleave', () => { sv._hoveredCardImg = null; });
-  });
-
   // Drag-to-reorder initiative (GM only)
   if (sv.isGM) {
     bindInitiativeDragDrop();
@@ -2668,7 +2666,13 @@ function handleScenarioUpdate(payload) {
     if (!sv.isGM) showToast(row.toast_message);
   }
 
-  if (changed) renderScenarioView();
+  if (changed) {
+    if (document.getElementById('sv-long-rest-modal') || document.getElementById('sv-negate-modal')) {
+      sv._pendingRender = true;
+    } else {
+      renderScenarioView();
+    }
+  }
 }
 
 function handlePartyUpdate(payload) {
@@ -2753,7 +2757,14 @@ function handlePartyUpdate(payload) {
     }
   }
 
-  if (changed) renderScenarioView();
+  if (changed) {
+    // Don't re-render if a modal requiring user input is open — it would destroy their selection
+    if (document.getElementById('sv-long-rest-modal') || document.getElementById('sv-negate-modal')) {
+      sv._pendingRender = true;
+    } else {
+      renderScenarioView();
+    }
+  }
 }
 
 function startPolling() {
@@ -2871,8 +2882,11 @@ function closeScenarioView() {
   sv.joinOrder = null; // reset for next scenario
   sv.activePlayerId = null;
   if (sv.tipTimer) { clearInterval(sv.tipTimer); sv.tipTimer = null; }
-  if (sv._zoomKeydown) { document.removeEventListener('keydown', sv._zoomKeydown); sv._zoomKeydown = null; }
-  if (sv._zoomKeyup)   { document.removeEventListener('keyup',   sv._zoomKeyup);   sv._zoomKeyup = null; }
+  if (sv._zoomKeydown)    { document.removeEventListener('keydown',  sv._zoomKeydown);    sv._zoomKeydown = null; }
+  if (sv._zoomKeyup)      { document.removeEventListener('keyup',    sv._zoomKeyup);      sv._zoomKeyup = null; }
+  if (sv._zoomMouseenter) { document.removeEventListener('mouseover', sv._zoomMouseenter); sv._zoomMouseenter = null; }
+  if (sv._zoomMouseleave) { document.removeEventListener('mouseout',  sv._zoomMouseleave); sv._zoomMouseleave = null; }
+  clearTimeout(sv._zoomHoverTimer);
   const overlay = document.getElementById('scenario-view-overlay');
   if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
   // Restart campaign polling

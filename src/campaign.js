@@ -154,56 +154,10 @@ async function getCampaigns() {
   const { data, error } = await sb()
     .from('campaigns')
     .select(`*, players(*), characters(*), campaign_unlocked_classes(*)`)
-    .eq('is_archived', false)
     .order('is_active', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
-}
-
-async function getArchivedCampaigns() {
-  const { data, error } = await sb()
-    .from('campaigns')
-    .select(`*, players(*), characters(*), campaign_unlocked_classes(*)`)
-    .eq('is_archived', true)
-    .order('archived_at', { ascending: false });
-  if (error) throw error;
-  return data ?? [];
-}
-
-async function archiveCampaign(id) {
-  const { error } = await sb().from('campaigns')
-    .update({ is_archived: true, is_active: false, archived_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw error;
-}
-
-async function restoreCampaign(id) {
-  const { error } = await sb().from('campaigns')
-    .update({ is_archived: false, archived_at: null })
-    .eq('id', id);
-  if (error) throw error;
-}
-
-async function deleteCampaignWithCleanup(id) {
-  // Fetch all log entries to clean up uploaded files first
-  const { data: logs } = await sb()
-    .from('scenario_log')
-    .select('scenario_log_url, cp_log_url')
-    .eq('campaign_id', id);
-
-  if (logs?.length) {
-    const urls = logs.flatMap(l => [l.scenario_log_url, l.cp_log_url]).filter(Boolean);
-    await Promise.all(urls.map(async url => {
-      try {
-        const fileId = url.split('/api/logs/')[1];
-        if (fileId) await fetch(`/api/logs/${fileId}`, { method: 'DELETE' });
-      } catch (_) { /* best effort */ }
-    }));
-  }
-
-  const { error } = await sb().from('campaigns').delete().eq('id', id);
-  if (error) throw error;
 }
 
 async function setActiveCampaign(campaignId) {
@@ -258,28 +212,25 @@ function isCM(players) {
   return false;
 }
 
-// ── Scenario functions ────────────────────────────────────────────
-async function checkReplayScenario(campaignId, scenarioNumber) {
-  // Check if this scenario number has been played before in this campaign
-  const { data } = await sb()
-    .from('scenario_log')
-    .select('id, is_replay, replay_number')
-    .eq('campaign_id', campaignId)
-    .eq('scenario_number', scenarioNumber)
-    .order('created_at', { ascending: false });
-  return data ?? [];
+async function deleteCampaign(id) {
+  const { error } = await sb().from('campaigns').delete().eq('id', id);
+  if (error) throw error;
 }
 
-async function createScenario(campaignId, gmPlayerId, number, name, goal, isReplay = false, replayNumber = null) {
+// ── Scenario functions ────────────────────────────────────────────
+async function createScenario(campaignId, gmPlayerId, number, name, goal) {
   // Deactivate any previous active/paused scenario for this campaign
   await sb().from('scenarios')
     .update({ status: 'abandoned', updated_at: new Date().toISOString() })
     .eq('campaign_id', campaignId)
     .in('status', ['active', 'paused']);
-  // Set campaign phase to scenario — done after party members inserted
-  // (Phase update happens after scenario status set to active in wizard)
+  // Set campaign phase to scenario
+  const { error: phaseError } = await sb().from('campaigns')
+    .update({ phase: 'scenario' })
+    .eq('id', campaignId);
+  if (phaseError) console.error('Phase update error:', phaseError);
   const { data, error } = await sb().from('scenarios')
-    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'pending', scenario_step: 'beginning', round_number: 0, is_replay: isReplay, replay_number: replayNumber })
+    .insert({ campaign_id: campaignId, gm_player_id: gmPlayerId, scenario_number: number, scenario_name: name, scenario_goal: goal, status: 'active', scenario_step: 'beginning', round_number: 0 })
     .select().single();
   if (error) throw error;
   return data;
@@ -308,7 +259,7 @@ async function addScenarioPartyMember(scenarioId, characterId, playerId, battleG
 
 async function getActiveScenario(campaignId) {
   const { data, error } = await sb().from('scenarios')
-    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(id, player_name, player_email, user_id, role, battle_goals_completed, treasure_looted, xp_100_gained, gold_60_spent, is_founding_member))`)
+    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(*))`)
     .eq('campaign_id', campaignId)
     .in('status', ['active', 'paused'])
     .order('created_at', { ascending: false })
@@ -316,33 +267,6 @@ async function getActiveScenario(campaignId) {
     .maybeSingle();
   if (error) throw error;
   return data;
-}
-
-async function createScenarioLogEntry(campaignId, scenarioId, scenarioNumber, scenarioName,
-  isReplay, replayNumber, result, partyNames, forcedLink) {
-
-  // Determine CP number
-  let cpNumber = null;
-  const hasCityPhase = result !== 'completed_forced_link' && result !== 'lost_replay';
-  if (hasCityPhase) {
-    // Increment cp_count on campaign
-    const { data: camp } = await sb().from('campaigns').select('cp_count').eq('id', campaignId).single();
-    const newCpCount = (camp?.cp_count ?? 0) + 1;
-    await sb().from('campaigns').update({ cp_count: newCpCount }).eq('id', campaignId);
-    cpNumber = newCpCount;
-  }
-
-  await sb().from('scenario_log').insert({
-    campaign_id: campaignId,
-    scenario_id: scenarioId,
-    scenario_number: scenarioNumber,
-    scenario_name: scenarioName,
-    is_replay: isReplay,
-    replay_number: replayNumber ?? null,
-    result,
-    party_names: partyNames,
-    cp_number: cpNumber,
-  });
 }
 
 async function updateCampaignPhase(campaignId, phase, cityStep = 'downtime') {
@@ -649,9 +573,8 @@ async function loadCampaigns() {
       container.innerHTML = '<div class="campaigns-empty">No campaigns yet. Click + to create one!</div>';
       return;
     }
-    container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('') + renderArchivedSection();
+    container.innerHTML = campaigns.map(c => renderCampaignCard(c)).join('');
     bindCampaignListEvents(campaigns);
-    bindArchivedSectionEvents();
     // Update sidebar class grouping from active campaign
     const activeCampaign = campaigns.find(c => c.is_active) ?? campaigns[0] ?? null;
     if (window.updateSidebarFromCampaign) {
@@ -702,7 +625,7 @@ function renderCampaignCard(campaign) {
         </div>
         <div class="campaign-player-class">${char.character_name ? `${char.character_name} · ` : ''}${cls.name}</div>
       </div>
-      ${isMe ? `<button class="campaign-deck-btn" data-char-id="${char.id}" data-player-id="${myPlayer.id}" data-campaign-id="${campaign.id}" data-campaign-phase="${campaign.phase ?? 'city'}">🃏 Deck</button>` : ''}
+      ${isMe ? `<button class="campaign-deck-btn" data-char-id="${char.id}" data-player-id="${myPlayer.id}">🃏 Deck</button>` : ''}
     </div>`;
   }
 
@@ -807,7 +730,7 @@ function renderCampaignCard(campaign) {
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           ${amCM ? `<button class="campaign-plus-btn campaign-add-player-btn" data-campaign-id="${campaign.id}" title="Add Player">＋</button>` : ''}
-          ${amCM ? `<button class="campaign-archive-btn" data-id="${campaign.id}" title="Archive campaign">📦</button>` : ''}
+          ${amCM ? `<button class="campaign-delete-btn" data-id="${campaign.id}" title="Delete campaign">🗑</button>` : ''}
         </div>
       </div>
       ${!isActive && amCM ? `<div class="campaign-set-active-bar"><button class="campaign-set-active-btn" data-campaign-id="${campaign.id}">⭐ Set as Active Campaign</button></div>` : ''}
@@ -830,7 +753,13 @@ function renderCampaignCard(campaign) {
         <div class="campaign-phase-bar campaign-phase-${campaign.phase ?? 'city'}">
           ${campaign.phase === 'scenario'
             ? `⚔️ <strong>Scenario Phase</strong> — <button class="campaign-resume-scenario-btn" data-campaign-id="${campaign.id}">Resume Active Scenario</button>`
-            : `🏛️ <strong>City Phase</strong> — ${campaign.city_step === 'city_event' ? 'City Event' : 'Downtime'}`
+            : `🏛️ <strong>City Phase</strong> — ${campaign.city_step === 'city_event'
+                ? `<label class="city-event-check-label">
+                    <input type="checkbox" class="city-event-checkbox" data-campaign-id="${campaign.id}">
+                    City Event
+                   </label>`
+                : 'Downtime'
+              }`
           }
         </div>` : ''}
       ${amCM ? `<div class="campaign-card-footer">
@@ -840,95 +769,6 @@ function renderCampaignCard(campaign) {
     </div>`;
 }
 
-
-// ── ARCHIVED CAMPAIGNS ───────────────────────────────────────
-function renderArchivedSection() {
-  return `
-    <div class="campaign-archive-section" id="campaign-archive-section">
-      <button class="campaign-archive-toggle" id="campaign-archive-toggle">
-        <span id="campaign-archive-toggle-icon">▶</span> Archived Campaigns
-      </button>
-      <div class="campaign-archive-list" id="campaign-archive-list" style="display:none">
-        <div class="campaigns-loading" id="campaign-archive-loading">Loading…</div>
-      </div>
-    </div>`;
-}
-
-async function loadArchivedCampaigns() {
-  const list = document.getElementById('campaign-archive-list');
-  if (!list) return;
-  list.innerHTML = '<div class="campaigns-loading">Loading…</div>';
-  try {
-    const campaigns = await getArchivedCampaigns();
-    if (!campaigns.length) {
-      list.innerHTML = '<div class="campaigns-empty" style="padding:12px 16px;font-size:13px">No archived campaigns.</div>';
-      return;
-    }
-    list.innerHTML = campaigns.map(c => {
-      const myPlayer = getEffectivePlayer(c.players ?? []);
-      const amCM = isCM(c.players ?? []);
-      const archivedDate = c.archived_at ? new Date(c.archived_at).toLocaleDateString() : '—';
-      return `
-        <div class="campaign-archive-card" data-id="${c.id}">
-          <div class="campaign-archive-card-info">
-            <div class="campaign-archive-card-name">${c.party_name ? `${c.party_name} — ${c.name}` : c.name}</div>
-            <div class="campaign-archive-card-date">Archived ${archivedDate}</div>
-          </div>
-          ${amCM ? `<div class="campaign-archive-card-actions">
-            <button class="campaign-restore-btn wizard-btn" data-id="${c.id}">↩ Restore</button>
-            <button class="campaign-delete-btn wizard-btn wizard-btn-danger" data-id="${c.id}">🗑 Delete</button>
-          </div>` : ''}
-        </div>`;
-    }).join('');
-    bindArchivedCardEvents();
-  } catch (err) {
-    list.innerHTML = `<div class="campaigns-error">Error: ${err.message}</div>`;
-  }
-}
-
-function bindArchivedSectionEvents() {
-  const toggle = document.getElementById('campaign-archive-toggle');
-  const list = document.getElementById('campaign-archive-list');
-  const icon = document.getElementById('campaign-archive-toggle-icon');
-  if (!toggle || !list) return;
-
-  toggle.addEventListener('click', async () => {
-    const isOpen = list.style.display !== 'none';
-    if (isOpen) {
-      list.style.display = 'none';
-      icon.textContent = '▶';
-    } else {
-      list.style.display = 'block';
-      icon.textContent = '▼';
-      await loadArchivedCampaigns();
-    }
-  });
-}
-
-function bindArchivedCardEvents() {
-  document.querySelectorAll('.campaign-restore-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      try {
-        await restoreCampaign(btn.dataset.id);
-        showToast('Campaign restored.');
-        loadCampaigns();
-      } catch (err) { showToast('Error: ' + err.message, true); }
-    });
-  });
-
-  document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      if (!confirm('Permanently delete this campaign and all its data? This cannot be undone.')) return;
-      try {
-        await deleteCampaignWithCleanup(btn.dataset.id);
-        showToast('Campaign deleted.');
-        await loadArchivedCampaigns();
-      } catch (err) { showToast('Error: ' + err.message, true); }
-    });
-  });
-}
 
 // ── PARTY PROGRESS ───────────────────────────────────────────
 function computeGoals(campaign, players) {
@@ -1142,16 +982,12 @@ function bindCampaignListEvents(campaigns) {
       e.stopPropagation();
       const charId = btn.dataset.charId;
       const playerId = btn.dataset.playerId;
-      const campaignId = btn.dataset.campaignId;
-      // Load full character + player objects AND fresh campaign phase
-      const [{ data: char }, { data: player }, { data: freshCampaign }] = await Promise.all([
-        sb().from('characters').select('*').eq('id', charId).single(),
-        sb().from('players').select('*').eq('id', playerId).single(),
-        sb().from('campaigns').select('phase').eq('id', campaignId).single(),
-      ]);
+      // Load full character + player objects
+      const { data: char } = await sb().from('characters').select('*').eq('id', charId).single();
+      const { data: player } = await sb().from('players').select('*').eq('id', playerId).single();
       if (char && player) {
         closeCampaignPanel();
-        openDeckBuilder(char, player, freshCampaign?.phase ?? 'city');
+        openDeckBuilder(char, player);
       }
     });
   });
@@ -1245,6 +1081,17 @@ function bindCampaignListEvents(campaigns) {
   });
 
   // ── Start Scenario button ────────────────────────────────────────
+  // ── City Event checkbox ─────────────────────────────────────────
+  document.querySelectorAll('.city-event-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', async () => {
+      try {
+        await updateCampaignPhase(checkbox.dataset.campaignId, 'city', 'downtime');
+        showToast('✅ City Event done — now in Downtime.');
+        loadCampaigns();
+      } catch (err) { showToast('Error: ' + err.message, true); }
+    });
+  });
+
   document.querySelectorAll('.campaign-start-scenario-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const campaign = campaigns.find(c => c.id === btn.dataset.campaignId);
@@ -1269,12 +1116,12 @@ function bindCampaignListEvents(campaigns) {
     });
   });
 
-  // Archive campaign
-  document.querySelectorAll('.campaign-archive-btn').forEach(btn => {
+  // Delete campaign
+  document.querySelectorAll('.campaign-delete-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm('Archive this campaign? It can be restored later from the Archived Campaigns section.')) return;
-      try { await archiveCampaign(btn.dataset.id); loadCampaigns(); showToast('Campaign archived.'); }
+      if (!confirm('Delete this campaign? This cannot be undone.')) return;
+      try { await deleteCampaign(btn.dataset.id); loadCampaigns(); showToast('Campaign deleted.'); }
       catch (err) { showToast('Error: ' + err.message, true); }
     });
   });
@@ -1394,15 +1241,6 @@ function showToast(msg, isError = false) {
   setTimeout(() => toast.classList.remove('cs-toast-show'), 3500);
 }
 
-// Broadcast a toast to all connected players via scenarios table
-window.broadcastScenarioToast = function(scenarioId, msg) {
-  if (!scenarioId) return;
-  sb().from('scenarios')
-    .update({ toast_message: msg, toast_at: new Date().toISOString() })
-    .eq('id', scenarioId)
-    .then(() => {});
-};
-
 // ── Scenario Wizard ──────────────────────────────────────────────
 let scenarioWizardState = { campaignId: null };
 
@@ -1471,44 +1309,22 @@ function openScenarioWizard(campaign) {
     const name = document.getElementById('scenario-name').value.trim();
     const goal = document.getElementById('scenario-goal').value.trim();
     const myPlayer = getEffectivePlayer(campaign.players ?? []) ?? (campaign.players ?? [])[0] ?? null;
-
-    // Check for replay
-    let isReplay = false;
-    let replayNumber = null;
-    const previousRuns = await checkReplayScenario(campaign.id, number);
-    if (previousRuns.length > 0) {
-      const confirmed = confirm(`Scenario ${number} has been played before. Is this a replay?`);
-      if (!confirmed) return; // Cancel scenario creation
-      isReplay = true;
-      // Count how many replays have already happened
-      const replayCount = previousRuns.filter(r => r.is_replay).length;
-      replayNumber = replayCount + 2; // First replay = 2, second = 3, etc.
-    }
-
     confirmBtn.disabled = true;
     confirmBtn.textContent = 'Starting...';
     try {
-      const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal, isReplay, replayNumber);
+      const scenario = await createScenario(campaign.id, myPlayer?.id, number, name, goal);
       const checked = [...document.querySelectorAll('.scenario-party-check:checked')];
-      // Insert all party members first before activating
-      await Promise.all(checked.map(cb => {
+      for (const cb of checked) {
         const bgInput = document.querySelector(`.scenario-bg-input[data-char-id="${cb.dataset.charId}"]`);
         const bgKey = typeof resolveBattleGoalKey !== 'undefined'
           ? resolveBattleGoalKey(bgInput?.value.trim())
           : (bgInput?.value.trim() || null);
-        return addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgKey);
-      }));
-      // Only NOW activate the scenario — Realtime fires to other browsers with all party ready
-      await Promise.all([
-        sb().from('scenarios').update({ status: 'active' }).eq('id', scenario.id),
-        sb().from('campaigns').update({ phase: 'scenario' }).eq('id', campaign.id),
-      ]);
+        await addScenarioPartyMember(scenario.id, cb.dataset.charId, cb.dataset.playerId, bgKey);
+      }
       overlay.style.display = 'none';
       await loadCampaigns();
       const fullScenario = await getActiveScenario(campaign.id);
-      if (fullScenario) {
-        await openScenarioView(fullScenario, campaign);
-      }
+      if (fullScenario) await openScenarioView(fullScenario, campaign);
     } catch (err) {
       console.error('Scenario creation error:', err);
       showToast('Error: ' + err.message, true);
@@ -1523,6 +1339,7 @@ function openScenarioWizard(campaign) {
 // openScenarioView is defined in scenario.js
 
 // ── Campaign Realtime — detect new scenarios for all players ─────
+let campaignPollTimer = null; // kept for stopPolling reference in scenario.js
 let campaignRealtimeChannel = null;
 let lastKnownScenarioId = null;
 
@@ -1574,151 +1391,10 @@ function startCampaignPolling() {
     .subscribe();
 }
 
-// ── Adventure Log ─────────────────────────────────────────────
-async function openAdventureLog() {
-  const overlay = document.getElementById('adventure-log-overlay');
-  if (!overlay) return;
-  overlay.classList.add('db-open');
-  renderAdventureLog();
-}
-
-function closeAdventureLog() {
-  document.getElementById('adventure-log-overlay')?.classList.remove('db-open');
-}
-
-async function renderAdventureLog() {
-  const body = document.getElementById('adventure-log-body');
-  if (!body) return;
-  body.innerHTML = '<div class="campaigns-loading">Loading...</div>';
-
-  try {
-    // Find active campaign
-    const { data: camps } = await sb().from('campaigns')
-      .select('id, name, is_active').eq('is_active', true).limit(1);
-    const campaign = camps?.[0];
-    if (!campaign) {
-      body.innerHTML = '<div class="campaigns-empty">No active campaign found.</div>';
-      return;
-    }
-
-    const { data: logs } = await sb()
-      .from('scenario_log')
-      .select('*')
-      .eq('campaign_id', campaign.id)
-      .order('created_at', { ascending: true });
-
-    if (!logs?.length) {
-      body.innerHTML = '<div class="campaigns-empty">No scenarios logged yet for this campaign.</div>';
-      return;
-    }
-
-    const resultLabel = {
-      'completed': '✅ Completed',
-      'completed_forced_link': '✅ Completed (Forced Link)',
-      'lost_return': '❌ Lost — Return to Gloomhaven',
-      'lost_replay': '❌ Lost — Replay',
-    };
-
-    const rows = logs.map(log => {
-      // Scenario label
-      let scenarioLabel = `Scenario ${log.scenario_number}: ${log.scenario_name}`;
-      if (log.is_replay && log.replay_number) scenarioLabel += ` (Replay ${log.replay_number})`;
-      const scenarioCell = log.scenario_log_url
-        ? `<a href="${log.scenario_log_url}" target="_blank" class="adv-log-link">${scenarioLabel}</a>`
-        : `<span>${scenarioLabel}</span>`;
-
-      // Party
-      const partyCell = (log.party_names ?? []).join(', ') || '—';
-
-      // Result
-      const resultCell = resultLabel[log.result] ?? log.result;
-
-      // City Phase
-      const cpLabel = log.cp_number ? `CP-${String(log.cp_number).padStart(2,'0')}` : '—';
-      const cpCell = log.cp_log_url
-        ? `<a href="${log.cp_log_url}" target="_blank" class="adv-log-link">${cpLabel}</a>`
-        : `<span>${cpLabel}</span>`;
-
-      // GM upload buttons (current player = GM check)
-      const isGM = !!currentPlayer || IS_DEV;
-      const uploadScenBtn = isGM ? `<button class="adv-log-upload-btn" data-log-id="${log.id}" data-type="scenario">📎</button>` : '';
-      const uploadCpBtn = isGM && log.cp_number ? `<button class="adv-log-upload-btn" data-log-id="${log.id}" data-type="cp">📎</button>` : '';
-
-      return `<tr class="adv-log-row">
-        <td class="adv-log-cell adv-log-scenario">${scenarioCell} ${uploadScenBtn}</td>
-        <td class="adv-log-cell">${partyCell}</td>
-        <td class="adv-log-cell">${resultCell}</td>
-        <td class="adv-log-cell adv-log-cp">${cpCell} ${uploadCpBtn}</td>
-      </tr>`;
-    }).join('');
-
-    body.innerHTML = `
-      <h3 class="adv-log-campaign-name">${campaign.name}</h3>
-      <div class="adv-log-table-wrap">
-        <table class="adv-log-table">
-          <thead>
-            <tr>
-              <th class="adv-log-th">Scenario Phase</th>
-              <th class="adv-log-th">Party</th>
-              <th class="adv-log-th">Result</th>
-              <th class="adv-log-th">City Phase</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <input type="file" id="adv-log-file-input" accept=".html" style="display:none">`;
-
-    // Bind upload buttons
-    let uploadTarget = null;
-    const fileInput = document.getElementById('adv-log-file-input');
-
-    document.querySelectorAll('.adv-log-upload-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        uploadTarget = { logId: btn.dataset.logId, type: btn.dataset.type };
-        fileInput.click();
-      });
-    });
-
-    fileInput?.addEventListener('change', async () => {
-      const file = fileInput.files?.[0];
-      if (!file || !uploadTarget) return;
-      if (file.size > 2 * 1024 * 1024) {
-        showToast('File too large — max 2MB', true);
-        return;
-      }
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('logId', uploadTarget.logId);
-        formData.append('type', uploadTarget.type);
-
-        const res = await fetch('/api/upload-log', { method: 'POST', body: formData });
-        if (!res.ok) throw new Error(await res.text());
-        const { url } = await res.json();
-
-        const field = uploadTarget.type === 'scenario' ? 'scenario_log_url' : 'cp_log_url';
-        await sb().from('scenario_log').update({ [field]: url }).eq('id', uploadTarget.logId);
-        showToast('✅ File uploaded successfully');
-        renderAdventureLog();
-      } catch (err) {
-        showToast('Upload failed: ' + err.message, true);
-      }
-      fileInput.value = '';
-      uploadTarget = null;
-    });
-
-  } catch (err) {
-    body.innerHTML = `<div class="campaigns-empty">Error loading log: ${err.message}</div>`;
-  }
-}
-
 // ── INIT ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   document.getElementById('open-campaigns-btn')?.addEventListener('click', openCampaignPanel);
-  document.getElementById('open-log-btn')?.addEventListener('click', openAdventureLog);
-  document.getElementById('close-log-btn')?.addEventListener('click', closeAdventureLog);
   document.getElementById('close-campaigns-btn')?.addEventListener('click', closeCampaignPanel);
   document.getElementById('campaign-backdrop')?.addEventListener('click', closeCampaignPanel);
   document.getElementById('new-campaign-btn')?.addEventListener('click', openCampaignWizard);

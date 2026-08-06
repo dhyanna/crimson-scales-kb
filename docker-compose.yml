@@ -26,8 +26,6 @@ services:
     build: .
     ports:
       - "8080:80"
-    volumes:
-      - ./data/logs:/data/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost/"]
@@ -43,7 +41,6 @@ services:
       - "8080:80"
     volumes:
       - ./src:/usr/share/nginx/html
-      - ./data/logs:/data/logs
     profiles: [dev]
 
   # ── Production: pull from ghcr.io, port 8081 ─────────────────────────────
@@ -52,8 +49,6 @@ services:
     image: ghcr.io/${GITHUB_REPO:-your-github-username/crimson-scales-kb}:latest
     ports:
       - "8081:80"
-    volumes:
-      - ./data/logs:/data/logs
     restart: unless-stopped
     profiles: [prod]
     healthcheck:
