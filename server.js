@@ -22,10 +22,11 @@ fs.mkdirSync(LOG_DIR, { recursive: true });
 // ── Multer storage ────────────────────────────────────────────────────────────
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, LOG_DIR),
-  filename: (_req, _file, cb) => {
+  filename: (_req, file, cb) => {
     // Store as UUID so URLs don't expose internal structure
     const id = crypto.randomUUID();
-    cb(null, `${id}.html`);
+    const ext = path.extname(file.originalname).toLowerCase() || '.html';
+    cb(null, `${id}${ext}`);
   },
 });
 
@@ -33,10 +34,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'text/html' || path.extname(file.originalname).toLowerCase() === '.html') {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const isPdf = file.mimetype === 'application/pdf' || ext === '.pdf';
+    const isHtml = file.mimetype === 'text/html' || ext === '.html';
+    if (isPdf || isHtml) {
       cb(null, true);
     } else {
-      cb(new Error('Only .html files are accepted'));
+      cb(new Error('Only .html or .pdf files are accepted'));
     }
   },
 });
@@ -116,11 +120,12 @@ app.post('/api/upload-log', upload.single('file'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  const id = path.basename(req.file.filename, '.html');
+  const id = path.basename(req.file.filename, path.extname(req.file.filename));
   const label = req.body.label || '';
 
   // Store metadata alongside the file
-  const meta = { id, label, uploadedAt: new Date().toISOString() };
+  const ext = path.extname(req.file.originalname).toLowerCase() || '.html';
+  const meta = { id, label, ext, uploadedAt: new Date().toISOString() };
   fs.writeFileSync(path.join(LOG_DIR, `${id}.json`), JSON.stringify(meta));
 
   return res.json({ id, url: `/api/logs/${id}` });
@@ -129,13 +134,22 @@ app.post('/api/upload-log', upload.single('file'), (req, res) => {
 // Serve a log file with dark theme injected
 app.get('/api/logs/:id', (req, res) => {
   const id = req.params.id.replace(/[^a-f0-9-]/gi, ''); // sanitize
-  const filePath = path.join(LOG_DIR, `${id}.html`);
+  const pdfPath = path.join(LOG_DIR, `${id}.pdf`);
+  const htmlPath = path.join(LOG_DIR, `${id}.html`);
+  const actualPath = fs.existsSync(pdfPath) ? pdfPath : fs.existsSync(htmlPath) ? htmlPath : null;
 
-  if (!fs.existsSync(filePath)) {
+  if (!actualPath) {
     return res.status(404).send('Log not found');
   }
 
-  let html = fs.readFileSync(filePath, 'utf8');
+  // Serve PDF directly
+  if (actualPath.endsWith('.pdf')) {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${id}.pdf"`);
+    return res.send(fs.readFileSync(actualPath));
+  }
+
+  let html = fs.readFileSync(actualPath, 'utf8');
 
   // Read label from metadata if available
   let label = id;
@@ -167,10 +181,12 @@ app.get('/api/logs/:id', (req, res) => {
 // Delete a log
 app.delete('/api/logs/:id', (req, res) => {
   const id = req.params.id.replace(/[^a-f0-9-]/gi, '');
-  const filePath = path.join(LOG_DIR, `${id}.html`);
+  const htmlPath2 = path.join(LOG_DIR, `${id}.html`);
+  const pdfPath2 = path.join(LOG_DIR, `${id}.pdf`);
   const metaPath = path.join(LOG_DIR, `${id}.json`);
+  const filePath = fs.existsSync(pdfPath2) ? pdfPath2 : fs.existsSync(htmlPath2) ? htmlPath2 : null;
 
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found' });
+  if (!filePath) return res.status(404).json({ error: 'Not found' });
 
   fs.unlinkSync(filePath);
   if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath);

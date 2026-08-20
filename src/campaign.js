@@ -1684,7 +1684,7 @@ async function renderAdventureLog() {
           <tbody>${rows}</tbody>
         </table>
       </div>
-      <input type="file" id="adv-log-file-input" accept=".html" style="display:none">`;
+      <input type="file" id="adv-log-file-input" accept=".html,.pdf" style="display:none">`;
 
     // Bind upload buttons
     let uploadTarget = null;
