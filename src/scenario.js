@@ -1073,7 +1073,7 @@ function openNegateDiscardModal(charId, classId) {
 }
 
 // ── Long Rest Modal ──────────────────────────────────────────────
-function openLongRestModal(charId, classId) {
+function openLongRestModal(charId, classId, playerId) {
   const ps = sv.playState[charId];
   if (!ps) return;
 
@@ -1137,6 +1137,12 @@ function openLongRestModal(charId, classId) {
     ps.restPhase = 'done';
     modal.remove();
     await savePlayStateForChar(charId);
+    // NOW mark the turn as ended — only after the lost-card selection is complete,
+    // so the round cannot end while this player is still mid-selection
+    if (playerId) {
+      sv.readyPlayers[playerId] = false;
+      await saveReadyState(playerId, false);
+    }
     showToast('🌙 Long Rest complete — discard returned to hand.');
     // Flush any renders that were deferred while this modal was open
     sv._pendingRender = false;
@@ -1715,21 +1721,22 @@ function bindScenarioViewEvents() {
               return;
             }
           }
-          sv.readyPlayers[playerId] = false;
-          await saveReadyState(playerId, false);
           const memberForPlayer = (sv.scenario.scenario_party ?? []).find(m => m.player_id === playerId);
           if (memberForPlayer) {
             const charId = memberForPlayer.character_id;
             const ps = sv.playState[charId];
-            // If player declared Long Rest during card selection, execute it now
+            // If player declared Long Rest during card selection, open modal FIRST.
+            // Don't mark ready=false (turn ended) until the lost-card selection completes —
+            // otherwise the round could end while this player is still mid-selection.
             if (ps?.isLongResting) {
-              await savePlayStateForChar(charId);
               renderScenarioView();
-              openLongRestModal(charId, memberForPlayer.characters?.class_id ?? '');
+              openLongRestModal(charId, memberForPlayer.characters?.class_id ?? '', playerId);
               return;
             }
             await savePlayStateForChar(charId);
           }
+          sv.readyPlayers[playerId] = false;
+          await saveReadyState(playerId, false);
           showToast('Turn ended.');
           renderScenarioView();
         }
