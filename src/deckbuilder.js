@@ -428,7 +428,7 @@ function renderCardTabs(milestoneCard) {
   const hasMilestone = !db.state.milestone_earned && milestoneCard;
   const hasPq = !!db.character.pq_card_id;
   const hasGoals = !!db.player?.is_founding_member &&
-    (!db.player.xp_100_gained || !db.player.gold_60_spent);
+    ((db.player.xp_total ?? 0) < 100 || (db.player.gold_spent ?? 0) < 60);
 
   const tabs = [];
   if (hasMilestone) tabs.push({ id: 'milestone', label: '🏆 Milestone' });

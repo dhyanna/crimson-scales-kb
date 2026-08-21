@@ -308,7 +308,7 @@ async function addScenarioPartyMember(scenarioId, characterId, playerId, battleG
 
 async function getActiveScenario(campaignId) {
   const { data, error } = await sb().from('scenarios')
-    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(id, player_name, player_email, user_id, role, battle_goals_completed, treasure_looted, xp_100_gained, gold_60_spent, is_founding_member))`)
+    .select(`*, scenario_party(*, characters(*), player:players!scenario_party_player_id_fkey(id, player_name, player_email, user_id, role, battle_goals_completed, treasure_looted, xp_total, gold_spent, is_founding_member))`)
     .eq('campaign_id', campaignId)
     .in('status', ['active', 'paused'])
     .order('created_at', { ascending: false })
@@ -947,8 +947,8 @@ function computeGoals(campaign, players) {
   return {
     founders,
     goal1: allBattleGoals,          // 5 battle goals each
-    goal2: allDone('xp_100_gained'), // 100 XP each
-    goal3: allDone('gold_60_spent'), // 60 gold each
+    goal2: founders.every(p => (p.xp_total ?? 0) >= 100), // 100 XP each
+    goal3: founders.every(p => (p.gold_spent ?? 0) >= 60), // 60 gold each
     goal4: allDone('treasure_looted'),// 1 treasure tile each
     goal5: !!campaign.party_goal_side_scenario, // side scenario
   };
@@ -1004,12 +1004,12 @@ function renderPartyProgress(campaign, players, myPlayer) {
       {
         label: 'Gain 100 experience each',
         done: goal2,
-        players: founders.map(p => ({ name: p.player_name, done: !!p.xp_100_gained, key: 'xp_100_gained', playerId: p.id })),
+        players: founders.map(p => ({ name: p.player_name, done: (p.xp_total ?? 0) >= 100, key: 'xp_total', playerId: p.id })),
       },
       {
         label: 'Spend 60 gold at the Item Shop each',
         done: goal3,
-        players: founders.map(p => ({ name: p.player_name, done: !!p.gold_60_spent, key: 'gold_60_spent', playerId: p.id })),
+        players: founders.map(p => ({ name: p.player_name, done: (p.gold_spent ?? 0) >= 60, key: 'gold_spent', playerId: p.id })),
       },
       {
         label: 'Loot 1 treasure tile in a scenario each',
