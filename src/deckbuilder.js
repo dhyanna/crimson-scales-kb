@@ -478,22 +478,34 @@ function renderGoalsSection() {
 }
 
 function renderGoalsInner() {
-  const xpDone   = !!db.player?.xp_100_gained;
-  const goldDone = !!db.player?.gold_60_spent;
-  if (xpDone && goldDone) return '<div style="padding:16px;font-size:13px;color:var(--color-text-secondary,#888)">All personal goals complete!</div>';
-  return `
-    <div class="db-party-goals-list">
-      ${!xpDone ? `
-        <label class="db-party-goal-row">
-          <input type="checkbox" id="db-goal-xp" class="db-goal-checkbox">
-          <span>Gained 100 XP total</span>
-        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Gained 100 XP total</div>'}
-      ${!goldDone ? `
-        <label class="db-party-goal-row">
-          <input type="checkbox" id="db-goal-gold" class="db-goal-checkbox">
-          <span>Spent 60 gold at the Item Shop</span>
-        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Spent 60 gold at Item Shop</div>'}
+  const XP_TARGET = 100;
+  const GOLD_TARGET = 60;
+  const xpValue   = db.player?.xp_total ?? 0;
+  const goldValue = db.player?.gold_spent ?? 0;
+  const xpDone   = xpValue >= XP_TARGET;
+  const goldDone = goldValue >= GOLD_TARGET;
+
+  const xpRow = `
+    <div class="db-party-goal-slider-row${xpDone ? ' db-goal-complete' : ''}">
+      <div class="db-goal-slider-label">
+        <span>${xpDone ? '✓ ' : ''}Gained XP total</span>
+        <span class="db-goal-slider-value">${Math.min(xpValue, XP_TARGET)} / ${XP_TARGET}</span>
+      </div>
+      <input type="range" id="db-goal-xp-slider" class="db-goal-slider"
+        min="0" max="${XP_TARGET}" step="5" value="${Math.min(xpValue, XP_TARGET)}">
     </div>`;
+
+  const goldRow = `
+    <div class="db-party-goal-slider-row${goldDone ? ' db-goal-complete' : ''}">
+      <div class="db-goal-slider-label">
+        <span>${goldDone ? '✓ ' : ''}Spent gold at the Item Shop</span>
+        <span class="db-goal-slider-value">${Math.min(goldValue, GOLD_TARGET)} / ${GOLD_TARGET}</span>
+      </div>
+      <input type="range" id="db-goal-gold-slider" class="db-goal-slider"
+        min="0" max="${GOLD_TARGET}" step="5" value="${Math.min(goldValue, GOLD_TARGET)}">
+    </div>`;
+
+  return `<div class="db-party-goals-list">${xpRow}${goldRow}</div>`;
 }
 
 function renderMilestoneInner(card) {
@@ -788,23 +800,35 @@ function bindDeckBuilderEvents() {
     });
   });
 
-  // Party goal checkboxes (XP and gold)
-  document.getElementById('db-goal-xp')?.addEventListener('change', async e => {
-    if (!e.target.checked) return;
-    if (!confirm('Mark 100 XP gained? This cannot be undone.')) { e.target.checked = false; return; }
-    await sb().from('players').update({ xp_100_gained: true }).eq('id', db.player.id);
-    db.player.xp_100_gained = true;
-    renderDeckBuilder();
-    showToast('100 XP goal marked complete!');
-  });
-  document.getElementById('db-goal-gold')?.addEventListener('change', async e => {
-    if (!e.target.checked) return;
-    if (!confirm('Mark 60 gold spent? This cannot be undone.')) { e.target.checked = false; return; }
-    await sb().from('players').update({ gold_60_spent: true }).eq('id', db.player.id);
-    db.player.gold_60_spent = true;
-    renderDeckBuilder();
-    showToast('60 gold goal marked complete!');
-  });
+  // Party goal sliders (XP and gold) — live label update + debounced save
+  const xpSlider = document.getElementById('db-goal-xp-slider');
+  if (xpSlider) {
+    const label = xpSlider.closest('.db-party-goal-slider-row')?.querySelector('.db-goal-slider-value');
+    xpSlider.addEventListener('input', () => {
+      if (label) label.textContent = `${xpSlider.value} / 100`;
+      clearTimeout(db._xpGoalSaveTimer);
+      db._xpGoalSaveTimer = setTimeout(async () => {
+        const value = parseInt(xpSlider.value, 10);
+        db.player.xp_total = value;
+        await sb().from('players').update({ xp_total: value }).eq('id', db.player.id);
+        renderDeckBuilder();
+      }, 600);
+    });
+  }
+  const goldSlider = document.getElementById('db-goal-gold-slider');
+  if (goldSlider) {
+    const label = goldSlider.closest('.db-party-goal-slider-row')?.querySelector('.db-goal-slider-value');
+    goldSlider.addEventListener('input', () => {
+      if (label) label.textContent = `${goldSlider.value} / 60`;
+      clearTimeout(db._goldGoalSaveTimer);
+      db._goldGoalSaveTimer = setTimeout(async () => {
+        const value = parseInt(goldSlider.value, 10);
+        db.player.gold_spent = value;
+        await sb().from('players').update({ gold_spent: value }).eq('id', db.player.id);
+        renderDeckBuilder();
+      }, 600);
+    });
+  }
 
   // Build toggles
   document.querySelectorAll('.db-build-toggle').forEach(btn => {
