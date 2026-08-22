@@ -2888,6 +2888,8 @@ function initSpacebarZoom(overlayEl) {
   sv._zoomMouseenter = e => {
     const img = e.target.closest('.sv-zoomable');
     if (!img) return;
+    clearTimeout(sv._zoomLeaveTimer); // cancel any pending "leave" from a boundary flicker
+    if (sv._hoveredCardImg === img.src) return; // already hovering/timing this exact image
     sv._hoveredCardImg = img.src;
     clearTimeout(sv._zoomHoverTimer);
     sv._zoomHoverTimer = setTimeout(() => {
@@ -2896,13 +2898,20 @@ function initSpacebarZoom(overlayEl) {
       if (zi && sv._hoveredCardImg) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
     }, 600);
   };
+  sv._zoomLeaveTimer = null;
   sv._zoomMouseleave = e => {
     const img = e.target.closest('.sv-zoomable');
     if (!img) return;
-    sv._hoveredCardImg = null;
+    // mouseout fires on every internal boundary crossing (e.g. img <-> its wrapping
+    // container), not just on truly leaving the card. Debounce the "leave" briefly —
+    // if a mouseover on the same image fires again within this window, cancel the leave.
     clearTimeout(sv._zoomHoverTimer);
-    const zo = document.getElementById('sv-zoom-overlay');
-    if (zo) zo.style.display = 'none';
+    clearTimeout(sv._zoomLeaveTimer);
+    sv._zoomLeaveTimer = setTimeout(() => {
+      sv._hoveredCardImg = null;
+      const zo = document.getElementById('sv-zoom-overlay');
+      if (zo) zo.style.display = 'none';
+    }, 80);
   };
   document.addEventListener('mouseover', sv._zoomMouseenter);
   document.addEventListener('mouseout', sv._zoomMouseleave);
@@ -2918,6 +2927,7 @@ function closeScenarioView() {
   if (sv._zoomMouseenter) { document.removeEventListener('mouseover', sv._zoomMouseenter); sv._zoomMouseenter = null; }
   if (sv._zoomMouseleave) { document.removeEventListener('mouseout',  sv._zoomMouseleave); sv._zoomMouseleave = null; }
   clearTimeout(sv._zoomHoverTimer);
+  clearTimeout(sv._zoomLeaveTimer);
   const overlay = document.getElementById('scenario-view-overlay');
   if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
   // Restart campaign polling
