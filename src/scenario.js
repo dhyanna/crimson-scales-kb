@@ -2882,6 +2882,30 @@ function initSpacebarZoom(overlayEl) {
   };
   document.addEventListener('keydown', sv._zoomKeydown);
   document.addEventListener('keyup', sv._zoomKeyup);
+
+  // Hover zoom — event delegation so it works everywhere including modals, no rebinding needed
+  sv._zoomHoverTimer = null;
+  sv._zoomMouseenter = e => {
+    const img = e.target.closest('.sv-zoomable');
+    if (!img) return;
+    sv._hoveredCardImg = img.src;
+    clearTimeout(sv._zoomHoverTimer);
+    sv._zoomHoverTimer = setTimeout(() => {
+      const zo = document.getElementById('sv-zoom-overlay');
+      const zi = zo?.querySelector('img');
+      if (zi && sv._hoveredCardImg) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
+    }, 600);
+  };
+  sv._zoomMouseleave = e => {
+    const img = e.target.closest('.sv-zoomable');
+    if (!img) return;
+    sv._hoveredCardImg = null;
+    clearTimeout(sv._zoomHoverTimer);
+    const zo = document.getElementById('sv-zoom-overlay');
+    if (zo) zo.style.display = 'none';
+  };
+  document.addEventListener('mouseover', sv._zoomMouseenter);
+  document.addEventListener('mouseout', sv._zoomMouseleave);
 }
 
 function closeScenarioView() {
