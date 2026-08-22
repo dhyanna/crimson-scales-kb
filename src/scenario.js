@@ -2854,7 +2854,7 @@ function initSpacebarZoom(overlayEl) {
 
   const zoomOverlay = document.createElement('div');
   zoomOverlay.id = 'sv-zoom-overlay';
-  zoomOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;';
+  zoomOverlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;pointer-events:none;';
   const zoomImg = document.createElement('img');
   zoomImg.style.cssText = 'max-height:90vh;max-width:90vw;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.8);';
   zoomOverlay.appendChild(zoomImg);
@@ -2864,10 +2864,12 @@ function initSpacebarZoom(overlayEl) {
   });
 
   // Use named handlers so they can be removed on close
+  sv._spaceHeld = false;
   sv._zoomKeydown = e => {
     if (e.code === 'Space' && sv._hoveredCardImg) {
       e.preventDefault();
       e.stopPropagation();
+      sv._spaceHeld = true;
       const zo = document.getElementById('sv-zoom-overlay');
       const zi = zo?.querySelector('img');
       if (zi) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
@@ -2876,6 +2878,7 @@ function initSpacebarZoom(overlayEl) {
   sv._zoomKeyup = e => {
     if (e.code === 'Space') {
       e.preventDefault();
+      sv._spaceHeld = false;
       const zo = document.getElementById('sv-zoom-overlay');
       if (zo) zo.style.display = 'none';
     }
@@ -2909,6 +2912,7 @@ function initSpacebarZoom(overlayEl) {
     clearTimeout(sv._zoomLeaveTimer);
     sv._zoomLeaveTimer = setTimeout(() => {
       sv._hoveredCardImg = null;
+      if (sv._spaceHeld) return; // don't hide while spacebar zoom is actively held
       const zo = document.getElementById('sv-zoom-overlay');
       if (zo) zo.style.display = 'none';
     }, 80);
@@ -2928,6 +2932,7 @@ function closeScenarioView() {
   if (sv._zoomMouseleave) { document.removeEventListener('mouseout',  sv._zoomMouseleave); sv._zoomMouseleave = null; }
   clearTimeout(sv._zoomHoverTimer);
   clearTimeout(sv._zoomLeaveTimer);
+  sv._spaceHeld = false;
   const overlay = document.getElementById('scenario-view-overlay');
   if (overlay) { overlay.style.display = 'none'; overlay.innerHTML = ''; }
   // Restart campaign polling
