@@ -643,7 +643,7 @@ function buildRestUI(charId, ps) {
       <div class="sv-rest-area sv-rest-candidate">
         <div class="sv-rest-title">🎲 Short Rest — Candidate Card</div>
         <div class="sv-rest-card-preview">
-          <img src="${cardImg}" class="sv-rest-card-img" alt="${ps.restCandidate}">
+          <img src="${cardImg}" class="sv-rest-card-img sv-zoomable" alt="${ps.restCandidate}">
           <div class="sv-rest-card-name">${cardData?.name ?? ps.restCandidate}</div>
         </div>
         <div class="sv-rest-actions">
@@ -659,7 +659,7 @@ function buildRestUI(charId, ps) {
       const cardData = getCardDataById(charId, cardId);
       const cardImg = cardData?.imageUrl ?? getCardBack(getClassIdForChar(charId));
       return `<div class="sv-rest-override-card" data-char-id="${charId}" data-card-id="${cardId}" data-action="override-select">
-        <img src="${cardImg}" class="sv-rest-card-img" alt="${cardId}">
+        <img src="${cardImg}" class="sv-rest-card-img sv-zoomable" alt="${cardId}">
         <div class="sv-rest-card-name">${cardData?.name ?? cardId}</div>
       </div>`;
     }).join('');
@@ -1235,7 +1235,7 @@ function buildHandCards(dbCards, classId, charId, ps, isPeeking) {
 
     return `<div class="sv-hand-card${isSelected ? ' sv-card-selected' : ''}${isLocked ? ' sv-card-locked' : ''}"
         data-card-id="${cardId}" data-char-id="${charId}" data-img="${cardImg}">
-      <img src="${cardImg}" class="sv-card-img" alt="${cardName}">
+      <img src="${cardImg}" class="sv-card-img sv-zoomable" alt="${cardName}">
       ${isSelected ? `<div class="sv-card-sel-badge">${selLabel}</div>` : ''}
       <div class="sv-card-name">${cardName}</div>
     </div>`;
