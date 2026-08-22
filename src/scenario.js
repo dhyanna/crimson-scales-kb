@@ -1193,7 +1193,7 @@ function buildCharacterMat(classId, classData) {
   const frontUrl = classData ? `https://raw.githubusercontent.com/any2cards/worldhaven/master/images/character-mats/crimson-scales/cs-${classId}.png` : '';
   return `
     <div class="sv-mat-wrapper" id="sv-mat-wrapper">
-      <img src="${frontUrl}" class="sv-mat-img sv-mat-front" id="sv-mat-front" alt="Character mat">
+      <img src="${frontUrl}" class="sv-mat-img sv-mat-front sv-zoomable" id="sv-mat-front" alt="Character mat">
       <button class="sv-mat-flip-btn" id="sv-mat-flip" title="Flip mat">⟳ Flip</button>
     </div>`;
 }
