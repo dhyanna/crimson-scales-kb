@@ -2886,20 +2886,13 @@ function initSpacebarZoom(overlayEl) {
   document.addEventListener('keydown', sv._zoomKeydown);
   document.addEventListener('keyup', sv._zoomKeyup);
 
-  // Hover zoom — event delegation so it works everywhere including modals, no rebinding needed
-  sv._zoomHoverTimer = null;
+  // Track which card is hovered so spacebar knows what to zoom — no auto-show on hover,
+  // since that interferes with clicking/selecting cards. Zoom only appears on spacebar hold.
   sv._zoomMouseenter = e => {
     const img = e.target.closest('.sv-zoomable');
     if (!img) return;
     clearTimeout(sv._zoomLeaveTimer); // cancel any pending "leave" from a boundary flicker
-    if (sv._hoveredCardImg === img.src) return; // already hovering/timing this exact image
     sv._hoveredCardImg = img.src;
-    clearTimeout(sv._zoomHoverTimer);
-    sv._zoomHoverTimer = setTimeout(() => {
-      const zo = document.getElementById('sv-zoom-overlay');
-      const zi = zo?.querySelector('img');
-      if (zi && sv._hoveredCardImg) { zi.src = sv._hoveredCardImg; zo.style.display = 'flex'; }
-    }, 600);
   };
   sv._zoomLeaveTimer = null;
   sv._zoomMouseleave = e => {
