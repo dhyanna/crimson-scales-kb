@@ -43,7 +43,15 @@ let sv = {
   // Per-player ready state (green initiative icon)
   readyPlayers:   {},     // { playerId: true/false }
   roundPhase:     'select', // 'select' | 'play'
+  messageLog:     [],      // rolling log of broadcast round-flow messages shown in the message panel
 };
+
+// Push a message into the shared message panel (does not trigger a full render by itself —
+// caller should already be re-rendering, or call renderScenarioView() after)
+function pushMessage(msg) {
+  sv.messageLog.push(msg);
+  if (sv.messageLog.length > 20) sv.messageLog.shift(); // cap history
+}
 
 // ── Load hand cards from DB ───────────────────────────────────────
 async function loadPartyHandCards(party) {
@@ -199,7 +207,8 @@ async function saveRoundState() {
 async function broadcastToast(msg, delayMs = 0) {
   if (!sv.scenario?.id) return;
   const fire = async () => {
-    showToast(msg);
+    pushMessage(msg);
+    renderScenarioView();
     await sb().from('scenarios')
       .update({ toast_message: msg, toast_at: new Date().toISOString() })
       .eq('id', sv.scenario.id);
@@ -462,9 +471,23 @@ function buildInitiativeTracker(party) {
       </div>`;
   }).join('');
   return `
-    <div class="sv-initiative-tracker" id="sv-initiative-tracker">
-      <div class="sv-init-label">Initiative</div>
-      <div class="sv-init-items" id="sv-init-items">${items}</div>
+    <div class="sv-init-row">
+      <div class="sv-initiative-tracker" id="sv-initiative-tracker">
+        <div class="sv-init-label">Initiative</div>
+        <div class="sv-init-items" id="sv-init-items">${items}</div>
+      </div>
+      ${buildMessagePanel()}
+    </div>`;
+}
+
+function buildMessagePanel() {
+  const messages = sv.messageLog ?? [];
+  const items = messages.slice(-5).reverse().map((m, i) =>
+    `<div class="sv-msg-item${i === 0 ? ' sv-msg-item-latest' : ''}">${m}</div>`
+  ).join('');
+  return `
+    <div class="sv-message-panel" id="sv-message-panel">
+      ${items || '<div class="sv-msg-empty">No messages yet</div>'}
     </div>`;
 }
 
@@ -2239,8 +2262,6 @@ function bindScenarioViewEvents() {
       round_number: newRound,
       scenario_step: 'play',
       initiative_order: initiativeOrder,
-      toast_message: beginMsg,
-      toast_at: new Date().toISOString(),
     }).eq('id', sv.scenario.id);
 
     renderScenarioView();
@@ -2666,11 +2687,11 @@ function handleScenarioUpdate(payload) {
     changed = true;
   }
 
-  // Sync toast messages from GM to all players
+  // Sync round-flow messages from GM to all players' message panel
   if (row.toast_message && row.toast_at && row.toast_at !== sv.scenario.lastToastAt) {
     sv.scenario.lastToastAt = row.toast_at;
-    // Show to all non-GM players
-    if (!sv.isGM) showToast(row.toast_message);
+    pushMessage(row.toast_message);
+    changed = true;
   }
 
   if (changed) {
