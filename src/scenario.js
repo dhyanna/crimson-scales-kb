@@ -482,12 +482,12 @@ function buildInitiativeTracker(party) {
 
 function buildMessagePanel() {
   const messages = sv.messageLog ?? [];
-  const items = messages.slice(-5).reverse().map((m, i) =>
-    `<div class="sv-msg-item${i === 0 ? ' sv-msg-item-latest' : ''}">${m}</div>`
-  ).join('');
+  const latest = messages[messages.length - 1];
   return `
     <div class="sv-message-panel" id="sv-message-panel">
-      ${items || '<div class="sv-msg-empty">No messages yet</div>'}
+      ${latest
+        ? `<div class="sv-msg-current" id="sv-msg-current">${latest}</div>`
+        : '<div class="sv-msg-empty">No messages yet</div>'}
     </div>`;
 }
 
@@ -1617,6 +1617,7 @@ function buildGMControls() {
   return `
     <div class="sv-gm-controls" id="sv-gm-controls">
       ${allReady && !inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-begin-round">⚔️ Begin Round</button>` : ''}
+      ${allReady && inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-secondary" id="sv-revert-round" title="Undo Begin Round — only available before anyone plays a card">↩ Revert to Selection</button>` : ''}
       ${allEndedTurns ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 End Round</button>` : ''}
     </div>`;
 }
@@ -2269,6 +2270,20 @@ function bindScenarioViewEvents() {
     broadcastToast('⚔️ Play cards in initiative order', 4000);
   });
 
+  // GM Revert to Selection button — undo an accidental Begin Round before anyone plays a card
+  document.getElementById('sv-revert-round')?.addEventListener('click', async () => {
+    if (!confirm('Revert to card selection? Selected cards and initiative order are kept — players will be able to change their cards before re-readying.')) return;
+    const revertRound = Math.max(0, (sv.scenario.round_number ?? 1) - 1);
+    sv.scenario.round_number = revertRound;
+    sv.roundPhase = 'select';
+    await sb().from('scenarios').update({
+      round_number: revertRound,
+      scenario_step: 'select_revert', // distinct from 'select' so other browsers don't wipe selections/ready state
+    }).eq('id', sv.scenario.id);
+    renderScenarioView();
+    await broadcastToast('↩ GM reverted to card selection — you may change your cards before re-readying');
+  });
+
   // End Scenario button
   document.getElementById('sv-end-scenario')?.addEventListener('click', () => {
     openEndScenarioModal();
@@ -2544,22 +2559,34 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
   // 1. Update scenario status
   await sb().from('scenarios').update({ status: 'completed', forced_link: forcedLink }).eq('id', s.id);
 
+  // Fetch fresh looted_treasure/battle_goal_completed directly from the DB rather than
+  // trusting this browser's local sv.playState cache — that cache only reflects updates
+  // made in THIS browser and is never synced for other players' checkbox toggles made
+  // in their own browsers, which was silently under-awarding party goals at completion.
+  const { data: freshPartyRows } = await sb()
+    .from('scenario_party')
+    .select('character_id, looted_treasure, battle_goal_completed')
+    .eq('scenario_id', s.id);
+
   // 2. Award battle goals for players who succeeded (only if < 5 total)
   for (const m of party) {
     const ps = sv.playState[m.character_id] ?? {};
+    const freshRow = (freshPartyRows ?? []).find(r => r.character_id === m.character_id);
+    const reallyBgCompleted = freshRow?.battle_goal_completed ?? ps.bgCompleted ?? false;
+    const reallyLooted = freshRow?.looted_treasure ?? ps.lootedTreasure ?? false;
     const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
     if (!player) continue;
     const bgData = m.battle_goal_card && typeof BATTLE_GOAL_DATA !== 'undefined'
       ? BATTLE_GOAL_DATA[m.battle_goal_card] : null;
     const checks = bgData?.checks ?? 1;
 
-    if (ps.bgCompleted && (player.battle_goals_completed ?? 0) < 5) {
+    if (reallyBgCompleted && (player.battle_goals_completed ?? 0) < 5) {
       const newCount = Math.min(5, (player.battle_goals_completed ?? 0) + checks);
       await sb().from('players').update({ battle_goals_completed: newCount }).eq('id', player.id);
     }
 
     // Award treasure tile if looted
-    if (ps.lootedTreasure && !player.treasure_looted) {
+    if (reallyLooted && !player.treasure_looted) {
       await sb().from('players').update({ treasure_looted: true }).eq('id', player.id);
     }
   }
@@ -2665,9 +2692,10 @@ function handleScenarioUpdate(payload) {
   const dbPhase = row.scenario_step === 'play' ? 'play' : 'select';
   if (dbPhase !== sv.roundPhase) {
     sv.roundPhase = dbPhase;
-    // Only reset selected/ready when transitioning back to select phase
-    // AND the round_number also changed (genuine new round, not a race condition)
-    if (dbPhase === 'select' && row.round_number === sv.scenario.round_number) {
+    // Only reset selected/ready when transitioning back to select phase via a genuine
+    // new round (End Round) — NOT when the GM reverts an in-progress round back to
+    // selection, which uses 'select_revert' and must preserve card selections/ready state.
+    if (row.scenario_step === 'select' && row.round_number === sv.scenario.round_number) {
       sv.readyPlayers = {};
       sv.selectedCards = {};
     }
@@ -2766,6 +2794,15 @@ function handlePartyUpdate(payload) {
       changed = true;
     }
 
+    // Sync treasure looted — previously missing entirely, which meant other browsers
+    // (including the GM's) never saw a player's checkbox toggle, causing the award at
+    // scenario completion to silently use stale (false) data for anyone but the browser
+    // that made the change
+    if (ps.lootedTreasure !== (row.looted_treasure ?? false)) {
+      ps.lootedTreasure = row.looted_treasure ?? false;
+      changed = true;
+    }
+
     // Sync play state — only for other players' characters
     if (!isMyChar && row.play_state && Object.keys(row.play_state).length) {
       const saved = row.play_state;
@@ -2843,7 +2880,7 @@ async function fallbackPoll() {
     // Poll scenario_party for play state changes
     const { data: partyRows } = await sb()
       .from('scenario_party')
-      .select('character_id, is_ready, is_exhausted, play_state, battle_goal_completed, is_absent, substitute_player_id')
+      .select('character_id, is_ready, is_exhausted, play_state, battle_goal_completed, looted_treasure, is_absent, substitute_player_id')
       .eq('scenario_id', sv.scenario.id);
     (partyRows ?? []).forEach(row => handlePartyUpdate({ new: row }));
   } catch (err) {

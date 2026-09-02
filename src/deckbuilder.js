@@ -492,7 +492,7 @@ function renderGoalsInner() {
         <span class="db-goal-slider-value">${Math.min(xpValue, XP_TARGET)} / ${XP_TARGET}</span>
       </div>
       <input type="range" id="db-goal-xp-slider" class="db-goal-slider"
-        min="0" max="${XP_TARGET}" step="5" value="${Math.min(xpValue, XP_TARGET)}">
+        min="0" max="${XP_TARGET}" step="1" value="${Math.min(xpValue, XP_TARGET)}">
     </div>`;
 
   const goldRow = `

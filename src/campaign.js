@@ -938,7 +938,13 @@ function bindArchivedCardEvents() {
 
 // ── PARTY PROGRESS ───────────────────────────────────────────
 function computeGoals(campaign, players) {
-  const founders = players.filter(p => p.is_founding_member);
+  // Sort by player_name (falling back to id) so each player always occupies the same
+  // visual "column" of pips across every goal row and every re-render — Supabase does
+  // not guarantee stable ordering for nested relations, which was causing the same
+  // column position to represent different players between renders.
+  const founders = players
+    .filter(p => p.is_founding_member)
+    .sort((a, b) => (a.player_name ?? '').localeCompare(b.player_name ?? '') || (a.id ?? '').localeCompare(b.id ?? ''));
   if (!founders.length) return null;
 
   const allDone = (key) => founders.every(p => p[key]);
@@ -1389,8 +1395,14 @@ async function resumeCharacter(characterId, playerId) {
 function openCampaignPanel() {
   document.getElementById('campaign-panel')?.classList.add('campaign-panel-open');
   loadCampaigns();
+  // Poll for updates (e.g. another player's goal slider) while the panel is open —
+  // there's no Realtime subscription backing this panel, so this is the simplest way
+  // to keep it reasonably fresh without requiring a manual close/reopen.
+  clearInterval(window._campaignPanelPollInterval);
+  window._campaignPanelPollInterval = setInterval(loadCampaigns, 20000);
 }
 function closeCampaignPanel() {
+  clearInterval(window._campaignPanelPollInterval);
   document.getElementById('campaign-panel')?.classList.remove('campaign-panel-open');
 }
 function openCampaignWizard() {
