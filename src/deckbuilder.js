@@ -28,7 +28,19 @@ const BASE_HAND_SIZES = {
 
 function getHandSize() {
   const base = BASE_HAND_SIZES[db.character?.class_id] ?? 10;
-  return db.state?.milestone_earned ? base + 1 : base;
+  return hasMilestoneCardInHand() ? base + 1 : base;
+}
+
+// The milestone reward card is locked permanently into the hand once earned —
+// hand size only bumps up while that specific card is actually in hand.
+function milestoneRewardCardId() {
+  return MILESTONE_REWARD_IDS[db.character?.class_id] ?? null;
+}
+
+function hasMilestoneCardInHand() {
+  const rewardId = milestoneRewardCardId();
+  if (!rewardId) return false;
+  return db.cards.some(c => c.card_id === rewardId && c.in_hand);
 }
 
 // ── MILESTONE REWARD CARD IDS ────────────────────────────────
@@ -81,10 +93,23 @@ async function initCharacter(character) {
 }
 
 async function saveHandToggle(cardId, inHand) {
+  // The milestone reward card is permanent once earned — it can never be
+  // moved back to the sideboard.
+  if (!inHand && cardId === milestoneRewardCardId()) return;
   const row = db.cards.find(c => c.card_id === cardId);
   if (!row) return;
   await sb().from('character_cards').update({ in_hand: inHand }).eq('id', row.id);
   row.in_hand = inHand;
+}
+
+async function ensureMilestoneCardLocked() {
+  const rewardId = milestoneRewardCardId();
+  if (!rewardId || !db.state?.milestone_earned) return;
+  const row = db.cards.find(c => c.card_id === rewardId);
+  if (row && !row.in_hand) {
+    await sb().from('character_cards').update({ in_hand: true }).eq('id', row.id);
+    row.in_hand = true;
+  }
 }
 
 async function saveMilestoneChecks(checks) {
@@ -94,22 +119,11 @@ async function saveMilestoneChecks(checks) {
   db.state.milestone_checks = checks;
 }
 
-async function saveNotes(text) {
-  const trimmed = text.slice(0, 1024);
+async function savePqChecks(checks) {
   await sb().from('character_state')
-    .update({ notes: trimmed, updated_at: new Date().toISOString() })
-    .eq('id', db.state.id);
-  db.state.notes = trimmed;
-}
-
-async function savePqChecks(checks, groupChecks) {
-  const update = { pq_checks: checks, updated_at: new Date().toISOString() };
-  if (groupChecks !== undefined) update.pq_group_checks = groupChecks;
-  await sb().from('character_state')
-    .update(update)
+    .update({ pq_checks: checks, updated_at: new Date().toISOString() })
     .eq('id', db.state.id);
   db.state.pq_checks = checks;
-  if (groupChecks !== undefined) db.state.pq_group_checks = groupChecks;
 }
 
 async function completePq() {
@@ -209,10 +223,6 @@ async function levelUp(chosenCardId, passedOverIds) {
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
-function escapeHtml(str) {
-  return (str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -242,10 +252,9 @@ function handCount() {
 }
 
 // ── OPEN / CLOSE ─────────────────────────────────────────────
-async function openDeckBuilder(character, player, campaignPhase) {
+async function openDeckBuilder(character, player) {
   db.character = character;
   db.player = player;
-  db.campaignPhase = campaignPhase ?? 'city'; // 'city' | 'scenario'
   db.allClassCards = CLASS_REGISTRY[character.class_id]?.cards ?? [];
   db.activeBuild = null;
   db.activeCardTab = 'milestone';
@@ -270,6 +279,10 @@ async function openDeckBuilder(character, player, campaignPhase) {
       `<div class="db-loading">Error loading character data. Please close and try again.</div>`;
     return;
   }
+
+  // Self-heal: if the milestone was earned but the reward card was somehow
+  // moved out of hand before the permanent-lock was added, put it back.
+  await ensureMilestoneCardLocked();
 
   // First time setup: name character and pick PQ card
   if (!character.character_name || !character.pq_card_id) {
@@ -326,7 +339,6 @@ function renderDeckBuilder() {
 
   const handFull = hand >= handSize;
   const handOk = hand === handSize;
-  const handLocked = db.campaignPhase === 'scenario';
 
   // Build toggle buttons from CLASS_BUILDS
   const buildsData = CLASS_BUILDS?.[db.character.class_id];
@@ -359,10 +371,9 @@ function renderDeckBuilder() {
           </div>
         </div>
         <div class="db-header-actions">
-          ${db.campaignPhase !== 'scenario' && db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
-          ${db.campaignPhase !== 'scenario' && db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn" ${!db.hasKbData ? 'disabled' : ''}>↩ Undo Level Up</button>` : ''}
-          ${db.campaignPhase !== 'scenario' ? `<button class="db-btn db-btn-secondary db-btn-retire" id="db-retire-btn">⚰️ Retire / Set Aside</button>` : ''}
-          ${db.campaignPhase === 'scenario' ? `<div class="db-scenario-lock">🔒 Scenario in progress — level up and retire unavailable</div>` : ''}
+          ${db.state.current_level < 9 ? `<button class="db-btn db-btn-secondary" id="db-levelup-btn">⬆ Level Up</button>` : ''}
+          ${db.state.current_level > 1 ? `<button class="db-btn db-btn-secondary" id="db-undo-levelup-btn" ${!db.hasKbData ? 'disabled' : ''}>↩ Undo Level Up</button>` : ''}
+          <button class="db-btn db-btn-secondary db-btn-retire" id="db-retire-btn">⚰️ Retire / Set Aside</button>
           <button class="db-btn db-btn-close" id="db-close-btn">✕ Close</button>
         </div>
       </div>
@@ -387,20 +398,9 @@ function renderDeckBuilder() {
           </div>
         </div>
         <div class="db-card-grid" id="db-hand-grid">
-          ${handCards.map(c => renderCardTile(c, true, false, cardBuildClass(c))).join('')}
+          ${handCards.map(c => renderCardTile(c, true, false, cardBuildClass(c), (c.id || slugify(c.name)) === milestoneRewardCardId())).join('')}
           ${hand === 0 ? '<div class="db-empty">No cards in hand — move cards up from your sideboard</div>' : ''}
         </div>
-      </div>
-
-      <!-- Notes -->
-      <div class="db-section db-notes-section">
-        <div class="db-section-header">
-          <h3 class="db-section-title">📝 Notes</h3>
-          <span class="db-notes-count" id="db-notes-count">${(db.state.notes ?? '').length}/1024</span>
-        </div>
-        <textarea class="db-notes-textarea" id="db-notes-textarea"
-          maxlength="1024" placeholder="Record card combos, round strategies, opening plays..."
-          >${escapeHtml(db.state.notes ?? '')}</textarea>
       </div>
 
       <!-- Sideboard -->
@@ -428,7 +428,7 @@ function renderCardTabs(milestoneCard) {
   const hasMilestone = !db.state.milestone_earned && milestoneCard;
   const hasPq = !!db.character.pq_card_id;
   const hasGoals = !!db.player?.is_founding_member &&
-    ((db.player.xp_total ?? 0) < 100 || (db.player.gold_spent ?? 0) < 60);
+    (!db.player.xp_100_gained || !db.player.gold_60_spent);
 
   const tabs = [];
   if (hasMilestone) tabs.push({ id: 'milestone', label: '🏆 Milestone' });
@@ -478,34 +478,22 @@ function renderGoalsSection() {
 }
 
 function renderGoalsInner() {
-  const XP_TARGET = 100;
-  const GOLD_TARGET = 60;
-  const xpValue   = db.player?.xp_total ?? 0;
-  const goldValue = db.player?.gold_spent ?? 0;
-  const xpDone   = xpValue >= XP_TARGET;
-  const goldDone = goldValue >= GOLD_TARGET;
-
-  const xpRow = `
-    <div class="db-party-goal-slider-row${xpDone ? ' db-goal-complete' : ''}">
-      <div class="db-goal-slider-label">
-        <span>${xpDone ? '✓ ' : ''}Gained XP total</span>
-        <span class="db-goal-slider-value">${Math.min(xpValue, XP_TARGET)} / ${XP_TARGET}</span>
-      </div>
-      <input type="range" id="db-goal-xp-slider" class="db-goal-slider"
-        min="0" max="${XP_TARGET}" step="1" value="${Math.min(xpValue, XP_TARGET)}">
+  const xpDone   = !!db.player?.xp_100_gained;
+  const goldDone = !!db.player?.gold_60_spent;
+  if (xpDone && goldDone) return '<div style="padding:16px;font-size:13px;color:var(--color-text-secondary,#888)">All personal goals complete!</div>';
+  return `
+    <div class="db-party-goals-list">
+      ${!xpDone ? `
+        <label class="db-party-goal-row">
+          <input type="checkbox" id="db-goal-xp" class="db-goal-checkbox">
+          <span>Gained 100 XP total</span>
+        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Gained 100 XP total</div>'}
+      ${!goldDone ? `
+        <label class="db-party-goal-row">
+          <input type="checkbox" id="db-goal-gold" class="db-goal-checkbox">
+          <span>Spent 60 gold at the Item Shop</span>
+        </label>` : '<div class="db-party-goal-row" style="color:var(--color-text-secondary,#888);text-decoration:line-through">✓ Spent 60 gold at Item Shop</div>'}
     </div>`;
-
-  const goldRow = `
-    <div class="db-party-goal-slider-row${goldDone ? ' db-goal-complete' : ''}">
-      <div class="db-goal-slider-label">
-        <span>${goldDone ? '✓ ' : ''}Spent gold at the Item Shop</span>
-        <span class="db-goal-slider-value">${Math.min(goldValue, GOLD_TARGET)} / ${GOLD_TARGET}</span>
-      </div>
-      <input type="range" id="db-goal-gold-slider" class="db-goal-slider"
-        min="0" max="${GOLD_TARGET}" step="5" value="${Math.min(goldValue, GOLD_TARGET)}">
-    </div>`;
-
-  return `<div class="db-party-goals-list">${xpRow}${goldRow}</div>`;
 }
 
 function renderMilestoneInner(card) {
@@ -551,19 +539,17 @@ function renderPqInner() {
     // Phase 1: checkbox grid — grouped or flat
     let boxes = '';
     if (tracker.groups) {
-      const groupChecks = db.state.pq_group_checks ?? {};
-      const groupItems = tracker.groups.map((g, gi) => {
-        const gKey = gi.toString();
-        const gCount = groupChecks[gKey] ?? 0;
+      let offset = 0;
+      const groupItems = tracker.groups.map(g => {
         const groupBoxes = Array.from({ length: g.count }, (_, i) => {
-          return `<button class="db-check-box ${i < gCount ? 'db-check-filled' : ''}"
-            data-pq-group="${gi}" data-pq-group-idx="${i}">
-            ${i < gCount ? '✓' : ''}
+          const idx = offset + i;
+          return `<button class="db-check-box ${idx < checks ? 'db-check-filled' : ''}" data-pq-check="${idx}">
+            ${idx < checks ? '✓' : ''}
           </button>`;
         }).join('');
-        const groupDone = gCount >= g.count;
-        return `<div class="db-pq-group${groupDone ? ' db-pq-group-done' : ''}">
-          <div class="db-pq-group-label">${g.label}${groupDone ? ' ✓' : ''}</div>
+        offset += g.count;
+        return `<div class="db-pq-group">
+          <div class="db-pq-group-label">${g.label}</div>
           <div class="db-checks-grid">${groupBoxes}</div>
         </div>`;
       }).join('');
@@ -657,12 +643,13 @@ function renderMilestoneTracker(milestoneCard) {
   `;
 }
 
-function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
+function renderCardTile(card, inHand, handFull = false, highlightClass = '', locked = false) {
   const cid = card.id || slugify(card.name);
   const action = inHand ? 'remove' : 'add';
-  const btnLabel = inHand ? '↓ Move to Sideboard' : '↑ Add to Hand';
-  const scenarioLocked = db.campaignPhase === 'scenario';
-  const btnClass = inHand ? 'db-card-btn-remove' : `db-card-btn-add ${(handFull || scenarioLocked) ? 'db-card-btn-disabled' : ''}`;
+  const btnLabel = locked ? '🔒 Permanent' : (inHand ? '↓ Move to Sideboard' : '↑ Add to Hand');
+  const btnClass = locked
+    ? 'db-card-btn-locked'
+    : (inHand ? 'db-card-btn-remove' : `db-card-btn-add ${handFull ? 'db-card-btn-disabled' : ''}`);
 
   return `
     <div class="db-card-tile ${highlightClass}" data-card-id="${cid}">
@@ -672,8 +659,8 @@ function renderCardTile(card, inHand, handFull = false, highlightClass = '') {
         <div class="db-card-overlay">
           <button class="db-card-btn ${btnClass}"
             data-action="${action}" data-card-id="${cid}"
-            ${(!inHand && handFull) || scenarioLocked ? 'disabled' : ''}>
-            ${scenarioLocked ? '🔒 Scenario active' : btnLabel}
+            ${locked || (!inHand && handFull) ? 'disabled' : ''}>
+            ${btnLabel}
           </button>
         </div>
       </div>
@@ -800,35 +787,23 @@ function bindDeckBuilderEvents() {
     });
   });
 
-  // Party goal sliders (XP and gold) — live label update + debounced save
-  const xpSlider = document.getElementById('db-goal-xp-slider');
-  if (xpSlider) {
-    const label = xpSlider.closest('.db-party-goal-slider-row')?.querySelector('.db-goal-slider-value');
-    xpSlider.addEventListener('input', () => {
-      if (label) label.textContent = `${xpSlider.value} / 100`;
-      clearTimeout(db._xpGoalSaveTimer);
-      db._xpGoalSaveTimer = setTimeout(async () => {
-        const value = parseInt(xpSlider.value, 10);
-        db.player.xp_total = value;
-        await sb().from('players').update({ xp_total: value }).eq('id', db.player.id);
-        renderDeckBuilder();
-      }, 600);
-    });
-  }
-  const goldSlider = document.getElementById('db-goal-gold-slider');
-  if (goldSlider) {
-    const label = goldSlider.closest('.db-party-goal-slider-row')?.querySelector('.db-goal-slider-value');
-    goldSlider.addEventListener('input', () => {
-      if (label) label.textContent = `${goldSlider.value} / 60`;
-      clearTimeout(db._goldGoalSaveTimer);
-      db._goldGoalSaveTimer = setTimeout(async () => {
-        const value = parseInt(goldSlider.value, 10);
-        db.player.gold_spent = value;
-        await sb().from('players').update({ gold_spent: value }).eq('id', db.player.id);
-        renderDeckBuilder();
-      }, 600);
-    });
-  }
+  // Party goal checkboxes (XP and gold)
+  document.getElementById('db-goal-xp')?.addEventListener('change', async e => {
+    if (!e.target.checked) return;
+    if (!confirm('Mark 100 XP gained? This cannot be undone.')) { e.target.checked = false; return; }
+    await sb().from('players').update({ xp_100_gained: true }).eq('id', db.player.id);
+    db.player.xp_100_gained = true;
+    renderDeckBuilder();
+    showToast('100 XP goal marked complete!');
+  });
+  document.getElementById('db-goal-gold')?.addEventListener('change', async e => {
+    if (!e.target.checked) return;
+    if (!confirm('Mark 60 gold spent? This cannot be undone.')) { e.target.checked = false; return; }
+    await sb().from('players').update({ gold_60_spent: true }).eq('id', db.player.id);
+    db.player.gold_60_spent = true;
+    renderDeckBuilder();
+    showToast('60 gold goal marked complete!');
+  });
 
   // Build toggles
   document.querySelectorAll('.db-build-toggle').forEach(btn => {
@@ -851,53 +826,22 @@ function bindDeckBuilderEvents() {
   });
 
   // PQ checkbox handler
-  // Flat PQ checks (non-grouped)
   document.querySelectorAll('[data-pq-check]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const i = parseInt(btn.dataset.pqCheck);
       const checks = db.state.pq_checks ?? 0;
       const newChecks = (i < checks) ? i : i + 1;
       await savePqChecks(newChecks);
-      renderDeckBuilder();
-    });
-  });
-
-  // Grouped PQ checks (e.g. CS-344)
-  document.querySelectorAll('[data-pq-group]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const gi = btn.dataset.pqGroup;
-      const idx = parseInt(btn.dataset.pqGroupIdx);
+      // Check if all boxes now filled — prompt to mark complete
       const tracker = PQ_TRACKER_DATA[db.character.pq_card_id];
-      const groupChecks = { ...(db.state.pq_group_checks ?? {}) };
-      const current = groupChecks[gi] ?? 0;
-      // Toggle: clicking filled box unfills it, clicking empty fills up to idx+1
-      groupChecks[gi] = (idx < current) ? idx : idx + 1;
-      // Recalculate total pq_checks as sum of all group checks
-      const totalChecks = tracker.groups.reduce((sum, _, i) =>
-        sum + (groupChecks[i.toString()] ?? 0), 0);
-      await savePqChecks(totalChecks, groupChecks);
-      renderDeckBuilder();
+      if (tracker && newChecks >= tracker.count && !db.state.pq_completed) {
+        renderDeckBuilder();
+        // Show complete button, handled below
+      } else {
+        renderDeckBuilder();
+      }
     });
   });
-
-  // Notes textarea — debounced auto-save
-  const notesTextarea = document.getElementById('db-notes-textarea');
-  const notesCount = document.getElementById('db-notes-count');
-  if (notesTextarea) {
-    let notesTimer = null;
-    notesTextarea.addEventListener('input', () => {
-      const len = notesTextarea.value.length;
-      if (notesCount) notesCount.textContent = `${len}/1024`;
-      clearTimeout(notesTimer);
-      notesTimer = setTimeout(async () => {
-        await saveNotes(notesTextarea.value);
-      }, 800);
-    });
-    notesTextarea.addEventListener('blur', async () => {
-      clearTimeout(notesTimer);
-      await saveNotes(notesTextarea.value);
-    });
-  }
 
   // Mark PQ complete button
   document.getElementById('db-complete-pq')?.addEventListener('click', async () => {
