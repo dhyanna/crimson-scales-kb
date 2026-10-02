@@ -968,7 +968,7 @@ function openPileModal(charId, pile, classId) {
 
   // Return to hand buttons
   modal.querySelectorAll('.sv-pile-return-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const { cardId, pile: p, charId: cid } = btn.dataset;
       const ps = sv.playState[cid];
       if (!ps) return;
@@ -978,6 +978,8 @@ function openPileModal(charId, pile, classId) {
       modal.remove();
       showToast(`↩ Card returned to hand.`);
       renderScenarioView();
+      try { await savePlayStateForChar(cid); }
+      catch (err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   });
 }
@@ -1083,7 +1085,7 @@ function openHandToLostModal(charId, classId) {
   modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 
   modal.querySelectorAll('.sv-negate-select-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const { cardId, charId: cid } = btn.dataset;
       const ps = sv.playState[cid];
       if (!ps) return;
@@ -1091,6 +1093,8 @@ function openHandToLostModal(charId, classId) {
       modal.remove();
       showToast('🛡️ Damage negated — 1 hand card lost.');
       renderScenarioView();
+      try { await savePlayStateForChar(cid); }
+      catch (err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   });
 }
@@ -1154,7 +1158,7 @@ function openNegateDiscardModal(charId, classId) {
       });
     });
 
-    document.getElementById('sv-negate-confirm')?.addEventListener('click', () => {
+    document.getElementById('sv-negate-confirm')?.addEventListener('click', async () => {
       const ps = sv.playState[charId];
       if (!ps) return;
       selected.forEach(cardId => {
@@ -1164,6 +1168,8 @@ function openNegateDiscardModal(charId, classId) {
       modal.remove();
       showToast('🛡️ Damage negated — 2 discard cards lost.');
       renderScenarioView();
+      try { await savePlayStateForChar(charId); }
+      catch (err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   }
 
