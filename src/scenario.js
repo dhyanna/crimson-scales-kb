@@ -565,10 +565,11 @@ function buildPlayArea(party) {
     <div class="sv-play-area${ps.isExhausted ? ' sv-play-area-exhausted' : ''}" id="sv-play-area">
       ${isPeeking ? `<div class="sv-peek-banner">👁 Viewing ${member.player?.player_name ?? '?'}'s play area</div>` : ''}
 
-      <!-- Top action bar: Negate Damage + Declare Exhaustion -->
+      <!-- Top action bar: Negate Damage + Discard + Declare Exhaustion -->
       ${!ps.isExhausted ? `
         <div class="sv-action-bar">
           ${!isPeeking ? buildNegateDamageCompact(charId, ps) : ''}
+          ${!isPeeking ? buildDiscardFromHandCompact(charId, ps) : ''}
           <button class="sv-exhaust-btn" data-char-id="${charId}">💀 Declare Exhaustion</button>
         </div>` : ''}
       ${ps.isExhausted ? `<div class="sv-exhausted-banner">💀 Exhausted — no longer participating in scenario play</div>` : ''}
@@ -784,6 +785,21 @@ function buildNegateDamageCompact(charId, ps) {
     </div>`;
 }
 
+// Forced discard (random event / scenario effect) — moves a hand card to
+// discard, NOT lost. Available any time during the round, not just on a
+// player's own turn, since these effects can trigger whenever.
+function buildDiscardFromHandCompact(charId, ps) {
+  const selectedCards = sv.selectedCards[charId] ?? [];
+  const playedOrLostOrSelected = new Set([...ps.active, ...ps.discard, ...ps.lost, ...selectedCards]);
+  const handCount = Math.max(0, (ps.handCards ?? []).filter(dc => !playedOrLostOrSelected.has(dc.card_id)).length);
+  if (handCount < 1) return '';
+  return `
+    <div class="sv-discard-hand-compact">
+      <button class="sv-discard-hand-btn" data-char-id="${charId}" data-action="discard-hand"
+        title="Random event / scenario effect: discard a card from hand">🗑️ Discard a Card</button>
+    </div>`;
+}
+
 // ── Bottom drawer: trackers + tips ───────────────────────────────
 function buildBottomDrawer(member, classId, classData, charId, ps, isPeeking) {
   const isOpen = sv.drawerOpen ?? false;
@@ -962,6 +978,66 @@ function openPileModal(charId, pile, classId) {
       modal.remove();
       showToast(`↩ Card returned to hand.`);
       renderScenarioView();
+    });
+  });
+}
+
+// ── Forced discard: Move hand card to discard (random event / scenario effect) ──
+function openDiscardFromHandModal(charId, classId) {
+  const ps = sv.playState[charId];
+  if (!ps) return;
+  const playedSet = new Set([...ps.active, ...ps.discard, ...ps.lost, ...(sv.selectedCards[charId] ?? [])]);
+  const availableHand = (ps.handCards ?? []).filter(dc => !playedSet.has(dc.card_id));
+
+  const cardItems = availableHand.map(dc => {
+    const cardData = getCardDataById(charId, dc.card_id);
+    const cardImg = cardData?.imageUrl ?? getCardBack(classId);
+    const cardName = cardData?.name ?? dc.card_id;
+    return `
+      <div class="sv-pile-modal-card">
+        <img src="${cardImg}" class="sv-pile-modal-img sv-zoomable" alt="${cardName}">
+        <div class="sv-pile-modal-card-name">${cardName}</div>
+        <button class="sv-discard-select-btn" data-card-id="${dc.card_id}" data-char-id="${charId}">
+          → Discard this card
+        </button>
+      </div>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.className = 'db-modal-overlay';
+  modal.id = 'sv-discard-hand-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="db-modal" style="max-width:600px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="db-modal-header">
+        <h3 class="db-modal-title">🗑️ Discard a Card from Hand</h3>
+        <button class="db-modal-close" id="sv-discard-hand-modal-close">✕</button>
+      </div>
+      <div class="db-modal-body" style="overflow-y:auto;flex:1">
+        ${availableHand.length ? `<div class="sv-pile-modal-grid">${cardItems}</div>`
+          : '<p style="color:#888;text-align:center;padding:20px">No cards available to discard.</p>'}
+      </div>
+    </div>`;
+
+  document.getElementById('scenario-view-overlay').appendChild(modal);
+  document.getElementById('sv-discard-hand-modal-close').addEventListener('click', () => modal.remove());
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  modal.querySelectorAll('.sv-discard-select-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const { cardId, charId: cid } = btn.dataset;
+      const psInner = sv.playState[cid];
+      if (!psInner) return;
+      // If this card happened to be staged for play, un-stage it — it can't be played anymore.
+      if (sv.selectedCards[cid]) {
+        sv.selectedCards[cid] = sv.selectedCards[cid].filter(id => id !== cardId);
+      }
+      psInner.discard.push(cardId);
+      modal.remove();
+      showToast('🗑️ Card discarded from hand.');
+      renderScenarioView();
+      try { await savePlayStateForChar(cid); }
+      catch (err) { showToast('⚠️ Sync error: ' + err.message, true); }
     });
   });
 }
@@ -1996,6 +2072,18 @@ function bindScenarioViewEvents() {
         // Show discard to pick 2 cards to lose
         openNegateDiscardModal(charId, classId);
       }
+    });
+  });
+
+  // Forced discard from hand (random event / scenario effect) — available
+  // any time during the round, not gated by whose turn it is.
+  document.querySelectorAll('[data-action="discard-hand"]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const { charId } = btn.dataset;
+      const member = (sv.scenario.scenario_party ?? []).find(m => m.character_id === charId);
+      const classId = member?.characters?.class_id ?? '';
+      openDiscardFromHandModal(charId, classId);
     });
   });
 
