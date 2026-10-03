@@ -270,6 +270,9 @@ window._handleMoveCard = async function(dest, cardId, charId) {
   if (!ps) return;
   if (dest === 'discard' && ps.discard.includes(cardId)) return;
   if (dest === 'lost' && ps.lost.includes(cardId)) return;
+  const cardName = getCardDataById(charId, cardId)?.name ?? cardId;
+  const destLabel = dest === 'discard' ? 'the Discard pile' : dest === 'lost' ? 'the Lost pile' : 'your Hand';
+  if (!confirm(`Move "${cardName}" to ${destLabel}?`)) return;
   ps.active = ps.active.filter(n => n !== cardId);
   if (dest === 'discard') ps.discard.push(cardId);
   else if (dest === 'lost') ps.lost.push(cardId);
@@ -722,17 +725,27 @@ function buildRestUI(charId, ps) {
       I have non-loss persistent cards in my active area (count toward discard for Long Rest)
     </label>` : '';
 
-  const overrideOption = ps.hasOverrideAbility
+  // Short Rest always resolves from ps.discard alone (lose 1, rest -> hand, discard -> 0),
+  // which would immediately trigger forced exhaustion if the resulting hand would still be < 2.
+  // Guard against offering Short Rest (or its Override variant) in that case — Long Rest is safe
+  // because its resolution is deferred to the play phase.
+  const canShortRestSafely = (handCount + discardCount) >= 3;
+
+  const overrideOption = (ps.hasOverrideAbility && canShortRestSafely)
     ? `<button class="sv-rest-btn sv-rest-override-btn" data-char-id="${charId}" data-action="start-override">⚡ Short Rest (Override)</button>`
     : '';
+
+  const shortRestUnsafeNote = (canRest && !canShortRestSafely) ? `
+    <div class="sv-rest-note">⚠️ Short Rest would leave too few cards and cause instant exhaustion — only Long Rest is available.</div>` : '';
 
   // Show rest buttons only when canRest
   const restButtons = canRest ? `
     <div class="sv-rest-actions">
-      <button class="sv-rest-btn sv-rest-short" data-char-id="${charId}" data-action="start-short">🎲 Short Rest</button>
+      ${canShortRestSafely ? `<button class="sv-rest-btn sv-rest-short" data-char-id="${charId}" data-action="start-short">🎲 Short Rest</button>` : ''}
       ${overrideOption}
       <button class="sv-rest-btn sv-rest-long" data-char-id="${charId}" data-action="start-long">🌙 Long Rest</button>
-    </div>` : '';
+    </div>
+    ${shortRestUnsafeNote}` : '';
 
   return `
     <div class="sv-rest-area${mustRest ? ' sv-rest-required' : ''}">
@@ -972,6 +985,8 @@ function openPileModal(charId, pile, classId) {
       const { cardId, pile: p, charId: cid } = btn.dataset;
       const ps = sv.playState[cid];
       if (!ps) return;
+      const cardName = getCardDataById(cid, cardId)?.name ?? cardId;
+      if (!confirm(`Return "${cardName}" to your hand?`)) return;
       if (p === 'discard') ps.discard = ps.discard.filter(id => id !== cardId);
       else ps.lost = ps.lost.filter(id => id !== cardId);
       // Card returns to hand — it's already in handCards so just removing from pile is enough
@@ -1030,6 +1045,8 @@ function openDiscardFromHandModal(charId, classId) {
       const { cardId, charId: cid } = btn.dataset;
       const psInner = sv.playState[cid];
       if (!psInner) return;
+      const cardName = getCardDataById(cid, cardId)?.name ?? cardId;
+      if (!confirm(`Discard "${cardName}" from your hand?`)) return;
       // If this card happened to be staged for play, un-stage it — it can't be played anymore.
       if (sv.selectedCards[cid]) {
         sv.selectedCards[cid] = sv.selectedCards[cid].filter(id => id !== cardId);
@@ -1089,6 +1106,8 @@ function openHandToLostModal(charId, classId) {
       const { cardId, charId: cid } = btn.dataset;
       const ps = sv.playState[cid];
       if (!ps) return;
+      const cardName = getCardDataById(cid, cardId)?.name ?? cardId;
+      if (!confirm(`Lose "${cardName}" to negate damage? This cannot be undone.`)) return;
       ps.lost.push(cardId);
       modal.remove();
       showToast('🛡️ Damage negated — 1 hand card lost.');
@@ -1694,13 +1713,15 @@ function buildGMControls() {
   const allEndedTurns = sv.roundPhase === 'play' && party.length > 0 &&
     party.every(m => !(sv.readyPlayers[m.player_id] ?? false));
   const inPlayPhase = sv.roundPhase === 'play';
+  const canUndoEndRound = !!sv._lastEndRoundSnapshot && sv.roundPhase === 'select';
 
-  if (!allReady && !allEndedTurns) return ''; // nothing to show
+  if (!allReady && !allEndedTurns && !canUndoEndRound) return ''; // nothing to show
   return `
     <div class="sv-gm-controls" id="sv-gm-controls">
       ${allReady && !inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-begin-round">⚔️ Begin Round</button>` : ''}
       ${allReady && inPlayPhase ? `<button class="sv-gm-btn sv-gm-btn-secondary" id="sv-revert-round" title="Undo Begin Round — only available before anyone plays a card">↩ Revert to Selection</button>` : ''}
       ${allEndedTurns ? `<button class="sv-gm-btn sv-gm-btn-primary" id="sv-new-round">🔄 End Round</button>` : ''}
+      ${canUndoEndRound ? `<button class="sv-gm-btn sv-gm-btn-secondary" id="sv-undo-end-round" title="Undo End Round — restores the previous round's play state so a player can fix a missed discard">↩ Undo End Round</button>` : ''}
     </div>`;
 }
 
@@ -2284,6 +2305,7 @@ function bindScenarioViewEvents() {
 
   // GM Begin Round button
   document.getElementById('sv-begin-round')?.addEventListener('click', async () => {
+    sv._lastEndRoundSnapshot = null; // starting a new round invalidates any pending End Round undo
     const newRound = (sv.scenario.round_number ?? 0) + 1;
 
     // Auto-sort initiative based on first selected card BEFORE saving
@@ -2409,6 +2431,16 @@ function bindScenarioViewEvents() {
     //   - Status condition duration tracking
     // ─────────────────────────────────────────────────────────────────
 
+    // Snapshot pre-End-Round state so the GM can undo (e.g. a player forgot to
+    // discard a persistent ability card before the round ended, and would
+    // otherwise instantly exhaust once the forced-exhaustion check re-runs).
+    sv._lastEndRoundSnapshot = {
+      playState: JSON.parse(JSON.stringify(sv.playState)),
+      readyPlayers: JSON.parse(JSON.stringify(sv.readyPlayers)),
+      selectedCards: JSON.parse(JSON.stringify(sv.selectedCards)),
+      roundNumber: sv.scenario.round_number,
+    };
+
     sv.readyPlayers = {};
     sv.selectedCards = {};
     // Clear rest flags for next round (hasActiveNonLoss persists until manually unchecked)
@@ -2429,6 +2461,42 @@ function bindScenarioViewEvents() {
     renderScenarioView();
     await broadcastToast('🔄 End of Round');
     broadcastToast('🃏 Select two cards to play', 4000);
+  });
+
+  // GM Undo End Round — restore play state from just before End Round was clicked,
+  // so a player can fix a missed action (e.g. discard a persistent card) before
+  // the round is ended again.
+  document.getElementById('sv-undo-end-round')?.addEventListener('click', async () => {
+    const snap = sv._lastEndRoundSnapshot;
+    if (!snap) return;
+    if (!confirm('Undo End Round? This restores every character\'s active/discard/lost piles and exhaustion status from just before the round ended, so a missed action can be corrected. Play resumes in the previous round — End Round again once everyone is ready.')) return;
+
+    sv.playState = JSON.parse(JSON.stringify(snap.playState));
+    sv.readyPlayers = JSON.parse(JSON.stringify(snap.readyPlayers));
+    sv.selectedCards = JSON.parse(JSON.stringify(snap.selectedCards));
+    sv.scenario.round_number = snap.roundNumber;
+    sv.roundPhase = 'play';
+    sv._lastEndRoundSnapshot = null;
+
+    await sb().from('scenarios').update({
+      round_number: snap.roundNumber,
+      scenario_step: 'play',
+    }).eq('id', sv.scenario.id);
+    await saveAllPlayStates();
+    // Re-sync exhaustion status (the forced-exhaustion check may have fired
+    // after End Round, before this undo) to match the restored snapshot.
+    const party = sv.scenario?.scenario_party ?? [];
+    await Promise.all(party.map(m => {
+      const restoredExhausted = snap.playState[m.character_id]?.isExhausted ?? false;
+      if ((m.is_exhausted ?? false) !== restoredExhausted) {
+        return saveExhaustedForChar(m.character_id, restoredExhausted);
+      }
+      return Promise.resolve();
+    }));
+
+    sv.scenario.scenario_step = 'play';
+    renderScenarioView();
+    await broadcastToast('↩ GM undid End Round — previous round state restored');
   });
 
   // GM cancel
