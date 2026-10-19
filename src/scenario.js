@@ -2760,6 +2760,25 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
   const currentCompletions = sv.campaign.scenario_completions ?? 0;
   await sb().from('campaigns').update({ scenario_completions: currentCompletions + 1 }).eq('id', campaignId);
 
+  // 4b. Merchant's Guild Hall: every 5 successfully completed (non-replay) scenarios
+  //     after Section 37D was read earns one reward for the CM to choose.
+  if (!(s.is_replay ?? false)) {
+    const { data: fresh } = await sb().from('campaigns')
+      .select('read_37d, guild_progress, guild_pending').eq('id', campaignId).maybeSingle();
+    if (fresh?.read_37d) {
+      const progress = (fresh.guild_progress ?? 0) + 1;
+      if (progress >= 5) {
+        await sb().from('campaigns').update({
+          guild_progress: 0,
+          guild_pending: (fresh.guild_pending ?? 0) + 1,
+        }).eq('id', campaignId);
+        showToast("🏛️ Merchant's Guild Hall: 5 scenarios completed — the Campaign Manager can choose a reward in Party Progress!");
+      } else {
+        await sb().from('campaigns').update({ guild_progress: progress }).eq('id', campaignId);
+      }
+    }
+  }
+
   // 5. Create adventure log entry
   const logResult = forcedLink ? 'completed_forced_link' : 'completed';
   if (typeof createScenarioLogEntry === 'function') {

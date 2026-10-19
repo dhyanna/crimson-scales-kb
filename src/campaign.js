@@ -936,6 +936,18 @@ function bindArchivedCardEvents() {
   });
 }
 
+// ── MERCHANT'S GUILD HALL (unlocked by Section 37D) ──────────
+const GUILD_REWARDS = [
+  ...Array.from({ length: 7 }, (_, i) => ({ key: `prosperity_${i + 1}`, label: 'Gain +3 Prosperity' })),
+  { key: 'event_59', label: 'Add City and Road Event 59 to the top of their corresponding decks' },
+  { key: 'event_60', label: 'Add City and Road Event 60 to the top of their corresponding decks' },
+  { key: 'scenario_51', label: 'Unlock side Scenario 51 (Rodent Warehouse)' },
+  { key: 'scenario_52', label: 'Unlock side Scenario 52 (Wishing Well)' },
+  { key: 'scenario_53', label: 'Unlock side Scenario 53 (Cave of Currents)' },
+  { key: 'scenario_54', label: 'Unlock side Scenario 54 (Lair of Horrors)' },
+  { key: 'scenario_55', label: 'Unlock side Scenario 55 (Catacomb Plunder)' },
+];
+
 // ── PARTY PROGRESS ───────────────────────────────────────────
 function computeGoals(campaign, players) {
   // Sort by player_name (falling back to id) so each player always occupies the same
@@ -964,7 +976,8 @@ function renderPartyProgress(campaign, players, myPlayer) {
   const show37d = !campaign.read_37d;
   const goals = computeGoals(campaign, players);
   const show53a = goals && !campaign.read_53a;
-  if (!show37d && !show53a) return '';
+  const showGuild = !!campaign.read_37d;
+  if (!show37d && !show53a && !showGuild) return '';
 
   const completions = campaign.scenario_completions ?? 0;
 
@@ -991,6 +1004,52 @@ function renderPartyProgress(campaign, players, myPlayer) {
               ✓ Mark as Read
             </button>
           </div>` : ''}
+      </div>`;
+  }
+
+  // Merchant's Guild Hall (unlocked once Section 37D has been read)
+  let sectionGuild = '';
+  let guildPending = 0;
+  if (showGuild) {
+    const claimed = Array.isArray(campaign.guild_rewards) ? campaign.guild_rewards : [];
+    guildPending = campaign.guild_pending ?? 0;
+    const progress = Math.min(4, campaign.guild_progress ?? 0);
+    const amCM = isCM(players);
+    const allClaimed = claimed.length >= GUILD_REWARDS.length;
+    const prosperity = claimed.filter(k => k.startsWith('prosperity_')).length * 3;
+
+    const boxes = Array.from({ length: 5 }, (_, i) => {
+      const checked = i < progress;
+      return `<button class="party-check-box ${checked ? 'party-check-filled' : ''}"
+        data-tracker="guild" data-campaign-id="${campaign.id}" data-index="${i}" ${amCM ? '' : 'disabled'}>
+        ${checked ? '✓' : ''}
+      </button>`;
+    }).join('');
+
+    const rewardRows = GUILD_REWARDS.map(r => {
+      const isClaimed = claimed.includes(r.key);
+      const canClaim = amCM && !isClaimed && guildPending > 0;
+      const canUnclaim = amCM && isClaimed;
+      return `<label class="guild-reward-row ${isClaimed ? 'guild-reward-claimed' : ''} ${canClaim ? 'guild-reward-available' : ''}">
+        <input type="checkbox" class="guild-reward-check" data-campaign-id="${campaign.id}" data-reward="${r.key}"
+          ${isClaimed ? 'checked' : ''} ${canClaim || canUnclaim ? '' : 'disabled'}>
+        <span>${r.label}</span>
+      </label>`;
+    }).join('');
+
+    sectionGuild = `
+      <div class="party-tracker">
+        <div class="party-tracker-title">🏛️ Merchant's Guild Hall
+          <span class="party-tracker-count">${claimed.length}/${GUILD_REWARDS.length} rewards${prosperity ? ` · +${prosperity} Prosperity` : ''}</span>
+        </div>
+        <div class="party-tracker-desc">Each time the party successfully completes five scenarios (replays don't count; solo scenarios do), check one reward.</div>
+        ${allClaimed ? '' : `<div class="party-tracker-boxes">${boxes}</div>`}
+        ${guildPending > 0 && !allClaimed ? `
+          <div class="party-tracker-banner">
+            <span>🎁 <strong>${guildPending === 1 ? 'A Guild Hall reward is' : guildPending + ' Guild Hall rewards are'} ready!</strong>
+            ${amCM ? 'Choose one below.' : 'Waiting for the Campaign Manager to choose.'}</span>
+          </div>` : ''}
+        <div class="guild-reward-list">${rewardRows}</div>
       </div>`;
   }
 
@@ -1066,11 +1125,11 @@ function renderPartyProgress(campaign, players, myPlayer) {
 
   return `
     <div class="campaign-available-toggle" data-list-id="progress-${campaign.id}">
-      📋 Party Progress
+      📋 Party Progress${guildPending > 0 ? ' 🎁' : ''}
       <span class="campaign-inactive-chevron">▼</span>
     </div>
     <div class="campaign-collapsible" id="progress-${campaign.id}" style="display:none">
-      ${section37d}${section53a}
+      ${section37d}${sectionGuild}${section53a}
     </div>`;
 }
 
@@ -1111,6 +1170,54 @@ function bindCampaignListEvents(campaigns) {
     });
   });
 
+  // Merchant's Guild Hall — progress boxes (CM correction)
+  document.querySelectorAll('.party-check-box[data-tracker="guild"]').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const campaignId = btn.dataset.campaignId;
+      const idx = parseInt(btn.dataset.index);
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (!campaign) return;
+      const current = Math.min(4, campaign.guild_progress ?? 0);
+      const newVal = idx < current ? idx : idx + 1;
+      const update = { guild_progress: newVal };
+      if (newVal >= 5) { // fifth box checked: earn a reward and start over
+        update.guild_progress = 0;
+        update.guild_pending = (campaign.guild_pending ?? 0) + 1;
+      }
+      await sb().from('campaigns').update(update).eq('id', campaignId);
+      loadCampaigns();
+    });
+  });
+
+  // Merchant's Guild Hall — choose / undo a reward
+  document.querySelectorAll('.guild-reward-check').forEach(box => {
+    box.addEventListener('change', async e => {
+      e.stopPropagation();
+      const campaignId = box.dataset.campaignId;
+      const reward = box.dataset.reward;
+      const campaign = campaigns.find(c => c.id === campaignId);
+      if (!campaign) return;
+      const label = GUILD_REWARDS.find(r => r.key === reward)?.label ?? reward;
+      const claimed = Array.isArray(campaign.guild_rewards) ? [...campaign.guild_rewards] : [];
+      if (box.checked) {
+        if (!confirm(`Choose this Guild Hall reward?\n\n${label}`)) { box.checked = false; return; }
+        await sb().from('campaigns').update({
+          guild_rewards: [...claimed, reward],
+          guild_pending: Math.max(0, (campaign.guild_pending ?? 0) - 1),
+        }).eq('id', campaignId);
+        showToast(`🏛️ Guild Hall reward chosen: ${label}`);
+      } else {
+        if (!confirm(`Undo this Guild Hall reward and make it available again?\n\n${label}`)) { box.checked = true; return; }
+        await sb().from('campaigns').update({
+          guild_rewards: claimed.filter(k => k !== reward),
+          guild_pending: (campaign.guild_pending ?? 0) + 1,
+        }).eq('id', campaignId);
+      }
+      loadCampaigns();
+    });
+  });
+
   // Party progress — mark as read buttons
   document.querySelectorAll('.party-mark-read-btn').forEach(btn => {
     btn.addEventListener('click', async e => {
@@ -1118,7 +1225,10 @@ function bindCampaignListEvents(campaigns) {
       const campaignId = btn.dataset.campaignId;
       const tracker = btn.dataset.tracker;
       const col = tracker === '37d' ? 'read_37d' : 'read_53a';
-      await sb().from('campaigns').update({ [col]: true }).eq('id', campaignId);
+      const update = { [col]: true };
+      // Reading 37D unlocks the Merchant's Guild Hall, with one reward on first read
+      if (tracker === '37d') update.guild_pending = 1;
+      await sb().from('campaigns').update(update).eq('id', campaignId);
       loadCampaigns();
       showToast(`Section ${tracker === '37d' ? '37D' : '53A'} marked as read. Tracker removed.`);
     });
