@@ -2738,12 +2738,10 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
     const reallyLooted = freshRow?.looted_treasure ?? ps.lootedTreasure ?? false;
     const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
     if (!player) continue;
-    const bgData = m.battle_goal_card && typeof BATTLE_GOAL_DATA !== 'undefined'
-      ? BATTLE_GOAL_DATA[m.battle_goal_card] : null;
-    const checks = bgData?.checks ?? 1;
-
+    // Party goal counts battle goal CARDS completed, not perk checks earned:
+    // a double-check card is still a single completed battle goal.
     if (reallyBgCompleted && (player.battle_goals_completed ?? 0) < 5) {
-      const newCount = Math.min(5, (player.battle_goals_completed ?? 0) + checks);
+      const newCount = Math.min(5, (player.battle_goals_completed ?? 0) + 1);
       await sb().from('players').update({ battle_goals_completed: newCount }).eq('id', player.id);
     }
 
