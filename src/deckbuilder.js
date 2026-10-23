@@ -33,8 +33,15 @@ function getHandSize() {
 
 // The milestone reward card is locked permanently into the hand once earned —
 // hand size only bumps up while that specific card is actually in hand.
+function milestoneRewardCardIdFor(classId) {
+  if (MILESTONE_REWARD_IDS[classId]) return MILESTONE_REWARD_IDS[classId];
+  // Classes not in the table above: use the class's Level M card from its data file
+  const card = getMilestoneCardData(classId);
+  return card ? (card.id || slugify(card.name)) : null;
+}
+
 function milestoneRewardCardId() {
-  return MILESTONE_REWARD_IDS[db.character?.class_id] ?? null;
+  return milestoneRewardCardIdFor(db.character?.class_id);
 }
 
 function hasMilestoneCardInHand() {
@@ -106,9 +113,29 @@ async function ensureMilestoneCardLocked() {
   const rewardId = milestoneRewardCardId();
   if (!rewardId || !db.state?.milestone_earned) return;
   const row = db.cards.find(c => c.card_id === rewardId);
-  if (row && !row.in_hand) {
-    await sb().from('character_cards').update({ in_hand: true }).eq('id', row.id);
-    row.in_hand = true;
+  if (row) {
+    if (!row.in_hand) {
+      await sb().from('character_cards').update({ in_hand: true }).eq('id', row.id);
+      row.in_hand = true;
+    }
+  } else {
+    // Milestone was claimed but the reward card was never added (earlier versions
+    // had no reward-card id for some classes) — add it to the hand now.
+    const { data: newCard, error } = await sb().from('character_cards').insert({
+      character_id: db.character.id,
+      card_id: rewardId,
+      class_id: db.character.class_id,
+      in_hand: true,
+      level_obtained: null,
+    }).select().single();
+    if (error) { console.error('ensureMilestoneCardLocked insert error:', error); return; }
+    if (newCard) db.cards.push(newCard);
+  }
+  // Keep the stored hand size in step with the derived one
+  const size = getHandSize();
+  if (db.state.hand_size !== size) {
+    await sb().from('character_state').update({ hand_size: size }).eq('id', db.state.id);
+    db.state.hand_size = size;
   }
 }
 
@@ -146,24 +173,34 @@ async function completePq() {
 
 async function earnMilestone() {
   const classId = db.character.class_id;
-  const rewardId = MILESTONE_REWARD_IDS[classId];
-  const newHandSize = getHandSize() + 1;
+  const rewardId = milestoneRewardCardIdFor(classId);
+  if (!rewardId) throw new Error(`No milestone reward card found for ${classId}`);
 
-  // Add reward card to pool AND hand
-  const { data: newCard } = await sb().from('character_cards').insert({
-    character_id: db.character.id,
-    card_id: rewardId,
-    class_id: classId,
-    in_hand: true,
-    level_obtained: null,
-  }).select().single();
-  if (newCard) db.cards.push(newCard);
+  // Add reward card to pool AND hand (or move it into hand if already in the pool)
+  const existing = db.cards.find(c => c.card_id === rewardId);
+  if (existing) {
+    const { error } = await sb().from('character_cards').update({ in_hand: true }).eq('id', existing.id);
+    if (error) throw error;
+    existing.in_hand = true;
+  } else {
+    const { data: newCard, error } = await sb().from('character_cards').insert({
+      character_id: db.character.id,
+      card_id: rewardId,
+      class_id: classId,
+      in_hand: true,
+      level_obtained: null,
+    }).select().single();
+    if (error) throw error;
+    if (newCard) db.cards.push(newCard);
+  }
 
-  await sb().from('character_state').update({
+  const newHandSize = getHandSize();
+  const { error: stateError } = await sb().from('character_state').update({
     milestone_earned: true,
     hand_size: newHandSize,
     updated_at: new Date().toISOString(),
   }).eq('id', db.state.id);
+  if (stateError) throw stateError;
   db.state.milestone_earned = true;
   db.state.hand_size = newHandSize;
 }
@@ -955,7 +992,13 @@ function bindDeckBuilderEvents() {
 async function handleEarnMilestone() {
   const rewardCard = getMilestoneCardData(db.player.class_id);
   if (!confirm(`Congratulations! Add "${rewardCard?.name ?? 'the milestone reward card'}" permanently to your hand?`)) return;
-  await earnMilestone();
+  try {
+    await earnMilestone();
+  } catch (err) {
+    console.error('earnMilestone failed:', err);
+    showToast('⚠️ Could not claim milestone: ' + (err.message ?? err), true);
+    return;
+  }
   renderDeckBuilder();
   showToast('Milestone earned! Reward card added to your hand permanently.');
 }
