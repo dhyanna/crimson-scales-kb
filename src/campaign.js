@@ -1822,8 +1822,8 @@ async function renderAdventureLog() {
     fileInput?.addEventListener('change', async () => {
       const file = fileInput.files?.[0];
       if (!file || !uploadTarget) return;
-      if (file.size > 2 * 1024 * 1024) {
-        showToast('File too large — max 2MB', true);
+      if (file.size > 4 * 1024 * 1024) {
+        showToast('File too large — max 4MB', true);
         return;
       }
       try {

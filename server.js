@@ -196,7 +196,7 @@ app.delete('/api/logs/:id', (req, res) => {
 
 // Error handler for multer
 app.use((err, _req, res, _next) => {
-  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (max 2 MB)' });
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'File too large (max 4 MB)' });
   res.status(400).json({ error: err.message });
 });
 
