@@ -2605,12 +2605,24 @@ function openEndScenarioModal() {
   document.getElementById('scenario-view-overlay').appendChild(modal);
 
   modal.querySelectorAll('.sv-outcome-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       modal.querySelectorAll('.sv-outcome-btn').forEach(b => b.classList.remove('sv-outcome-selected'));
       btn.classList.add('sv-outcome-selected');
       const outcome = btn.dataset.outcome;
       const details = document.getElementById('sv-outcome-details');
-      if (outcome === 'completed') details.innerHTML = buildCompletedDetails(party, s);
+      if (outcome === 'completed') {
+        // Show each player's battle goal result as currently stored in the DB (this
+        // browser's cache can be stale), so the GM reviews what will really be awarded.
+        try {
+          const { data: rows } = await sb().from('scenario_party')
+            .select('character_id, battle_goal_completed').eq('scenario_id', s.id);
+          for (const r of rows ?? []) {
+            const ps = sv.playState[r.character_id];
+            if (ps) ps.bgCompleted = r.battle_goal_completed ?? false;
+          }
+        } catch (err) { console.warn('Could not refresh battle goal state:', err); }
+        details.innerHTML = buildCompletedDetails(party, s);
+      }
       else if (outcome === 'lost') details.innerHTML = buildLostDetails();
       bindOutcomeDetails(modal, outcome);
     });
@@ -2628,14 +2640,19 @@ function buildCompletedDetails(party, s) {
     const bgTitle = bgData ? bgData.title : (bgCard ?? 'No BG');
     const battleGoalsDone = (sv.campaign.players ?? []).find(p => p.id === m.player_id)?.battle_goals_completed ?? 0;
     const bgAlreadyDone = battleGoalsDone >= 5;
+    // GM can correct the result here (e.g. a player forgot to check their battle goal tracker)
+    const override = bgAlreadyDone
+      ? '<span class="sv-bg-summary-result sv-bg-success">⭐ Party goal met</span>'
+      : `<label class="sv-bg-override-label ${achieved ? 'sv-bg-success' : 'sv-bg-fail'}">
+           <input type="checkbox" class="sv-bg-override-check" data-char-id="${m.character_id}" ${achieved ? 'checked' : ''}>
+           <span class="sv-bg-override-text">${achieved ? '✅ Success' : '❌ Not achieved'}</span>
+         </label>`;
     return `
       <div class="sv-bg-summary-row">
         ${classIcon(cls, 18)}
         <span class="sv-bg-summary-name">${playerName}</span>
         <span class="sv-bg-summary-card">${bgTitle}</span>
-        <span class="sv-bg-summary-result ${achieved ? 'sv-bg-success' : 'sv-bg-fail'}">
-          ${bgAlreadyDone ? '⭐ Party goal met' : achieved ? '✅ Success' : '❌ Not achieved'}
-        </span>
+        ${override}
       </div>`;
   }).join('');
 
@@ -2645,6 +2662,7 @@ function buildCompletedDetails(party, s) {
     <div class="sv-outcome-section">
       <div class="sv-outcome-section-title">🎯 Battle Goals</div>
       ${bgRows}
+      <div class="sv-bg-override-hint">Check or uncheck a player's box to correct their result before confirming.</div>
     </div>
     ${isSideScenario ? `<div class="sv-outcome-note">⭐ Side Scenario ${s.scenario_number} — Party Goal will be marked complete</div>` : ''}
     <div class="sv-outcome-section" style="margin-top:12px">
@@ -2689,13 +2707,37 @@ function bindOutcomeDetails(modal, outcome) {
     });
   }
 
+  // Battle goal result overrides — update the label live as the GM toggles
+  modal.querySelectorAll('.sv-bg-override-check').forEach(chk => {
+    chk.addEventListener('change', () => {
+      const label = chk.closest('.sv-bg-override-label');
+      if (!label) return;
+      label.classList.toggle('sv-bg-success', chk.checked);
+      label.classList.toggle('sv-bg-fail', !chk.checked);
+      const text = label.querySelector('.sv-bg-override-text');
+      if (text) text.textContent = chk.checked ? '✅ Success' : '❌ Not achieved';
+    });
+  });
+
   // Confirm completed
   document.getElementById('sv-confirm-outcome')?.addEventListener('click', async () => {
+    const confirmBtn = document.getElementById('sv-confirm-outcome');
+    if (confirmBtn) confirmBtn.disabled = true; // avoid double-submit awarding twice
     const forcedLink = flCheck?.checked ?? false;
     const linkNum = parseInt(document.getElementById('sv-link-num')?.value ?? '0') || 0;
     const linkName = document.getElementById('sv-link-name')?.value?.trim() ?? '';
-    await handleCompletedOutcome(forcedLink, linkNum, linkName);
-    modal.remove();
+    const bgOverrides = {};
+    modal.querySelectorAll('.sv-bg-override-check').forEach(chk => {
+      bgOverrides[chk.dataset.charId] = chk.checked;
+    });
+    try {
+      await handleCompletedOutcome(forcedLink, linkNum, linkName, bgOverrides);
+      modal.remove();
+    } catch (err) {
+      console.error('handleCompletedOutcome failed:', err);
+      showToast('⚠️ Could not complete scenario: ' + (err.message ?? err), true);
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
   });
 
   // Lost actions
@@ -2713,7 +2755,7 @@ function getPartyCharacterNames() {
     .map(m => m.characters?.character_name ?? m.player?.player_name ?? '?');
 }
 
-async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName) {
+async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName, bgOverrides = {}) {
   const s = sv.scenario;
   const party = s.scenario_party ?? [];
   const campaignId = sv.campaign.id;
@@ -2734,7 +2776,14 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
   for (const m of party) {
     const ps = sv.playState[m.character_id] ?? {};
     const freshRow = (freshPartyRows ?? []).find(r => r.character_id === m.character_id);
-    const reallyBgCompleted = freshRow?.battle_goal_completed ?? ps.bgCompleted ?? false;
+    const dbBgCompleted = freshRow?.battle_goal_completed ?? ps.bgCompleted ?? false;
+    // The GM's choice on the final review screen wins over what the player had checked
+    const reallyBgCompleted = Object.prototype.hasOwnProperty.call(bgOverrides, m.character_id)
+      ? bgOverrides[m.character_id]
+      : dbBgCompleted;
+    if (reallyBgCompleted !== dbBgCompleted) {
+      await saveBgCompletedForChar(m.character_id, reallyBgCompleted);
+    }
     const reallyLooted = freshRow?.looted_treasure ?? ps.lootedTreasure ?? false;
     const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
     if (!player) continue;
