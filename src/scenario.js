@@ -2615,10 +2615,12 @@ function openEndScenarioModal() {
         // browser's cache can be stale), so the GM reviews what will really be awarded.
         try {
           const { data: rows } = await sb().from('scenario_party')
-            .select('character_id, battle_goal_completed').eq('scenario_id', s.id);
+            .select('character_id, battle_goal_completed, looted_treasure').eq('scenario_id', s.id);
           for (const r of rows ?? []) {
             const ps = sv.playState[r.character_id];
-            if (ps) ps.bgCompleted = r.battle_goal_completed ?? false;
+            if (!ps) continue;
+            ps.bgCompleted = r.battle_goal_completed ?? false;
+            ps.lootedTreasure = r.looted_treasure ?? false;
           }
         } catch (err) { console.warn('Could not refresh battle goal state:', err); }
         details.innerHTML = buildCompletedDetails(party, s);
@@ -2656,14 +2658,38 @@ function buildCompletedDetails(party, s) {
       </div>`;
   }).join('');
 
+  // Treasure tile: each player can loot one per campaign, so only players who haven't yet
+  const treasureRows = party.map(m => {
+    const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
+    if (!player || player.treasure_looted) return '';
+    const ps = sv.playState[m.character_id] ?? {};
+    const looted = ps.lootedTreasure ?? false;
+    return `
+      <div class="sv-bg-summary-row">
+        ${classIcon(m.characters?.class_id ?? '', 18)}
+        <span class="sv-bg-summary-name">${m.player?.player_name ?? '?'}</span>
+        <span class="sv-bg-summary-card">Treasure tile</span>
+        <label class="sv-bg-override-label ${looted ? 'sv-bg-success' : 'sv-bg-fail'}">
+          <input type="checkbox" class="sv-treasure-override-check" data-char-id="${m.character_id}" ${looted ? 'checked' : ''}>
+          <span class="sv-bg-override-text">${looted ? '✅ Looted' : '❌ Not looted'}</span>
+        </label>
+      </div>`;
+  }).join('');
+  const treasureSection = treasureRows ? `
+    <div class="sv-outcome-section" style="margin-top:12px">
+      <div class="sv-outcome-section-title">🗝️ Treasure</div>
+      ${treasureRows}
+    </div>` : '';
+
   const isSideScenario = s.scenario_number >= 51 && s.scenario_number <= 55;
 
   return `
     <div class="sv-outcome-section">
       <div class="sv-outcome-section-title">🎯 Battle Goals</div>
       ${bgRows}
-      <div class="sv-bg-override-hint">Check or uncheck a player's box to correct their result before confirming.</div>
+      <div class="sv-bg-override-hint">Check or uncheck a box to correct a result before confirming.</div>
     </div>
+    ${treasureSection}
     ${isSideScenario ? `<div class="sv-outcome-note">⭐ Side Scenario ${s.scenario_number} — Party Goal will be marked complete</div>` : ''}
     <div class="sv-outcome-section" style="margin-top:12px">
       <label class="sv-override-check-label" style="margin-bottom:8px">
@@ -2708,14 +2734,17 @@ function bindOutcomeDetails(modal, outcome) {
   }
 
   // Battle goal result overrides — update the label live as the GM toggles
-  modal.querySelectorAll('.sv-bg-override-check').forEach(chk => {
+  modal.querySelectorAll('.sv-bg-override-check, .sv-treasure-override-check').forEach(chk => {
+    const isTreasure = chk.classList.contains('sv-treasure-override-check');
     chk.addEventListener('change', () => {
       const label = chk.closest('.sv-bg-override-label');
       if (!label) return;
       label.classList.toggle('sv-bg-success', chk.checked);
       label.classList.toggle('sv-bg-fail', !chk.checked);
       const text = label.querySelector('.sv-bg-override-text');
-      if (text) text.textContent = chk.checked ? '✅ Success' : '❌ Not achieved';
+      if (text) text.textContent = isTreasure
+        ? (chk.checked ? '✅ Looted' : '❌ Not looted')
+        : (chk.checked ? '✅ Success' : '❌ Not achieved');
     });
   });
 
@@ -2730,8 +2759,12 @@ function bindOutcomeDetails(modal, outcome) {
     modal.querySelectorAll('.sv-bg-override-check').forEach(chk => {
       bgOverrides[chk.dataset.charId] = chk.checked;
     });
+    const treasureOverrides = {};
+    modal.querySelectorAll('.sv-treasure-override-check').forEach(chk => {
+      treasureOverrides[chk.dataset.charId] = chk.checked;
+    });
     try {
-      await handleCompletedOutcome(forcedLink, linkNum, linkName, bgOverrides);
+      await handleCompletedOutcome(forcedLink, linkNum, linkName, bgOverrides, treasureOverrides);
       modal.remove();
     } catch (err) {
       console.error('handleCompletedOutcome failed:', err);
@@ -2755,7 +2788,7 @@ function getPartyCharacterNames() {
     .map(m => m.characters?.character_name ?? m.player?.player_name ?? '?');
 }
 
-async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName, bgOverrides = {}) {
+async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioName, bgOverrides = {}, treasureOverrides = {}) {
   const s = sv.scenario;
   const party = s.scenario_party ?? [];
   const campaignId = sv.campaign.id;
@@ -2784,7 +2817,18 @@ async function handleCompletedOutcome(forcedLink, linkScenarioNum, linkScenarioN
     if (reallyBgCompleted !== dbBgCompleted) {
       await saveBgCompletedForChar(m.character_id, reallyBgCompleted);
     }
-    const reallyLooted = freshRow?.looted_treasure ?? ps.lootedTreasure ?? false;
+    const dbLooted = freshRow?.looted_treasure ?? ps.lootedTreasure ?? false;
+    const reallyLooted = Object.prototype.hasOwnProperty.call(treasureOverrides, m.character_id)
+      ? treasureOverrides[m.character_id]
+      : dbLooted;
+    if (reallyLooted !== dbLooted) {
+      const member = party.find(x => x.character_id === m.character_id);
+      if (member) {
+        await sb().from('scenario_party').update({ looted_treasure: reallyLooted }).eq('id', member.id);
+        member.looted_treasure = reallyLooted;
+      }
+      if (ps) ps.lootedTreasure = reallyLooted;
+    }
     const player = (sv.campaign.players ?? []).find(p => p.id === m.player_id);
     if (!player) continue;
     // Party goal counts battle goal CARDS completed, not perk checks earned:
